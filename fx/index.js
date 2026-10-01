@@ -4,8 +4,14 @@ import { buildLanternFall } from './lanterns.js';
 import { buildAnimated } from './animate.js';
 import { buildMotes } from './motes.js';
 import { buildFireworks } from './fireworks.js';
+import { buildEmitters } from './emitters.js';
+import { buildBeams } from './beams.js';
+import { buildDanceFloor } from './dance.js';
+import { buildMist } from './mist.js';
+import { patchSky } from './sky.js';
 
-export const FX_DEFAULTS = { lanternfall: true, carousel: true, motes: true, fireworks: true, 'fireworks-always': false };
+export const FX_DEFAULTS = { lanternfall: true, carousel: true, motes: true, fireworks: true, 'fireworks-always': false,
+  emitters: true, beams: true, dance: true, mist: true, sky: true, aurora: false };
 
 export function fxConfig(Q, { mobile = false, reduceMotion = false } = {}) {
   const tok = new Set(decodeURIComponent(location.hash.slice(1)).split(/[,&+\s]/).filter(Boolean));
@@ -25,15 +31,22 @@ export function fxLanterns(Q, { f32, count, waterY, uTime }) {
 }
 
 // called once the manifest is in (before the parts stream)
-export function fxScene(Q, { scene, lands, uTime }) {
+export function fxScene(Q, { scene, lands, uTime, lake, waterY, moon }) {
+  const motion = Q.fx.motion ? 1 : 0;
   if (Q.fx.motes) { fx.motes = buildMotes({ lands, uTime, motion: Q.fx.motion ? 1 : 0, scale: Q.fx.scale }); scene.add(fx.motes); }
   if (Q.fx.fireworks && Q.fx.motion) { fx.fireworks = buildFireworks({ uTime, scale: Q.fx.scale }); scene.add(fx.fireworks); }
+  if (Q.fx.emitters) { fx.emitters = buildEmitters({ uTime, motion, scale: Q.fx.scale }); scene.add(fx.emitters); }
+  if (Q.fx.beams) { fx.beams = buildBeams({ uTime, motion }); scene.add(fx.beams); }
+  if (Q.fx.dance) { fx.dance = buildDanceFloor({ uTime, motion }); scene.add(fx.dance); }
+  if (Q.fx.mist && lake) { fx.mist = buildMist({ lake, waterY, uTime, motion, layers: Q.fx.scale < 1 ? 2 : 3 }); scene.add(fx.mist); }
+  if (Q.fx.sky || Q.fx.aurora) fx.sky = patchSky(scene, { uTime, motion, aurora: Q.fx.aurora, moonDir: moon });
 }
 
 // once per frame, before rendering
 // ctx: { time, dt, tour } where tour is the tour clock in seconds (wrapped) or -1 outside the tour
 export function fxUpdate(Q, camera, ctx) {
   if (fx.motes) fx.motes.userData.update(camera);
+  if (fx.beams) fx.beams.userData.update(ctx.time);
   if (fx.fireworks) fx.fireworks.userData.update(ctx.time, ctx.dt, { tour: ctx.tour, always: Q.fx['fireworks-always'] });
 }
 

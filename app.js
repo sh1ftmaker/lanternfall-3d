@@ -434,7 +434,7 @@ async function load() {
   initRail(manifest.rail.a, manifest.rail.b);
   buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
-  FX.fxScene(Q, { scene, lands: manifest.lands, uTime });
+  FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
   const exU8 = await fetchBin(ex.file.file);
   if (ex.lanterns) {
     const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
