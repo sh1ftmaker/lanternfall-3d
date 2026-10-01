@@ -8,6 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { createWater } from './fx/water.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -45,6 +46,10 @@ const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
 const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+// Stillwater (fx/water.js). '#oldwater' brings back the three.js Water from the ocean example for comparison.
+const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
+Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: 2, waterMirrorLow: 1, mirrorScale: mobile ? 0.4 : 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
+  mirrorEveryLow: 1, mirrorScaleLow: 0.35, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 let composer, bloomPass, composerSamples = -1;
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
@@ -246,7 +251,7 @@ function meshFrom(geometry, m) {
 
 const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
-let manifest, nav = null, trains = [], lanterns = null, water = null, flatWater = null, forest = [];
+let manifest, nav = null, trains = [], lanterns = null, water = null, flatWater = null, forest = [], fxWater = null;
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -430,7 +435,8 @@ async function load() {
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
   bakedMat.uniforms.uRange.value = manifest.range;
   initRail(manifest.rail.a, manifest.rail.b);
-  buildWater(manifest.lake, manifest.water_z);
+  if (Q.water === 'new') fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
+  else buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
   const exU8 = await fetchBin(ex.file.file);
   if (ex.lanterns) buildLanterns(new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice(), ex.lanterns.count);
@@ -716,6 +722,7 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 function setHD(on) {
   Q.hd = on; $('#btn-hd').setAttribute('aria-pressed', String(on));
   if (water) { water.visible = on; flatWater.visible = !on; }
+  if (fxWater) fxWater.setHD(on);
   Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1); resize();
 }
 $('#btn-hd').addEventListener('click', () => { setHD(!Q.hd); perf.locked = true; });
@@ -781,9 +788,10 @@ function frame() {
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
   updateLOD();
+  if (fxWater) fxWater.update(dt, time);
   if (Q.bloom) { bloomPass.enabled = true; composer.render(dt); } else renderer.render(scene, camera);
   adapt(dt * 1000);
 }
-window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns };
+window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
