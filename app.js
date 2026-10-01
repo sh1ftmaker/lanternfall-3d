@@ -12,6 +12,7 @@ import { createDepth, depthTargetOptions, fixMirrorForReversedDepth } from './fx
 import { readFx } from './fx/settings.js';
 import { buildFx, fxActive } from './fx/post.js';
 import { makeProfiler } from './fx/prof.js';
+import { createWater } from './fx/water.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -55,6 +56,11 @@ Q.fx = readFx();                     // post-processing tokens from the URL hash
 let composer, bloomPass, composerSamples = -1, fxOut = null;
 // z-fighting: per-frame near plane from the camera's clearance to the park (fx/depth.js); '#fixednear' turns it off
 const depth = createDepth(THREE, camera, { on: !/fixednear/.test(location.hash) });
+// Stillwater (fx/water.js). '#oldwater' brings back the three.js Water from the ocean example for comparison.
+const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
+// waterMirror (HD) / waterMirrorLow (non-HD): 2 = full planar mirror, 1 = captured lands + planar Spire layer + reflected lantern sprites, 0 = capture + sprites
+Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
+  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
@@ -274,7 +280,7 @@ function meshFrom(geometry, m) {
 
 const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
-let manifest, nav = null, trains = [], lanterns = null, water = null, flatWater = null, forest = [];
+let manifest, nav = null, trains = [], lanterns = null, water = null, flatWater = null, forest = [], fxWater = null;
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -464,7 +470,8 @@ async function load() {
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
   bakedMat.uniforms.uRange.value = manifest.range;
   initRail(manifest.rail.a, manifest.rail.b); depth.addRail(manifest.rail.a, manifest.rail.b, manifest.rail.top);
-  buildWater(manifest.lake, manifest.water_z);
+  if (Q.water === 'new') fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
+  else buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
   const exU8 = await fetchBin(ex.file.file);
   if (ex.lanterns) buildLanterns(new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice(), ex.lanterns.count);
@@ -750,6 +757,7 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 function setHD(on) {
   Q.hd = on; $('#btn-hd').setAttribute('aria-pressed', String(on));
   if (water) { water.visible = on; flatWater.visible = !on; }
+  if (fxWater) fxWater.setHD(on);
   Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1); resize();
 }
 $('#btn-hd').addEventListener('click', () => { setHD(!Q.hd); perf.locked = true; });
@@ -764,7 +772,7 @@ function adapt(ms) {
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++;
-  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.lod = Math.max(Q.lod, 1.8); resize(); }
+  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); resize(); }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
   else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }
   else if (perf.step === 4) { setHD(false); }
@@ -814,12 +822,14 @@ function frame() {
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
-  updateLOD(); depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
+  updateLOD();
+  if (fxWater) fxWater.update(dt, time);
+  depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   if (Q.bloom) { if (bloomPass) bloomPass.enabled = true; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns,
+window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns,
   fx: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.fx = readFx(h); composer.dispose(); bloomPass = null; fxOut = null; buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
