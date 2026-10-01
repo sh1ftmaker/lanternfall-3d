@@ -26,7 +26,11 @@ function beamMaterial(color, strength, uTime) {
         edge = 1.0 - edge;
         float fall = pow(1.0 - along, 2.2) * smoothstep(0.0, 0.03, along);
         float dust = 0.65 + 0.35 * vnoise(vW * 0.08 + vec3(uTime * 0.2, 0.0, uTime * 0.1));
-        vec3 c = uColor * uStrength * edge * fall * dust;
+        // seen from close by the cone's walls become a flat sheet across the view, and from the aerial shots a hard
+        // line: fade both ends of the viewing distance
+        float dc = length(cameraPosition - vW);
+        float view = smoothstep(6.0, 45.0, dc) * mix(1.0, 0.5, smoothstep(250.0, 550.0, dc));
+        vec3 c = uColor * uStrength * edge * fall * dust * view;
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -45,7 +49,7 @@ export function buildBeams({ uTime, motion = 1 }) {
   const root = new THREE.Group(); root.name = 'fx-beams';
   // harbour lighthouse: two opposite beams, one turn per 14 s
   const harbour = new THREE.Group(); harbour.position.set(49.7, 11.9, 10.3);
-  const hm = beamMaterial([1.0, 0.82, 0.55], 0.055, uTime);
+  const hm = beamMaterial([1.0, 0.82, 0.55], 0.04, uTime);
   for (const s of [1, -1]) {
     const b = cone(150, 0.35, 7.5); b.material = hm; b.rotation.z = -Math.PI / 2 * s + s * 0.05; b.frustumCulled = false;
     harbour.add(b);

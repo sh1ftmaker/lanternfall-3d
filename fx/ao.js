@@ -153,7 +153,7 @@ export class LiteAOPass extends Pass {
     if (!this._marked && this.ctx) {          // lanterns and water load after the composer is built
       const l = this.ctx.lanterns && this.ctx.lanterns(), w = this.ctx.water && this.ctx.water();
       if (l) markGlow(l.material);
-      if (w) w.material.uniforms.alpha.value = 64.0;     // water: alpha >> 1 reads as "all glow", so no AO on reflections
+      if (w) markReflective(w.material);                 // water: alpha >> 1 reads as "all glow", so no AO on reflections
       this._marked = !!(l && w);
     }
     u.tDepth.value = readBuffer.depthTexture;
@@ -173,6 +173,12 @@ export class LiteAOPass extends Pass {
 export function markGlow(material) {
   if (!material || material.userData.glowMarked) return;
   material.userData.glowMarked = true;
+  if (material.blending === THREE.CustomBlending && material.blendDst === THREE.OneMinusSrcAlphaFactor) {
+    // premultiplied "emissive + paper" sprites (fx/lanterns.js): the colour blend needs the shader's alpha (paper
+    // coverage), so only let that coverage accumulate in the target's alpha; near paper lanterns are kept out of AO
+    material.blendSrcAlpha = THREE.OneFactor; material.blendDstAlpha = THREE.OneFactor; material.needsUpdate = true;
+    return;
+  }
   material.blending = THREE.CustomBlending;
   material.blendEquation = THREE.AddEquation; material.blendSrc = THREE.OneFactor; material.blendDst = THREE.OneFactor;
   material.blendEquationAlpha = THREE.AddEquation; material.blendSrcAlpha = THREE.OneFactor; material.blendDstAlpha = THREE.OneFactor;
@@ -182,6 +188,17 @@ export function markGlow(material) {
     sh.fragmentShader = sh.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));\n}');
   };
   material.customProgramCacheKey = () => 'glowMarked';
+  material.needsUpdate = true;
+}
+
+// An opaque surface that should never be occluded (the lake: reflections): write alpha 64.
+function markReflective(material) {
+  if (!material || material.userData.glowMarked) return;
+  material.userData.glowMarked = true;
+  if (material.uniforms && material.uniforms.alpha) { material.uniforms.alpha.value = 64.0; return; }     // three's Water
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (sh, r) => { prev && prev(sh, r); sh.fragmentShader = sh.fragmentShader.replace(/}\s*$/, '  gl_FragColor.a = 64.0;\n}'); };
+  material.customProgramCacheKey = () => 'reflective';
   material.needsUpdate = true;
 }
 

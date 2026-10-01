@@ -82,22 +82,6 @@ export function depthTargetOptions(THREE, renderer, w, h) {
   if (!renderer.state.buffers.depth.getReversed()) return {};
   return { depthTexture: new THREE.DepthTexture(w, h, THREE.FloatType), resolveDepthBuffer: false };
 }
-// three's Water builds its mirror camera's oblique near plane for the [-1, 1] depth range. With reversed [0, 1] depth
-// it is rebuilt here (scene.onBeforeRender runs for the mirror render, before culling): near plane = the water plane.
-export function fixMirrorForReversedDepth(THREE, renderer, scene, mainCamera, waterY) {
-  if (!renderer.state.buffers.depth.getReversed()) return;
-  const C = new THREE.Vector4(), plane = new THREE.Plane(), q = new THREE.Vector4(), inv = new THREE.Matrix4();
-  scene.onBeforeRender = (r, s, cam) => {
-    if (cam === mainCamera || !cam.isPerspectiveCamera) return;
-    const P = cam.projectionMatrix.copy(mainCamera.projectionMatrix), te = P.elements;
-    plane.set(new THREE.Vector3(0, 1, 0), -waterY).applyMatrix4(cam.matrixWorldInverse);
-    C.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
-    q.set(Math.sign(C.x), Math.sign(C.y), 0, 1).applyMatrix4(inv.copy(P).invert());      // far corner (reversed: ndc z = 0)
-    const a = -q.z / C.dot(q);                                                              // z row = w row - a * C
-    te[2] = -a * C.x; te[6] = -a * C.y; te[10] = -1 - a * C.z; te[14] = -a * C.w;
-  };
-}
-
 // ── Data hook for coplanar faces (not emitted yet) ──
 // bakedMat breaks exact-coplanar ties with a depth-only lift: pitch-black under-layers -1.8 mm, brighter faces up to
 // +1.8 mm. A guess; the data can replace it. pack.py may set "lay": 1 on a mesh entry in manifest.json and append one

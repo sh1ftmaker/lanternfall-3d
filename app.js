@@ -6,9 +6,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { Water } from 'three/addons/objects/Water.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { createDepth, depthTargetOptions, fixMirrorForReversedDepth } from './fx/depth.js';
+import { createDepth, depthTargetOptions } from './fx/depth.js';
 import { readFx } from './fx/settings.js';
 import { buildFx, fxActive } from './fx/post.js';
 import { makeProfiler } from './fx/prof.js';
@@ -66,15 +65,15 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
-const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
 Q.post = readFx();                     // post-processing tokens from the URL hash (fx/settings.js)
 let composer, bloomPass, composerSamples = -1, fxOut = null;
 // z-fighting: per-frame near plane from the camera's clearance to the park (fx/depth.js); '#fixednear' turns it off
 const depth = createDepth(THREE, camera, { on: !/fixednear/.test(location.hash) });
-// Stillwater (fx/water.js). '#oldwater' brings back the three.js Water from the ocean example for comparison.
+// Stillwater, the lake (fx/water.js): settings below; '#nosim' and '#noboat' turn its ripple simulation and punt off.
 const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
 // waterMirror (HD) / waterMirrorLow (non-HD): 2 = full planar mirror, 1 = captured lands + planar Spire layer + reflected lantern sprites, 0 = capture + sprites
-Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
+Object.assign(Q, { waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
   mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 FX.fxConfig(Q, { mobile, reduceMotion });     // atmosphere / particle systems (fx/index.js) -> Q.fx
 for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean' && !HASH.has(k) && !HASH.has('no-' + k)) Q.fx[k] = PREFS[k];
@@ -89,7 +88,7 @@ function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   composerSamples = (!mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce
   if (fxActive(Q.post)) {                                                          // fx/post.js: AO, mip bloom, final pass, AA ...
-    fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => water, focus: () => camLook, tour: () => mode === 'tour' });
+    fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => fxWater && fxWater.mesh, focus: () => camLook, tour: () => mode === 'tour' });
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...depthTargetOptions(THREE, renderer, size.x, size.y) });
@@ -333,7 +332,7 @@ function meshFrom(geometry, m) {
 
 const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
-let manifest, nav = null, trains = [], lanterns = null, water = null, flatWater = null, forest = [], fxWater = null;
+let manifest, nav = null, trains = [], lanterns = null, forest = [], fxWater = null;
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -352,51 +351,6 @@ function railAt(s) {   // Blender-frame x, y + unit tangent at arc length s
   return { x: rail.a * Math.cos(t), y: rail.b * Math.sin(t), tx: tx / l, ty: ty / l };
 }
 
-function buildWater(lake, y) {
-  const shape = new THREE.Shape(lake.map(([x, yy]) => new THREE.Vector2(x, yy)));
-  const geo = new THREE.ShapeGeometry(shape);
-  // tileable ripple normal map, generated (no texture download)
-  const N = 256, data = new Uint8Array(N * N * 4), rnd = mulberry(11), waves = [];
-  for (let i = 0; i < 26; i++) { const fx = Math.round((rnd() - 0.5) * 22), fy = Math.round((rnd() - 0.5) * 22); if (!fx && !fy) continue; waves.push([fx, fy, rnd() * 6.283, 1 / (1 + Math.hypot(fx, fy) * 0.55)]); }
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    let dx = 0, dy = 0; const u = (i / N) * 6.2831853, v = (j / N) * 6.2831853;
-    for (const [fx, fy, ph, am] of waves) { const c = Math.cos(fx * u + fy * v + ph) * am; dx += c * fx; dy += c * fy; }
-    const nx = -dx * 0.085, ny = -dy * 0.085, l = Math.hypot(nx, ny, 1), o = (j * N + i) * 4;
-    data[o] = (nx / l * 0.5 + 0.5) * 255; data[o + 1] = (ny / l * 0.5 + 0.5) * 255; data[o + 2] = (1 / l * 0.5 + 0.5) * 255; data[o + 3] = 255;
-  }
-  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true; tex.needsUpdate = true;
-  water = new Water(geo, { textureWidth: Q.mirrorSize, textureHeight: Q.mirrorSize, waterNormals: tex, sunDirection: MOON.clone(), sunColor: 0x5b6fae, waterColor: 0x01030a, distortionScale: 0.75, alpha: 1.0 });
-  const wm = water.material;
-  wm.fragmentShader = wm.fragmentShader.replace('vec3( 0.1 )', 'vec3( 0.002, 0.003, 0.007 )');
-  wm.uniforms.size.value = 9.0;
-  water.rotation.x = -Math.PI / 2; water.position.y = y;
-  const inner = water.onBeforeRender; let frame = 0;
-  water.onBeforeRender = function (r, s, c) {
-    if ((frame++ % Q.mirrorEvery) !== 0) return;
-    const lite = Q.mirrorLite;
-    for (const m of farMeshes) m.visible = false;
-    for (const f of forest) f.visible = false;
-    if (lite) for (const m of landMeshes) m.visible = false;
-    inner.call(this, r, s, c);
-    for (const m of farMeshes) m.visible = true;
-    for (const f of forest) f.visible = Q.forest > 0;
-    if (lite) for (const m of landMeshes) m.visible = true;
-  };
-  scene.add(water); fixMirrorForReversedDepth(THREE, renderer, scene, camera, y);
-  flatWater = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-    uniforms: { uTime },
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: `uniform float uTime; varying vec3 vW;
-      void main(){ vec3 v = normalize(cameraPosition - vW); float fr = pow(1.0 - clamp(v.y, 0.0, 1.0), 4.0);
-        float rp = sin(vW.x * 0.9 + uTime * 0.7) * sin(vW.z * 1.1 - uTime * 0.5);
-        vec3 c = mix(vec3(0.004, 0.006, 0.016), vec3(0.05, 0.045, 0.10), fr) + vec3(0.03, 0.02, 0.008) * fr * (0.5 + 0.5 * rp);
-        gl_FragColor = vec4(c, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }` }));
-  flatWater.rotation.x = -Math.PI / 2; flatWater.position.y = y; flatWater.visible = false; scene.add(flatWater);
-}
 function mulberry(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 function buildLanterns(f32, count) {
@@ -523,8 +477,7 @@ async function load() {
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
   bakedMat.uniforms.uRange.value = manifest.range;
   initRail(manifest.rail.a, manifest.rail.b); depth.addRail(manifest.rail.a, manifest.rail.b, manifest.rail.top);
-  if (Q.water === 'new') fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
-  else buildWater(manifest.lake, manifest.water_z);
+  fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
   FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
   const exU8 = await fetchBin(ex.file.file);
@@ -623,7 +576,7 @@ function buildTour() {
   const P = (id) => places.find((p) => p.id === id);
   const O = new THREE.Vector3(0, 0, 0), rad = (d) => d * Math.PI / 180;
   shots = [];
-  shots.push({ place: P('park'), dur: 13, f: orbitShot(O, 540, 470, 275, 225, rad(-112), rad(-62), 8, 8) });
+  shots.push({ place: P('park'), dur: 13, f: orbitShot(O, 455, 395, 235, 192, rad(-112), rad(-62), 8, 8) });     // ends where the pull-back ends: seamless loop
   const gate = new THREE.CatmullRomCurve3([B(336, 0, 3.6), B(296, 0, 3.0), B(262, 0, 2.7), B(226, 0, 2.8), B(188, 0.4, 2.9), B(169, 7.6, 3.0), B(151, 7.6, 3.1), B(128, 1.2, 3.3), B(102, 0, 4.6), B(74, 0, 9.5)], false, 'centripetal');
   const spTop = B(0, 0, 44);
   shots.push({ place: P('gate'), dur: 19, f: (u, out) => {
@@ -635,14 +588,14 @@ function buildTour() {
     const ctr = new THREE.Vector3(p.target.x, 0, p.target.z);
     if (id === 'brinewatch') {
       const ship = new THREE.Vector3(c[0] + p.lake[0] * 104, 0, -(c[1] + p.lake[1] * 104));        // the galleon, moored off the pier
-      shots.push({ place: p, dur: 13, f: orbitShot(ship, 78, 58, 30, 13, base + rad(95), base + rad(-12), 11, 12) });
+      shots.push({ place: p, dur: 13, f: orbitShot(ship, 84, 68, 32, 18, base + rad(95), base + rad(-12), 11, 14) });     // ends with the whole rig in frame
     } else shots.push({ place: p, dur: 11.5, f: orbitShot(ctr, 118, 86, 58, 27, base - rad(40), base + rad(34), 9, 8) });
   }
   shots.push({ place: { id: 'loop', kicker: 'An elevated circuit over every land', title: 'The Meridian Loop', text: 'Best view of the finale is from the top of the line.', color: '#7ff0d8', chip: document.createElement('i') }, dur: 15, f: (u, out, t) => {
     const lead = trains.find((g) => g.userData.name.includes('lanternrow_car0')) || trains[0];
     const s = (lead ? lead.userData.s : 0) + t * TRAIN_SPEED, a = railAt(s - 66 + u * 8), b = railAt(s + 6);
     out.p.set(a.x * 1.022, manifest.rail.top + 9.5 - u * 2.0, -a.y * 1.022); out.l.set(b.x, manifest.rail.top + 1.2, -b.y); } });
-  shots.push({ place: P('park'), dur: 12, f: orbitShot(O, 210, 540, 70, 275, rad(-175), rad(-112), 14, 8) });
+  shots.push({ place: P('park'), dur: 12, f: orbitShot(O, 210, 455, 70, 235, rad(-175), rad(-112), 14, 8) });
   tourLen = shots.reduce((s, x) => s + x.dur, 0);
 }
 const poseA = { p: new THREE.Vector3(), l: new THREE.Vector3() }, poseB = { p: new THREE.Vector3(), l: new THREE.Vector3() };
@@ -846,7 +799,6 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 /* ───────────────────────── quality ───────────────────────── */
 function setHD(on) {
   Q.hd = on;
-  if (water) { water.visible = on; flatWater.visible = !on; }
   if (fxWater) fxWater.setHD(on);
   Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1); resize();
 }
@@ -910,7 +862,6 @@ function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(), dt = Math.min(Math.max(now - lastNow, 0) / 1000, 0.1); lastNow = now; time += dt; uTime.value = time;
   if (document.hidden || glCtx.lost) return;
-  if (water) water.material.uniforms.time.value = time * 0.32;
   if (ready) {
     updateTrains(time);
     if (mode === 'tour') {
@@ -947,8 +898,8 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
-  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
+window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
+  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;
 load().catch((err) => {
