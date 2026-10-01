@@ -1,4 +1,4 @@
-// GPU timing of the post chain with EXT_disjoint_timer_query_webgl2 (#prof, or __park.fx.prof.start()).
+// GPU timing of the post chain with EXT_disjoint_timer_query_webgl2 (#prof, or __park.post.prof.start()).
 // Each composer pass becomes a segment; the water mirror render is split out of the scene pass.
 export function makeProfiler(renderer) {
   const gl = renderer.getContext(); let ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');

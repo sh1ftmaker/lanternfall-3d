@@ -1,0 +1,65 @@
+// Atmosphere & motion effects for Lanternfall 3D. Each effect lives in its own module; this file owns the switches.
+// Switches: Q.fx.<name>; URL hash tokens turn them on (#fireworks) or off (#no-motes), comma separated (#aurora,no-carousel).
+import { buildLanternFall } from './lanterns.js';
+import { buildAnimated } from './animate.js';
+import { buildMotes } from './motes.js';
+import { buildFireworks } from './fireworks.js';
+import { buildEmitters } from './emitters.js';
+import { buildBeams } from './beams.js';
+import { buildDanceFloor } from './dance.js';
+import { buildMist } from './mist.js';
+import { patchSky } from './sky.js';
+
+export const FX_DEFAULTS = { lanternfall: true, carousel: true, motes: true, fireworks: true, 'fireworks-always': false,
+  emitters: true, beams: true, dance: true, mist: true, sky: true, aurora: false };
+
+export function fxConfig(Q, { mobile = false, reduceMotion = false } = {}) {
+  const tok = new Set(decodeURIComponent(location.hash.slice(1)).split(/[,&+\s]/).filter(Boolean));
+  Q.fx = {};
+  for (const [k, v] of Object.entries(FX_DEFAULTS)) Q.fx[k] = tok.has(k) ? true : tok.has('no-' + k) ? false : v;
+  Q.fx.motion = !reduceMotion || tok.has('motion');           // prefers-reduced-motion freezes everything that drifts
+  Q.fx.scale = mobile ? 0.5 : 1;                              // particle budget multiplier (adapt() lowers it)
+  return Q.fx;
+}
+
+const fx = { lanterns: null };
+
+export function fxLanterns(Q, { f32, count, waterY, uTime }) {
+  if (!Q.fx || !Q.fx.lanternfall) return null;
+  fx.lanterns = buildLanternFall({ f32, count, waterY, uTime, motion: Q.fx.motion ? 1 : 0 });
+  return fx.lanterns;
+}
+
+// called once the manifest is in (before the parts stream)
+export function fxScene(Q, { scene, lands, uTime, lake, waterY, moon }) {
+  const motion = Q.fx.motion ? 1 : 0;
+  if (Q.fx.motes) { fx.motes = buildMotes({ lands, uTime, motion: Q.fx.motion ? 1 : 0, scale: Q.fx.scale }); scene.add(fx.motes); }
+  if (Q.fx.fireworks && Q.fx.motion) { fx.fireworks = buildFireworks({ uTime, scale: Q.fx.scale }); scene.add(fx.fireworks); }
+  if (Q.fx.emitters) { fx.emitters = buildEmitters({ uTime, motion, scale: Q.fx.scale }); scene.add(fx.emitters); }
+  if (Q.fx.beams) { fx.beams = buildBeams({ uTime, motion }); scene.add(fx.beams); }
+  if (Q.fx.dance) { fx.dance = buildDanceFloor({ uTime, motion }); scene.add(fx.dance); }
+  if (Q.fx.mist && lake) { fx.mist = buildMist({ lake, waterY, uTime, motion, layers: Q.fx.scale < 1 ? 2 : 3 }); scene.add(fx.mist); }
+  if (Q.fx.sky || Q.fx.aurora) fx.sky = patchSky(scene, { uTime, motion, aurora: Q.fx.aurora, moonDir: moon });
+}
+
+// once per frame, before rendering
+// ctx: { time, dt, tour } where tour is the tour clock in seconds (wrapped) or -1 outside the tour
+export function fxUpdate(Q, camera, ctx) {
+  if (fx.motes) fx.motes.userData.update(camera);
+  if (fx.beams) fx.beams.userData.update(ctx.time);
+  if (fx.fireworks) fx.fireworks.userData.update(ctx.time, ctx.dt, { tour: ctx.tour, always: Q.fx['fireworks-always'] });
+}
+
+// follows the quality ladder in app.js adapt(): fewer particles first, then drop the fill-heavy layers
+export function fxDegrade(Q, step) {
+  if (fx.motes) fx.motes.userData.setScale(step >= 5 ? 0 : step >= 4 ? 0.35 : step >= 2 ? 0.6 : 1);
+  if (fx.mist) fx.mist.visible = step < 3;
+  if (fx.beams && step >= 5) fx.beams.visible = false;
+}
+
+// called once all park parts are loaded
+export function fxPark(Q, { park, uTime }) {
+  if (Q.fx.carousel) { park.updateMatrixWorld(true); fx.animated = buildAnimated({ park, uTime, motion: Q.fx.motion ? 1 : 0 }); }
+}
+
+export function fxState() { return fx; }

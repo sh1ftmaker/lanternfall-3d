@@ -1,4 +1,4 @@
-// Builds the HD post chain from Q.fx (see settings.js). app.js calls buildFx() from buildComposer() when any
+// Builds the HD post chain from Q.post (see settings.js). app.js calls buildFx() from buildComposer() when any
 // fx token is set; with no token the original chain (RenderPass, UnrealBloom, OutputPass, grade) is unchanged.
 //
 //   [TAA jitter]       fx/taa.js      sub-pixel projection offset
@@ -42,7 +42,7 @@ export function fxActive(F) { return !!(F.final || F.ao || F.aa || F.tilt || F.s
 
 export function buildFx(ctx) {
   const { renderer, scene, camera, Q, size, mobile } = ctx;
-  const F = Object.assign({}, Q.fx);
+  const F = Object.assign({}, Q.post);
   const dpr = renderer.getPixelRatio();
   // 'auto' AA: SMAA where pixels are scarce (replaces 4x MSAA, which also leaves dark AO specks on resolved
   // edges), nothing on dense screens and phones (as the original chain)
