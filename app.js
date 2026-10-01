@@ -15,6 +15,8 @@ import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createLit, litFromHash } from './fx/lit.js';
+import { trackDisposables, watchContext } from './fx/context.js';
+import { veilFail, unsupported } from './fx/ui.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -41,6 +43,9 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
+const missing = unsupported();                    // WebGL2, DecompressionStream: say so in the loading veil (fx/ui.js)
+if (missing) { veilFail(missing.title, missing.text, false); await new Promise(() => {}); }
+trackDisposables(THREE);                           // context-loss hygiene (fx/context.js)
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: !/norz/.test(location.hash) });
@@ -90,6 +95,11 @@ function buildComposer() {
         gl_FragColor = vec4(c, 1.0); }` }));
   prof.wrapComposer(composer);
 }
+function disposeComposer() {      // EffectComposer.dispose() frees only its own two targets: the passes hold the rest
+  if (!composer) return;
+  for (const p of composer.passes) if (p.dispose) p.dispose();
+  composer.dispose(); composer = null; bloomPass = null; fxOut = null;
+}
 let baseFov = 52;
 function applyFov() {     // keep a useful horizontal field of view on tall phone screens
   const k = Math.max(1, 1.3 / camera.aspect);
@@ -103,7 +113,7 @@ function resize() {
   camera.aspect = w / h; applyFov();
   if (composer) {
     const want = (!mobile && pr <= 1.3) ? 4 : 0;
-    if (want !== composerSamples) { composer.dispose(); buildComposer(); }
+    if (want !== composerSamples) { disposeComposer(); buildComposer(); }
     composer.setPixelRatio(pr); composer.setSize(w, h);
   }
 }
@@ -111,6 +121,14 @@ const prof = makeProfiler(renderer);
 resize(); buildComposer(); resize();
 addEventListener('resize', resize);
 new ResizeObserver(resize).observe(stage);
+// context loss (fx/context.js): stop drawing while lost; on restore three re-uploads everything, the app re-validates
+// what lived only on the GPU (water simulation, environment capture, temporal history, pending timer queries)
+const glCtx = watchContext(renderer, { onRestored() {
+  perf.n = Math.min(perf.n, 0);                                       // shaders recompile: do not count those frames
+  prof.restore();
+  if (fxWater) fxWater.contextRestored();
+  if (fxOut && fxOut.passes.taa) fxOut.passes.taa.first = true;
+} });
 
 /* ───────────────────────── materials ───────────────────────── */
 const uTime = { value: 0 };
@@ -808,7 +826,7 @@ let lastNow = performance.now(), time = 0;
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(), dt = Math.min(Math.max(now - lastNow, 0) / 1000, 0.1); lastNow = now; time += dt; uTime.value = time;
-  if (document.hidden) return;
+  if (document.hidden || glCtx.lost) return;
   if (water) water.material.uniforms.time.value = time * 0.32;
   if (ready) {
     updateTrains(time);
@@ -843,7 +861,20 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
-  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); composer.dispose(); bloomPass = null; fxOut = null; buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
+window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
+  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
 frame();
-load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
+let loadFailed = false;
+load().catch((err) => {
+  loadFailed = true; console.warn('Lanternfall: loading failed:', err);
+  const net = err instanceof TypeError || /network|fetch|\b[45]\d\d\b/i.test(err.message);
+  veilFail(net ? 'The download was interrupted.' : 'The park could not be loaded.', net ? 'Check the connection and try again.' : err.message);
+});
+{ // a download that stops without an error (stalled connection): offer a retry instead of an endless progress bar
+  let seen = -1, still = 0;
+  const watch = setInterval(() => {
+    if (loaded || loadFailed) { clearInterval(watch); return; }
+    if (glCtx.lost || loadedBytes !== seen) { seen = loadedBytes; still = 0; return; }
+    if (++still === 25) veilFail('The download has stalled.', 'Nothing has arrived for 25 seconds. Check the connection and try again.');
+  }, 1000);
+}

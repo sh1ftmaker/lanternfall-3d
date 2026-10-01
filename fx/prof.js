@@ -3,7 +3,7 @@
 export function makeProfiler(renderer) {
   const gl = renderer.getContext(); let ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
   const P = { on: false, acc: {}, frames: 0, pending: [], cur: null, curName: null, ext: !!ext };
-  if (!ext) return Object.assign(P, { seg() {}, poll() {}, start() {}, report() { return 'no timer query'; }, wrapComposer() {}, wrapMirror() {} });
+  if (!ext) return Object.assign(P, { seg() {}, poll() {}, start() {}, restore() {}, report() { return 'no timer query'; }, wrapComposer() {}, wrapMirror() {} });
   P.seg = (name) => {
     if (!P.on) return;
     if (P.cur) { gl.endQuery(ext.TIME_ELAPSED_EXT); P.pending.push([P.curName, P.cur, P.frames]); P.cur = null; }
@@ -23,6 +23,7 @@ export function makeProfiler(renderer) {
     P.pending = keep;
   };
   P.start = () => { ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'); P.on = !!ext; P.acc = {}; P.frames = 0; P.pending = []; P.cur = null; };
+  P.restore = () => { ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'); P.pending = []; P.cur = null; if (!ext) P.on = false; };   // after a context restore
   P.report = () => {
     const per = {}; const frames = Object.keys(P.acc).map(Number).sort((a, b) => a - b).slice(5, -2);
     for (const f of frames) for (const [n, ms] of Object.entries(P.acc[f])) (per[n] ||= []).push(ms);

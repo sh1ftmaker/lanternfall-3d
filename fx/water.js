@@ -701,11 +701,12 @@ export function createWater(ctx) {
   }
 
   /* ───────── GPU timing (EXT_disjoint_timer_query_webgl2), for measurements: __park.fxWater().prof(true) ───────── */
-  const gl = renderer.getContext(), tq = gl.getExtension && gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const gl = renderer.getContext(); let tq = gl.getExtension && gl.getExtension('EXT_disjoint_timer_query_webgl2');   // re-fetched after a context restore
   const prof = { on: false, cur: null, pending: [], data: {} };
   function qBegin(name) { if (!prof.on || !tq || prof.cur) return; const q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); prof.cur = { q, name }; }
   function qEnd() { if (!prof.cur) return; gl.endQuery(tq.TIME_ELAPSED_EXT); prof.pending.push(prof.cur); prof.cur = null; }
   function qPoll() {
+    if (!prof.pending.length) return;
     const disjoint = tq && gl.getParameter(tq.GPU_DISJOINT_EXT);
     prof.pending = prof.pending.filter(({ q, name }) => {
       if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) return true;
@@ -771,5 +772,12 @@ export function createWater(ctx) {
     prof(on) { if (on !== undefined) { prof.on = !!on; prof.data = {}; } return profResult(); },
     pathClearance() { let mn = 1e9; for (let s = 0; s < 400; s += 0.5) { boatAt(s, _bp); const i = Math.floor((_bp.x - X0) / dx), j = Math.floor((_bp.z - Z0) / dx); mn = Math.min(mn, open[j * SW + i] ? dist[j * SW + i] : 0); } return mn; },
     info: () => ({ SW, SH, dx, scanned: queue.length, mirror: [mirror.w, mirror.h], sim: sim.on }),
+    // after a WebGL context restore (fx/context.js): render-target contents are gone, so restart the simulation from
+    // rest, re-render the mirror and capture the environment cube again; timer queries of the dead context are dropped
+    contextRestored() {
+      if (sim.a) { sim.a.dispose(); sim.b.dispose(); sim.a = sim.b = null; }
+      mirror.valid = false; prof.pending = []; prof.cur = null; tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+      env.face = -1; env.parts = -1; env.done = false; mat.uniforms.uEnvOn.value = 0; applyTier();
+    },
   };
 }
