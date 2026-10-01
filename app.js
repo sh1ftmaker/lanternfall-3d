@@ -14,6 +14,7 @@ import { buildFx, fxActive } from './fx/post.js';
 import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
+import { createLit, litFromHash } from './fx/lit.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -151,6 +152,8 @@ const glassMat = new THREE.ShaderMaterial({
     }`,
   side: THREE.DoubleSide, transparent: true, depthWrite: false,
 });
+
+const lit = createLit({ renderer, scene, bakedMat, DATA, fetchBin, Q, moon: MOON }); Q.lit = lit.state;     // real-time lighting mode (#lit), off by default
 
 /* ───────────────────────── sky ───────────────────────── */
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.ShaderMaterial({
@@ -492,7 +495,7 @@ async function load() {
     const u8 = await fetchBin(part.file); let off = 0;
     for (const m of part.meshes) {
       const d = decodeMesh(u8, off, m); off = d.next;
-      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh);
+      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); lit.register(mesh, m, part.id);
       const cx = (m.bbox[0] + m.bbox[3]) / 2, cz = (m.bbox[2] + m.bbox[5]) / 2;
       if (Math.hypot(cx, cz) > 420) farMeshes.push(mesh);
       if (part.id !== 'core') landMeshes.push(mesh);
@@ -509,6 +512,8 @@ async function load() {
   }
   FX.fxPark(Q, { park, uTime });
   bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0;
+  const lh = litFromHash(location.hash); if (lh) await lit.set(lh).catch((e) => console.warn('lit:', e.message));
+  addEventListener('hashchange', () => { const o = litFromHash(location.hash); lit.set(o || { on: false }).catch(() => {}); });
 }
 
 /* ───────────────────────── places + captions ───────────────────────── */
@@ -690,6 +695,7 @@ function walkCanStand(x, y, z) {
 const keys = new Set(); const stick = { id: -1, x: 0, y: 0, ox: 0, oy: 0 }; const look = { id: -1, x: 0, y: 0 };
 addEventListener('keydown', (e) => { if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return; keys.add(e.code); if (mode === 'walk' && /Arrow|Space/.test(e.code)) e.preventDefault(); });
 addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('keydown', (e) => { if (e.code === 'KeyL' && loaded) lit.set({ on: !lit.state.on }).catch((x) => console.warn('lit:', x.message)); });   // toggle real-time lighting
 addEventListener('blur', () => keys.clear());
 function updateWalk(dt) {
   let fx = 0, fy = 0;
@@ -837,7 +843,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX,
+window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); composer.dispose(); bloomPass = null; fxOut = null; buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
