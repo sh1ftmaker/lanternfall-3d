@@ -75,7 +75,7 @@ export function createDepth(THREE, camera, opt = {}) {
   return Object.assign(st, { addMesh, addInstanced, addRail, clearance, update, grid, N, CELL, HALF });
 }
 
-// ── Reversed depth (experimental, '#rz'): EXT_clip_control + a 32-bit float depth target in the HD composer. ──
+// ── Reversed depth ('#norz' disables): EXT_clip_control + a 32-bit float depth target in the HD composer. ──
 // Render-target options for the composer: a float depth attachment is what makes reversed depth pay off (with the
 // canvas' 24-bit fixed-point buffer it is no better than the standard mapping). Depth is never sampled: no resolve.
 export function depthTargetOptions(THREE, renderer, w, h) {

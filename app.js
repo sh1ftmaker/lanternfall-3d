@@ -35,7 +35,9 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: /\brz\b/.test(location.hash) });
+// Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
+// off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: !/norz/.test(location.hash) });
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 2.1;
 renderer.setClearColor(0x05040f);
