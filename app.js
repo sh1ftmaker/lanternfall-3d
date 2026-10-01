@@ -804,10 +804,10 @@ function updateLOD() {
 }
 
 /* ───────────────────────── frame loop ───────────────────────── */
-const clock = new THREE.Clock(); let time = 0;
+let lastNow = performance.now(), time = 0;
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), 0.1); time += dt; uTime.value = time;
+  const now = performance.now(), dt = Math.min(Math.max(now - lastNow, 0) / 1000, 0.1); lastNow = now; time += dt; uTime.value = time;
   if (document.hidden) return;
   if (water) water.material.uniforms.time.value = time * 0.32;
   if (ready) {
