@@ -97,3 +97,10 @@ export function fixMirrorForReversedDepth(THREE, renderer, scene, mainCamera, wa
     te[2] = -a * C.x; te[6] = -a * C.y; te[10] = -1 - a * C.z; te[14] = -a * C.w;
   };
 }
+
+// ── Data hook for coplanar faces (not emitted yet) ──
+// bakedMat breaks exact-coplanar ties with a depth-only lift: pitch-black under-layers -1.8 mm, brighter faces up to
+// +1.8 mm. A guess; the data can replace it. pack.py may set "lay": 1 on a mesh entry in manifest.json and append one
+// u8 plane of nv bytes after the index planes (same zigzag-delta coding as the colour planes): a per-vertex layer rank
+// (0 terrain, 1 land base, 2 paving, 3 paths, 4 decals/markings ...; all corners of a triangle equal, so do not weld
+// across ranks). The viewer then lifts depth by rank * 0.5 mm and drops the brightness guess (app.js decodeMesh).

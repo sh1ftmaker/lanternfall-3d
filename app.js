@@ -96,15 +96,15 @@ new ResizeObserver(resize).observe(stage);
 /* ───────────────────────── materials ───────────────────────── */
 const uTime = { value: 0 };
 const bakedMat = new THREE.ShaderMaterial({
-  uniforms: { uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uZBias: { value: new THREE.Vector2(0.0018, 0.0018) } },
+  uniforms: { uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uZBias: { value: new THREE.Vector3(0.0018, 0.0018, 0.0005) } },
   vertexShader: /* glsl */`
-    attribute vec4 aCol; uniform float uRange; uniform vec2 uZBias; varying vec3 vCol; varying float vDist;
+    attribute vec4 aCol; attribute float aLay; uniform float uRange; uniform vec3 uZBias; varying vec3 vCol; varying float vDist;
     void main(){ vCol = aCol.rgb * (aCol.a * uRange);
       vec4 mv = modelViewMatrix * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv;
       // z-fight tie-break for exactly coplanar floors (the data has some, see fx/depth.js): depth is taken as if the vertex
       // sat up to 1.8 mm higher (brighter faces) or 1.8 mm lower (pitch-black faces: under-layers that never saw light).
       // Less than the 1.95 mm position quantum, so it never reorders layers that the data keeps apart.
-      float lum = dot(vCol, vec3(0.3, 0.5, 0.2)), dy = vCol == vec3(0.0) ? -uZBias.x : uZBias.y * lum / (lum + 0.05);
+      float lum = dot(vCol, vec3(0.3, 0.5, 0.2)), dy = (vCol == vec3(0.0) ? -uZBias.x : uZBias.y * lum / (lum + 0.05)) + aLay * uZBias.z;
       vec4 cz = projectionMatrix * (mv + viewMatrix[1] * dy);
       if (cz.w * gl_Position.w > 1e-6) gl_Position.z = cz.z * (gl_Position.w / cz.w);
     }`,
@@ -117,6 +117,7 @@ const bakedMat = new THREE.ShaderMaterial({
     }`,
   side: THREE.DoubleSide,
 });
+bakedMat.defaultAttributeValues.aLay = [0];     // optional per-vertex layer rank (manifest mesh 'lay', see fx/depth.js)
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
   vertexShader: /* glsl */`
@@ -240,6 +241,11 @@ function decodeMesh(u8, off, m) {
   }
   off += ni * 4;
   const g = new THREE.BufferGeometry();
+  if (m.lay) {                     // optional coplanar-priority plane (zigzag-delta u8 per vertex): a higher rank wins ties
+    const lay = new Uint8Array(nv); let acc = 0;
+    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
+    off += nv; g.setAttribute('aLay', new THREE.BufferAttribute(lay, 1)); bakedMat.uniforms.uZBias.value.y = 0;   // ranks replace the brightness guess
+  }
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
   g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
