@@ -8,6 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import * as FX from './fx/index.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -45,6 +46,7 @@ const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
 const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+FX.fxConfig(Q, { mobile, reduceMotion });
 let composer, bloomPass, composerSamples = -1;
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
@@ -433,7 +435,11 @@ async function load() {
   buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
   const exU8 = await fetchBin(ex.file.file);
-  if (ex.lanterns) buildLanterns(new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice(), ex.lanterns.count);
+  if (ex.lanterns) {
+    const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
+    lanterns = FX.fxLanterns(Q, { f32: lf, count: ex.lanterns.count, waterY: manifest.water_z, uTime });
+    if (lanterns) scene.add(lanterns); else buildLanterns(lf, ex.lanterns.count);
+  }
   if (ex.forest) buildForest(exU8, ex.forest);
   const names = { core: 'Filling Stillwater', transit: 'Raising the monorail' };
   const pill = $('#loadpill');
@@ -784,6 +790,6 @@ function frame() {
   if (Q.bloom) { bloomPass.enabled = true; composer.render(dt); } else renderer.render(scene, camera);
   adapt(dt * 1000);
 }
-window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns };
+window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns, fx: FX };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
