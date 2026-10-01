@@ -1,15 +1,17 @@
 // Interface helpers that are not about the 3D scene: failure messages in the loading veil.
 const $ = (s) => document.querySelector(s);
 
-// What this browser lacks for the viewer, or null. Checked before the renderer is made so a visitor gets a message
-// instead of a blank page.
-export function unsupported() {
+// What this browser can do, checked on a throw-away context before the renderer is made, so a visitor gets a message
+// instead of a blank page and the renderer is not asked for features that only produce console warnings.
+//   fail: {title, text} when the viewer cannot run; clip: EXT_clip_control (reversed depth); hdr: float colour targets
+export function probe() {
   let gl = null;
   try { gl = document.createElement('canvas').getContext('webgl2'); } catch (e) { gl = null; }
-  if (!gl) return { title: 'This browser cannot show the park.', text: 'Lanternfall needs WebGL 2. It works in current Chrome, Edge, Firefox and Safari (15 or newer); if you use one of those, check that hardware acceleration is turned on.' };
+  if (!gl) return { fail: { title: 'This browser cannot show the park.', text: 'Lanternfall needs WebGL 2. It works in current Chrome, Edge, Firefox and Safari (15 or newer); if you use one of those, check that hardware acceleration is turned on.' } };
+  const out = { fail: null, clip: !!gl.getExtension('EXT_clip_control'), hdr: !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float')) };
   const lc = gl.getExtension('WEBGL_lose_context'); if (lc) lc.loseContext();            // free the probe context
-  if (typeof DecompressionStream === 'undefined') return { title: 'This browser is too old for the park.', text: 'Lanternfall unpacks its 3D data with DecompressionStream, available in browsers from 2023 on. Updating the browser will fix it.' };
-  return null;
+  if (typeof DecompressionStream === 'undefined') out.fail = { title: 'This browser is too old for the park.', text: 'Lanternfall unpacks its 3D data with DecompressionStream, available in browsers from 2023 on. Updating the browser will fix it.' };
+  return out;
 }
 
 // Show a failure in the loading veil (or, once the park is open, in the small status pill). retry: true adds a
@@ -47,7 +49,8 @@ export function buildSettings(opts) {
   const qBox = sheet.querySelector('.seg'), note = sheet.querySelector('.seg-note'), tBox = sheet.querySelector('.toggles');
   const qBtns = opts.qualities.map((q) => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = q.label; b.dataset.q = q.id;
-    b.setAttribute('role', 'radio'); b.addEventListener('click', () => { set(q.id, true); opts.onQuality(q.id); });
+    b.setAttribute('role', 'radio'); if (q.disabled) { b.disabled = true; b.title = q.disabled; }
+    b.addEventListener('click', () => { set(q.id, true); opts.onQuality(q.id); });
     qBox.appendChild(b); return b;
   });
   let current = opts.quality;
@@ -60,7 +63,8 @@ export function buildSettings(opts) {
   qBox.addEventListener('keydown', (e) => {     // radio group: arrows move the choice
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!d) return; e.preventDefault(); e.stopPropagation();
-    const i = (opts.qualities.findIndex((x) => x.id === current) + d + qBtns.length) % qBtns.length;
+    let i = opts.qualities.findIndex((x) => x.id === current);
+    for (let k = 0; k < qBtns.length; k++) { i = (i + d + qBtns.length) % qBtns.length; if (!qBtns[i].disabled) break; }
     qBtns[i].focus(); qBtns[i].click();
   });
   const tBtns = {};

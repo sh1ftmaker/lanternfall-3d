@@ -91,6 +91,7 @@ export function createWater(ctx) {
   const extra = Q.waterPools ? [BASIN] : [];
   const polys = [lake, ...extra];
   const caps = renderer.capabilities, ext = renderer.extensions;
+  const rtType = Q.hdr === false ? THREE.UnsignedByteType : THREE.HalfFloatType;      // 8-bit where float targets are not renderable
   const canSim = caps.isWebGL2 && (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float'));
 
   // sim / mask domain over the lake, in three (x, z)
@@ -227,7 +228,7 @@ export function createWater(ctx) {
     const sc = tier() >= 2 ? Q.mirrorScale : Q.mirrorScaleLow, w = Math.max(64, Math.round(db.x * sc)), h = Math.max(64, Math.round(db.y * sc));
     if (mirror.rt && mirror.w === w && mirror.h === h) return;
     if (mirror.rt) mirror.rt.dispose();
-    mirror.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: true, samples: 0 });
+    mirror.rt = new THREE.WebGLRenderTarget(w, h, { type: rtType, depthBuffer: true, samples: 0 });
     mirror.rt.texture.minFilter = THREE.LinearFilter; mirror.rt.texture.generateMipmaps = false;
     mirror.w = w; mirror.h = h; mirror.valid = false;
     if (mat) mat.uniforms.tMirror.value = mirror.rt.texture;
@@ -564,7 +565,7 @@ export function createWater(ctx) {
       if (!ctx.isLoaded() || n === env.parts) return;
       env.parts = n; env.face = 0;
       if (!env.rt) {
-        env.rt = new THREE.WebGLCubeRenderTarget(Q.waterEnvSize, { type: THREE.HalfFloatType, generateMipmaps: false, minFilter: THREE.LinearFilter });
+        env.rt = new THREE.WebGLCubeRenderTarget(Q.waterEnvSize, { type: rtType, generateMipmaps: false, minFilter: THREE.LinearFilter });
         env.cam = new THREE.CubeCamera(ENV_NEAR, 3000, env.rt); env.cam.position.set(0, ENV_Y, 0); env.cam.updateMatrixWorld(true);
       }
     }

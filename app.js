@@ -15,7 +15,7 @@ import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createLit, litFromHash } from './fx/lit.js';
 import { trackDisposables, watchContext } from './fx/context.js';
-import { veilFail, unsupported, loadPrefs, buildSettings } from './fx/ui.js';
+import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -50,12 +50,12 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
-const missing = unsupported();                    // WebGL2, DecompressionStream: say so in the loading veil (fx/ui.js)
-if (missing) { veilFail(missing.title, missing.text, false); await new Promise(() => {}); }
+const CAN = probe();                              // WebGL2, DecompressionStream, reversed depth, HDR targets (fx/ui.js)
+if (CAN.fail) { veilFail(CAN.fail.title, CAN.fail.text, false); await new Promise(() => {}); }
 trackDisposables(THREE);                           // context-loss hygiene (fx/context.js)
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: !/norz/.test(location.hash) });
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 2.1;
 renderer.setClearColor(0x05040f);
@@ -80,13 +80,14 @@ for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean
 // picture quality: 'fast' (no post, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
 // A '#fx=' token in the URL wins over the saved choice.
 const hasFxToken = /(^|[#,&])fx=/.test(location.hash);
-let quality = hasFxToken ? (Q.post.preset === 'legacy' || Q.post.preset === 'off' ? 'hd' : 'cinematic') : (PREFS.quality || 'hd');
+Q.hdr = CAN.hdr;            // without float colour targets: no post chain, 8-bit water targets, no ripple simulation
+let quality = !Q.hdr ? 'fast' : hasFxToken ? (Q.post.preset === 'legacy' || Q.post.preset === 'off' ? 'hd' : 'cinematic') : (PREFS.quality || 'hd');
 if (!hasFxToken && quality === 'cinematic') Q.post = readFx('#fx=hd');
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-  composerSamples = (!mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce
+  composerSamples = (Q.bloom && !mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce (not in Fast)
   if (fxActive(Q.post)) {                                                          // fx/post.js: AO, mip bloom, final pass, AA ...
     fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => fxWater && fxWater.mesh, focus: () => camLook, tour: () => mode === 'tour' });
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
@@ -141,7 +142,7 @@ function resize() {
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   view.w = w; view.h = h; applyFov();
   if (composer) {
-    const want = (!mobile && pr <= 1.3) ? 4 : 0;
+    const want = (Q.bloom && !mobile && pr <= 1.3) ? 4 : 0;
     if (want !== composerSamples) { disposeComposer(); buildComposer(); }
     composer.setPixelRatio(pr); composer.setSize(w, h);
   }
@@ -800,13 +801,13 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 function setHD(on) {
   Q.hd = on;
   if (fxWater) fxWater.setHD(on);
-  Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1); resize();
+  Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1, Q.dpr); resize();   // never raises what adapt() lowered
 }
 function setQuality(q, user) {
   quality = q; if (user) perf.locked = true;               // a visitor's choice is not overridden by adapt()
-  if (q !== 'fast') {
+  {
     const want = readFx(q === 'cinematic' ? '#fx=hd' : '#fx=legacy');
-    if (want.preset !== Q.post.preset) { Q.post = want; disposeComposer(); buildComposer(); resize(); }
+    if (JSON.stringify(want) !== JSON.stringify(Q.post)) { Q.post = want; disposeComposer(); buildComposer(); resize(); }
   }
   setHD(q !== 'fast'); if (settings) settings.setQuality(q);
 }
@@ -815,6 +816,7 @@ const QUALITIES = [
   { id: 'hd', label: 'HD', note: 'Glow around the lights and the lake as a mirror.' },
   { id: 'cinematic', label: 'Cinematic', note: 'HD plus contact shadows and a softer, wider glow. Same speed on most graphics cards.' },
 ];
+if (!Q.hdr) for (const q of QUALITIES) if (q.id !== 'fast') q.disabled = 'This graphics driver cannot render the glow (no float render targets).';
 let settings = null;
 settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQuality(q, true),
   toggles: [
@@ -845,9 +847,15 @@ function adapt(ms) {
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step);
-  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); resize(); }
+  // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
+  // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
+  if (perf.step === 1) {
+    Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); Q.waterSimHz = 30;
+    if (Q.post.ao || Q.post.aa === 'taa' || Q.post.tilt) { Q.post = { ...Q.post, ao: '', tilt: false, aa: Q.post.aa === 'taa' ? 'auto' : Q.post.aa }; disposeComposer(); buildComposer(); }
+    resize();
+  }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
-  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }
+  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; if (fxWater) fxWater.sim.on = false; resize(); }
   else if (perf.step === 4) { setQuality('fast'); }
   else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.75; resize(); }
 }
@@ -900,7 +908,9 @@ function frame() {
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
-  if (Q.bloom) { if (bloomPass) bloomPass.enabled = true; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
+  // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
+  // canvas, additive lanterns and beams would be tone-mapped one by one and clip to white. Direct only without HDR targets.
+  if (Q.bloom || Q.hdr) { if (bloomPass) bloomPass.enabled = Q.bloom; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
   prof.poll();
   adapt(dt * 1000);
 }
