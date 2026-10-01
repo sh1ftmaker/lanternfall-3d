@@ -465,6 +465,7 @@ async function load() {
       $('#veil').classList.add('done'); pill.hidden = false; showHint();
     }
   }
+  FX.fxPark(Q, { park, uTime });
   bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0;
 }
 

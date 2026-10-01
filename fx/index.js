@@ -1,8 +1,9 @@
 // Atmosphere & motion effects for Lanternfall 3D. Each effect lives in its own module; this file owns the switches.
 // Switches: Q.fx.<name>; URL hash tokens turn them on (#fireworks) or off (#no-motes), comma separated (#aurora,no-carousel).
 import { buildLanternFall } from './lanterns.js';
+import { buildAnimated } from './animate.js';
 
-export const FX_DEFAULTS = { lanternfall: true };
+export const FX_DEFAULTS = { lanternfall: true, carousel: true };
 
 export function fxConfig(Q, { mobile = false, reduceMotion = false } = {}) {
   const tok = new Set(decodeURIComponent(location.hash.slice(1)).split(/[,&+\s]/).filter(Boolean));
@@ -19,6 +20,11 @@ export function fxLanterns(Q, { f32, count, waterY, uTime }) {
   if (!Q.fx || !Q.fx.lanternfall) return null;
   fx.lanterns = buildLanternFall({ f32, count, waterY, uTime, motion: Q.fx.motion ? 1 : 0 });
   return fx.lanterns;
+}
+
+// called once all park parts are loaded
+export function fxPark(Q, { park, uTime }) {
+  if (Q.fx.carousel) { park.updateMatrixWorld(true); fx.animated = buildAnimated({ park, uTime, motion: Q.fx.motion ? 1 : 0 }); }
 }
 
 export function fxState() { return fx; }
