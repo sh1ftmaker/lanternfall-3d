@@ -38,6 +38,13 @@ const ATTRACTIONS = {
   'lantern-row': 'Shrine of Wishes · Rooftop Chase · The Night Market',
   rosewick: 'The Moonlit Promenade · Pavilion of Wings · Blossom Lane',
 };
+// Walk-mode arrival point per chip, Blender (x, y) + yaw: picked with a nav-grid sight-line search and checked in
+// screenshots (open view of the place's landmark, no pylon, wall or balustrade in front)
+const WALK_AT = {
+  park: [300, 0, Math.PI], gate: [288, 0, Math.PI], spire: [85.5, 31.1, -2.79],
+  guildhollow: [-149.9, 36.1, -2.36], frostmere: [-65.0, 107.5, 3.14], meridian: [81.7, 93.8, 2.36], wanderers: [139.9, 48.2, 0.39],
+  brinewatch: [114.9, -81.5, 0.39], 'lantern-row': [-16.6, -118.5, -0.26], rosewick: [-136.6, -57.6, -1.18],
+};
 const MOON = new THREE.Vector3(-0.507, 0.616, 0.604).normalize();
 const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
@@ -553,7 +560,16 @@ function setupPlaces() {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = p.name; b.style.setProperty('--c', p.color); b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => gotoPlace(p)); p.chip = b; chips.appendChild(b);
   }
-  buildTour();
+  buildTour();                       // the tour's land shots orbit the original targets: build it before the overrides
+  for (const p of places) {
+    const w = WALK_AT[p.id]; if (w) { p.walk = [w[0], w[1]]; p.yaw = w[2]; }
+    // Explore vantage for a land: from behind it, looking in across the land towards the lake, so the lantern canopy over
+    // the water is the backdrop instead of a curtain between the camera and the land
+    if (p.land) { const c = p.land.center, lk = p.lake; p.target = B(c[0] + lk[0] * 22, c[1] + lk[1] * 22, 4); p.pos = B(c[0] - lk[0] * 105, c[1] - lk[1] * 105, 62); }
+  }
+  // chips in the order the tour visits the lands (round the lake), not the manifest's
+  const order = ['park', 'gate', 'spire', 'wanderers', 'meridian', 'frostmere', 'guildhollow', 'rosewick', 'lantern-row', 'brinewatch'];
+  for (const id of order) { const p = places.find((q) => q.id === id); if (p) chips.appendChild(p.chip); }
 }
 let capKey = '';
 function setCaption(p) {
