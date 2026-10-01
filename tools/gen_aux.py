@@ -20,7 +20,7 @@ CLASSES = [  # (class id, regex on material name without the part prefix); first
     (4, r"grass|lawn|turf|hedge|leaf|topiary|boxwood|conifer|snow|soil|earth|gravel|sand|shrub|flower|blossom|pine|maple|palm|bark|trunk|moss"),
     (1, r"pave|paving|cobble|flagstone|plaza|quay|road|tactile|wharf|prom|kerb|asphalt|floor|ring|walk"),
     (2, r"wood|plank|boardwalk|deck|timber|bench|barrel|crate|board|siding|bamboo|pile|mast|chest|tabletop|counter|cork"),
-    (3, r"stone|brick|wall|marble|stucco|plaster|concrete|coping|balustrade|facade|rock|pylon|panel|cap|base"),
+    (3, r"stone|brick|wall|marble|concrete|coping|balustrade|facade|rock|pylon|panel|cap|base"),
     (6, r"iron|brass|gold|chrome|steel|copper|bronze|metal|wire|rail|pipe|truss|silver|grate"),
 ]
 NAMES = {0: "plain", 1: "paving", 2: "wood", 3: "masonry", 4: "organic", 5: "roof", 6: "metal", 7: "emissive"}
