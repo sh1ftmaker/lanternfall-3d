@@ -48,8 +48,9 @@ camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
 // Stillwater (fx/water.js). '#oldwater' brings back the three.js Water from the ocean example for comparison.
 const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
-Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: 2, waterMirrorLow: 1, mirrorScale: mobile ? 0.4 : 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
-  mirrorEveryLow: 1, mirrorScaleLow: 0.35, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
+// waterMirror (HD) / waterMirrorLow (non-HD): 2 = full planar mirror, 1 = captured lands + planar Spire layer + reflected lantern sprites, 0 = capture + sprites
+Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
+  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 let composer, bloomPass, composerSamples = -1;
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
@@ -737,7 +738,7 @@ function adapt(ms) {
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++;
-  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.lod = Math.max(Q.lod, 1.8); resize(); }
+  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); resize(); }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
   else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }
   else if (perf.step === 4) { setHD(false); }

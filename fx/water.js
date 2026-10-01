@@ -536,11 +536,11 @@ export function createWater(ctx) {
         }
         // moon glitter: sharp glints on ruffled water plus a soft path
         float md = max(dot(R, uMoon), 0.0);
-        float glit = pow(md, 1400.0) * (0.25 + 2.5 * rough) * 9.0 + pow(md, 90.0) * 0.012 * (0.3 + rough);
+        float glit = pow(md, 2400.0) * (0.04 + rough) * 6.0 + pow(md, 120.0) * 0.006 * (0.2 + rough);
         // body colour: black in open water, a faint peaty tint where it is shallow by the quay
         float shallow = 1.0 - smoothstep(0.4, 7.0, shore);
         vec3 body = mix(vec3(0.0010, 0.0014, 0.0030), vec3(0.0060, 0.0070, 0.0062), shallow);
-        vec3 col = body * (1.0 - F) + refl * F + vec3(0.62, 0.70, 0.95) * glit * F * 8.0;
+        vec3 col = body * (1.0 - F) + refl * F + vec3(0.62, 0.70, 0.95) * glit * F * 3.0;
         // contact line: damp darkening against walls, a thin lift where ripples break on them
         float contact = 1.0 - smoothstep(0.0, 0.55, shore);
         col *= 1.0 - 0.55 * contact;
