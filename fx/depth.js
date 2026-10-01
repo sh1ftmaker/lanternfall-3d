@@ -22,7 +22,7 @@ export function updateDepthUniforms(u, camera) {
 export const DEPTH_GLSL = /* glsl */`
   uniform mat4 uProj, uProjInv; uniform float uLogFar;
   bool isSky(float d){
-    #ifdef REVERSED_DEPTH
+    #if defined(REVERSED_DEPTH) || defined(USE_REVERSED_DEPTH_BUFFER)
       return d <= 0.0;
     #else
       return d >= 1.0;
@@ -35,7 +35,7 @@ export const DEPTH_GLSL = /* glsl */`
       vec4 c = uProjInv * vec4(uv * 2.0 - 1.0, -1.0, 1.0); vec3 r = c.xyz / c.w;   // a point on the ray
       return r * (w / -r.z);
     #else
-      #ifdef REVERSED_DEPTH
+      #if defined(REVERSED_DEPTH) || defined(USE_REVERSED_DEPTH_BUFFER)
         vec4 c = uProjInv * vec4(uv * 2.0 - 1.0, d, 1.0);
       #else
         vec4 c = uProjInv * vec4(vec3(uv, d) * 2.0 - 1.0, 1.0);

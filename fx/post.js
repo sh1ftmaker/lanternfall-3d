@@ -42,8 +42,11 @@ export function fxActive(F) { return !!(F.final || F.ao || F.aa || F.tilt || F.s
 
 export function buildFx(ctx) {
   const { renderer, scene, camera, Q, size, mobile } = ctx;
-  const F = Q.fx;
+  const F = Object.assign({}, Q.fx);
   const dpr = renderer.getPixelRatio();
+  // 'auto' AA: SMAA where pixels are scarce (replaces 4x MSAA, which also leaves dark AO specks on resolved
+  // edges), nothing on dense screens and phones (as the original chain)
+  if (F.aa === 'auto') F.aa = (!mobile && dpr <= 1.3) ? 'smaa' : 'none';
   const msaa = F.aa === 'msaa' ? 4 : (F.aa ? 0 : ctx.samples);                 // a post AA replaces MSAA
   const needDepth = !!(F.ao || F.tilt || F.aa === 'taa');
   const rg11 = F.fmt === 'rg11' && canRG11(renderer) && !F.ao;                  // no alpha in RG11: AO uses it for lantern glow
@@ -87,7 +90,7 @@ export function buildFx(ctx) {
   }
 
   if (useFinal) {
-    const fin = new FinalPass({ camera, renderer, ao: !!(ao && ao.isTextureOnly), bloom: F.bloom === 'mip', dof: !!dof, grain: F.grain, aoDebug: F.aodebug });
+    const fin = new FinalPass({ camera, renderer, ao: !!(ao && ao.isTextureOnly), bloom: F.bloom === 'mip', dof: !!dof, grain: F.grain, aoDebug: F.aodebug, sharpen: F.aa === 'taa' });
     if (ao && ao.isTextureOnly) fin.ao = ao;
     if (F.bloom === 'mip') { fin.bloom = bloom; fin.uniforms.uBloom.value = bloom.strength; }
     fin.dof = dof;

@@ -84,7 +84,8 @@ export class TAAPass extends Pass {
     u.uCamWorld.value.copy(cam.matrixWorld); u.uPrevVP.value.copy(this.prevVP); u.uJitter.value.copy(this.jitter);
     u.uReset.value = this.first ? 1 : 0; this.first = false;
     this.q.material = this.m; renderer.setRenderTarget(this.hist[this.cur]); this.q.render(renderer);
-    this.mCopy.uniforms.tSrc.value = this.hist[this.cur].texture; this.q.material = this.mCopy; renderer.setRenderTarget(readBuffer); this.q.render(renderer);
+    this.mCopy.uniforms.tSrc.value = this.hist[this.cur].texture; this.q.material = this.mCopy; renderer.setRenderTarget(readBuffer);
+    const ac = renderer.autoClear; renderer.autoClear = false; this.q.render(renderer); renderer.autoClear = ac;   // keep the scene depth
     this.cur = 1 - this.cur;
     // un-jitter for everything after (bloom, final, the next frame's LOD maths) and remember this frame's VP
     cam.projectionMatrix.copy(this.saved); cam.projectionMatrixInverse.copy(this.saved).invert();

@@ -36,6 +36,7 @@ export class FinalPass extends Pass {
     if (o.grain) d.USE_GRAIN = '';
     if (o.ca) d.USE_CA = '';
     if (o.aoDebug) d.AO_DEBUG = '';
+    if (o.sharpen) d.USE_SHARPEN = '';
     this.material.defines = d; this.material.needsUpdate = true;
   }
   _frag() {
@@ -53,6 +54,14 @@ export class FinalPass extends Pass {
       void main(){
         vec4 src = texture2D(tDiffuse, vUv);
         vec3 c = src.rgb;
+        #ifdef USE_SHARPEN
+          // light unsharp mask after TAA (which softens a little); done in a compressed space so bulbs do not halo
+          ivec2 ip = ivec2(gl_FragCoord.xy);
+          vec3 nb = texelFetch(tDiffuse, ip + ivec2(1, 0), 0).rgb + texelFetch(tDiffuse, ip - ivec2(1, 0), 0).rgb
+                  + texelFetch(tDiffuse, ip + ivec2(0, 1), 0).rgb + texelFetch(tDiffuse, ip - ivec2(0, 1), 0).rgb;
+          vec3 tc = c / (1.0 + c), tn = (nb * 0.25) / (1.0 + nb * 0.25);
+          tc = clamp(tc + (tc - tn) * 0.35, 0.0, 0.999); c = tc / (1.0 - tc);
+        #endif
         #ifdef USE_CA
           vec2 dd = (vUv - 0.5) * uCA;
           c.r = texture2D(tDiffuse, vUv - dd).r; c.b = texture2D(tDiffuse, vUv + dd).b;
