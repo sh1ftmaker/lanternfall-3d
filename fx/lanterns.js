@@ -53,11 +53,15 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
 
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime, uScale: { value: 500 }, uWater: { value: waterY }, uMotion: { value: motion }, uPeriod: { value: PERIOD },
-      uF: { value: new THREE.Vector4(F.rise, F.rise + F.hang, F.rise + F.hang + F.desc, F.rise + F.hang + F.desc + F.float) }, uGain: { value: 1 } },
+      uF: { value: new THREE.Vector4(F.rise, F.rise + F.hang, F.rise + F.hang + F.desc, F.rise + F.hang + F.desc + F.float) }, uGain: { value: 1 },
+      uStretch: { value: 2.6 }, tMask: { value: null }, uDom: { value: new THREE.Vector4(0, 0, 1, 1) } },
     vertexShader: /* glsl */`
       attribute vec3 aSeed, aCol; attribute vec2 aPar; attribute vec4 aC, aW;
       uniform float uTime, uScale, uWater, uMotion, uPeriod, uGain; uniform vec4 uF;
       varying vec2 vQ; varying vec3 vCol; varying float vShape, vK, vFlame, vAlpha;
+      #ifdef REFL
+        uniform float uStretch; uniform sampler2D tMask; uniform vec4 uDom;     // reflection on the lake (see makeReflection)
+      #endif
       const float TAU = 6.2831853;
       float hh(float n){ return fract(sin(n) * 43758.5453); }
       vec3 wander(float t, float ph, float amp){
@@ -104,24 +108,46 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
         } else { p = floatAt(1.0, t, ph); lit = 0.0; }
         p = mix(aSeed, p, uMotion);
         lit = mix(1.0, lit, uMotion);
+        float reflK = 1.0, stretch = 1.0;
+        #ifdef REFL
+          // image of the lantern in the lake: mirror it about the water plane, draw it where the reflected ray meets the
+          // surface, sized by the mirrored distance, faded by Fresnel and masked to open water
+          vec3 mp = vec3(p.x, 2.0 * uWater - p.y, p.z), cp = cameraPosition;
+          float tw = (cp.y - uWater) / max(cp.y - mp.y, 1e-3);
+          vec3 sp = cp + (mp - cp) * (tw * 0.997);
+          vec4 mk = texture2D(tMask, (sp.xz - uDom.xy) * uDom.zw);
+          vec3 Vw = normalize(cp - sp);
+          reflK = step(0.5, mk.g) * step(0.0, cp.y - uWater) * step(uWater + 0.25, p.y) * (0.02 + 0.98 * pow(1.0 - clamp(Vw.y, 0.0, 1.0), 5.0));
+          stretch = 1.0 + uStretch * smoothstep(0.6, 0.05, Vw.y);
+          float dmir = max(-(viewMatrix * vec4(mp, 1.0)).z, 0.1);
+          p = sp;
+        #endif
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        float dist = max(-mv.z, 0.05);
+        float distP = max(-mv.z, 0.05);
+        #ifdef REFL
+          float dist = dmir;
+        #else
+          float dist = distP;
+        #endif
         float px = aPar.y * 1.4 * uScale / dist;                // nominal glow diameter in pixels (as the old sprite)
         float sz = clamp(px, 2.0, 1e4);
         float flick = 0.86 + 0.14 * sin(t * (2.0 + fract(ph * 3.3) * 3.0) + ph * 9.0);
         float gain = aPar.x * flick * min(1.0, (px * px) / (sz * sz) * 2.0 + 0.10) * mix(0.34, 0.13, smoothstep(3.0, 22.0, px));
         // lanterns closer than a few metres fade out instead of filling the screen
-        gain *= smoothstep(1.0, 4.0, dist) * lit * uGain;
+        gain *= smoothstep(1.0, 4.0, dist) * lit * uGain * reflK;
         vCol = aCol * gain;
         vShape = smoothstep(9.0, 20.0, px);                     // far: glow dot; near: paper lantern
+        #ifdef REFL
+          vShape = 0.0; sz = min(sz, 40.0);
+        #endif
         // camera-facing quad whose "up" follows world up projected on the screen
         vec2 up = (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xy; float k = length(up);
         up = k > 1e-3 ? up / k : vec2(0.0, 1.0);
         float sw = sin(t * (0.7 + fract(ph * 7.1) * 0.5) + ph * 3.0) * 0.07 * sway * uMotion;
         float cs = cos(sw), sn = sin(sw); up = vec2(cs * up.x - sn * up.y, sn * up.x + cs * up.y);
         vec2 rt = vec2(up.y, -up.x);
-        float hs = 0.5 * sz * dist / uScale * mix(1.0, 1.6, vShape);       // world half-size of the quad
-        mv.xy += (position.x * rt + position.y * up) * hs;
+        float hs = 0.5 * sz * distP / uScale * mix(1.0, 1.6, vShape);      // world half-size of the quad
+        mv.xy += (position.x * rt + position.y * up * stretch) * hs;
         vQ = position.xy * mix(1.0, 1.6, vShape);
         vK = k; vFlame = 0.75 + 0.25 * sin(t * 11.0 + ph * 17.0) * sin(t * 7.3 + ph);
         vAlpha = smoothstep(1.0, 4.0, dist) * lit;
@@ -174,5 +200,15 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
   const mesh = new THREE.Mesh(quad, mat);
   mesh.renderOrder = 8; mesh.frustumCulled = false;
   mesh.onBeforeRender = (r, s, cam) => { const rt = r.getRenderTarget(); const h = rt ? rt.height : r.domElement.height; mat.uniforms.uScale.value = h * 0.5 * cam.projectionMatrix.elements[5]; };
+  // A second draw of the same instances as their reflections on the lake, for water tiers without a planar mirror
+  // (fx/water.js calls this with its open-water mask). Shares every uniform with the lanterns, so it follows the life cycle.
+  mesh.userData.makeReflection = ({ tMask, dom, stretch = 2.6 }) => {
+    const m2 = mat.clone();
+    m2.uniforms = { ...mat.uniforms, uScale: { value: 500 }, tMask: { value: tMask }, uDom: { value: dom }, uStretch: { value: stretch } };
+    m2.defines = { REFL: '' }; m2.blending = THREE.AdditiveBlending; m2.depthTest = true; m2.depthWrite = false; m2.needsUpdate = true;
+    const refl = new THREE.Mesh(quad, m2); refl.renderOrder = 7; refl.frustumCulled = false;
+    refl.onBeforeRender = (r, s, cam) => { const rt = r.getRenderTarget(); const h = rt ? rt.height : r.domElement.height; m2.uniforms.uScale.value = h * 0.5 * cam.projectionMatrix.elements[5]; };
+    return refl;
+  };
   return mesh;
 }

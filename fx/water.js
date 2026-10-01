@@ -386,7 +386,7 @@ export function createWater(ctx) {
   // floating lanterns: each bobs, and now and then gets nudged (or a new one "lands") and sends out a ring
   let lanternSplat = null;
   function buildLanternSplat(L) {
-    const src = L.geometry.attributes.position, ib = src.data.array, stride = src.data.stride, pts = [];
+    const src = L.geometry.attributes.aSeed || L.geometry.attributes.position, ib = src.data.array, stride = src.data.stride, pts = [];
     for (let i = 0; i < src.count; i++) { const y = ib[i * stride + 1]; if (y < W0 + 0.6) pts.push(ib[i * stride], y, ib[i * stride + 2]); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
     const m = new THREE.ShaderMaterial({
@@ -583,6 +583,9 @@ export function createWater(ctx) {
   /* ───────── reflected lantern sprites (no-mirror tier) ───────── */
   let spriteRefl = null;
   function buildSpriteRefl(L) {
+    if (L.userData && L.userData.makeReflection) {            // animated lantern-fall (fx/lanterns.js): reflect the same instances
+      spriteRefl = L.userData.makeReflection({ tMask: maskTex, dom }); scene.add(spriteRefl); return;
+    }
     const m = new THREE.ShaderMaterial({
       uniforms: { uTime, uScale: { value: 500 }, uWater: { value: W0 }, tMask: { value: maskTex }, uDom: { value: dom }, uStretch: { value: 2.6 } },
       vertexShader: DRIFT + /* glsl */`
