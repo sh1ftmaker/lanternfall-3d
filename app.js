@@ -8,6 +8,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { readFx } from './fx/settings.js';
+import { buildFx, fxActive } from './fx/post.js';
+import { makeProfiler } from './fx/prof.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -45,12 +48,17 @@ const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
 const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
-let composer, bloomPass, composerSamples = -1;
+Q.fx = readFx();                     // post-processing tokens from the URL hash (fx/settings.js)
+let composer, bloomPass, composerSamples = -1, fxOut = null;
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   composerSamples = (!mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce
+  if (fxActive(Q.fx)) {                                                          // fx/post.js: AO, mip bloom, final pass, AA ...
+    fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => water, focus: () => camLook, tour: () => mode === 'tour' });
+    composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
+  }
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
@@ -66,6 +74,7 @@ function buildComposer() {
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, 1.14);
         vec2 q = vUv - 0.5; c *= 1.0 - 0.32 * dot(q, q);                              // soft vignette
         gl_FragColor = vec4(c, 1.0); }` }));
+  prof.wrapComposer(composer);
 }
 let baseFov = 52;
 function applyFov() {     // keep a useful horizontal field of view on tall phone screens
@@ -84,6 +93,7 @@ function resize() {
     composer.setPixelRatio(pr); composer.setSize(w, h);
   }
 }
+const prof = makeProfiler(renderer);
 resize(); buildComposer(); resize();
 addEventListener('resize', resize);
 new ResizeObserver(resize).observe(stage);
@@ -781,9 +791,11 @@ function frame() {
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
   updateLOD();
-  if (Q.bloom) { bloomPass.enabled = true; composer.render(dt); } else renderer.render(scene, camera);
+  if (Q.bloom) { if (bloomPass) bloomPass.enabled = true; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
+  prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns };
+window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns,
+  fx: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.fx = readFx(h); composer.dispose(); bloomPass = null; fxOut = null; buildComposer(); resize(); prof.wrapComposer(composer); prof.wrapMirror(water); } } };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
