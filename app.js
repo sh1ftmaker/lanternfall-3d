@@ -44,11 +44,14 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
-const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
-let composer, bloomPass;
+const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+let composer, bloomPass, composerSamples = -1;
+// HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
+function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: mobile ? 0 : 4 });
+  composerSamples = (!mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce
+  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.10, 0.35, 1.8);
@@ -72,9 +75,14 @@ function applyFov() {     // keep a useful horizontal field of view on tall phon
 }
 function resize() {
   const w = stage.clientWidth || innerWidth, h = stage.clientHeight || innerHeight;
-  renderer.setPixelRatio(Q.dpr); renderer.setSize(w, h, false);
+  const pr = effDpr(w, h);
+  renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   camera.aspect = w / h; applyFov();
-  if (composer) { composer.setPixelRatio(Q.dpr); composer.setSize(w, h); }
+  if (composer) {
+    const want = (!mobile && pr <= 1.3) ? 4 : 0;
+    if (want !== composerSamples) { composer.dispose(); buildComposer(); }
+    composer.setPixelRatio(pr); composer.setSize(w, h);
+  }
 }
 resize(); buildComposer(); resize();
 addEventListener('resize', resize);
@@ -720,9 +728,9 @@ function adapt(ms) {
   if (!loaded || document.hidden) return;
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
-  if (perf.locked || perf.cool > 0 || perf.ema < 30) return;
+  if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++;
-  if (perf.step === 1) { Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.lod = Math.max(Q.lod, 1.8); }
+  if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.lod = Math.max(Q.lod, 1.8); resize(); }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
   else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }
   else if (perf.step === 4) { setHD(false); }
