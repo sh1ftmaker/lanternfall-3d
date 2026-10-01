@@ -434,6 +434,7 @@ async function load() {
   initRail(manifest.rail.a, manifest.rail.b);
   buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
+  FX.fxScene(Q, { scene, lands: manifest.lands, uTime });
   const exU8 = await fetchBin(ex.file.file);
   if (ex.lanterns) {
     const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
@@ -787,7 +788,7 @@ function frame() {
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
-  updateLOD();
+  updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (Q.bloom) { bloomPass.enabled = true; composer.render(dt); } else renderer.render(scene, camera);
   adapt(dt * 1000);
 }
