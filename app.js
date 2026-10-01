@@ -108,16 +108,32 @@ function disposeComposer() {      // EffectComposer.dispose() frees only its own
   composer.dispose(); composer = null; bloomPass = null; fxOut = null;
 }
 let baseFov = 52;
+// Where the interface covers the scene (caption and dock on a phone), the projection centre is moved up into the free
+// part of the screen with a view offset, so what the camera looks at is not hidden behind the caption.
+const view = { w: 1, h: 1, dy: 0, want: 0 };
 function applyFov() {     // keep a useful horizontal field of view on tall phone screens
-  const k = Math.max(1, 1.3 / camera.aspect);
-  camera.fov = Math.min(baseFov + 26, 2 * Math.atan(Math.tan((baseFov * Math.PI) / 360) * k) * 180 / Math.PI);
+  const { w, h } = view, dy = Math.round(view.dy), H = h + 2 * dy;
+  const k = Math.max(1, 1.3 / (w / h));
+  const fv = Math.min(baseFov + 26, 2 * Math.atan(Math.tan((baseFov * Math.PI) / 360) * k) * 180 / Math.PI);   // visible window
+  camera.fov = 2 * Math.atan(Math.tan(fv * Math.PI / 360) * H / h) * 180 / Math.PI;                              // the taller virtual image
+  camera.aspect = w / H;
+  if (dy > 0) camera.setViewOffset(w, H, 0, 2 * dy, w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
+}
+function coveredBand() {  // px of the screen bottom covered by interface, minus the top bar, halved: the shift that centres the free band
+  const W = view.w, H = view.h, dock = $('.dock'), cap = $('#caption'), top = $('.hud.top');
+  if (!dock || mode === 'walk') return 0;
+  const cr = cap.getBoundingClientRect(), dr = dock.getBoundingClientRect();
+  let bottom = H - dr.top;
+  if (cr.width > 0.6 * W && cr.height > 0) bottom = H - Math.min(cr.top, dr.top);
+  const t = top.getBoundingClientRect().bottom;
+  return clamp((bottom - t) / 2, 0, H * 0.18);
 }
 function resize() {
   const w = stage.clientWidth || innerWidth, h = stage.clientHeight || innerHeight;
   const pr = effDpr(w, h);
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
-  camera.aspect = w / h; applyFov();
+  view.w = w; view.h = h; applyFov();
   if (composer) {
     const want = (!mobile && pr <= 1.3) ? 4 : 0;
     if (want !== composerSamples) { disposeComposer(); buildComposer(); }
@@ -870,6 +886,8 @@ function frame() {
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
+  if ((lodTick & 15) === 0) view.want = coveredBand();
+  if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (fxWater) fxWater.update(dt, time);
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
