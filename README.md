@@ -23,14 +23,38 @@ every land, and at eleven ten thousand paper lanterns come down onto the water.
 
 The **HD** button toggles water reflections and glow. The page also lowers quality by itself if frames run slow.
 
+## What moves
+
+- The lantern fall is a living cycle: lanterns are released from the Spire, rise, hang over the lake, settle on the
+  water and burn out.
+- The lake has interactive ripples (tap or click the water), rings from the floating lanterns, and a lamp-lit punt
+  circling the island.
+- The carousel in Rosewick turns, the monorail runs, it snows in Frostmere, there are fireflies and petals in the
+  gardens, steam and smoke at the stalls, and fireworks during the tour's Spire shot and finale.
+
+## Optional switches
+
+Add these after `#` in the address, separated by commas, then reload.
+
+| Token | Effect |
+|---|---|
+| `fx=hd` | New post chain: ambient occlusion, mip bloom, SMAA |
+| `fx=ultra` | The above plus temporal anti-aliasing, tilt-shift on aerial tour shots and light streaks |
+| `tex` | Procedural paving, plank and masonry detail (experimental) |
+| `shadow` | Moon shadows (experimental) |
+| `oldwater` | The previous lake water, for comparison |
+| `aurora` | Aurora in the night sky |
+| `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
+
 ## How it is built
 
 - The park was modelled procedurally in Blender (Python scripts, headless) and lit in Cycles.
 - Lighting, colour and emission are baked into vertex colours, so the page needs no real-time lights.
 - Geometry is quantised, delta-filtered and gzip-compressed into `data/*.bin` (about 34 MB in total).
   The browser unpacks it with `DecompressionStream`; there is no WebAssembly and no build step.
-- Rendering uses [three.js](https://threejs.org/) from a CDN: a baked-colour shader, the `Water` reflective surface
-  from the three.js examples, a procedural night sky, point-sprite lanterns, bloom and a light colour grade.
+- Rendering uses [three.js](https://threejs.org/) from a CDN. The viewer is `app.js` plus small modules in `fx/`:
+  lake water with a planar mirror and a ripple simulation, the lantern fall, particles, depth-precision handling,
+  and the optional post chain.
 - Walk mode uses a precomputed 0.5 m navigation grid (`data/nav.bin`) instead of mesh collision.
 
 ## Run locally
