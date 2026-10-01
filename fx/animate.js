@@ -33,8 +33,11 @@ function variant(base, uFx) {
   if (variants.has(base)) return variants.get(base);
   const re = /modelViewMatrix\s*\*\s*vec4\(\s*position\s*,\s*1\.0\s*\)/;
   if (!re.test(base.vertexShader)) { variants.set(base, null); return null; }
-  const m = base.clone();
-  m.uniforms = { ...base.uniforms, ...uFx };                       // share the base uniform objects (fog, range...)
+  // a sibling material that shares the base uniform objects (fog, range, moon shadow map...); not clone(), which would
+  // try to copy the uniforms' textures
+  const m = new THREE.ShaderMaterial({ uniforms: { ...base.uniforms, ...uFx }, fragmentShader: base.fragmentShader, side: base.side,
+    transparent: base.transparent, depthWrite: base.depthWrite, defines: { ...base.defines } });
+  Object.assign(m.defaultAttributeValues, base.defaultAttributeValues);
   m.vertexShader = base.vertexShader.replace(/void\s+main\s*\(/, GLSL + '\nvoid main(').replace(re, 'viewMatrix * vec4(fxAnim((modelMatrix * vec4(position, 1.0)).xyz), 1.0)');
   variants.set(base, m); return m;
 }
