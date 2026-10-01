@@ -8,6 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { createDepth, depthTargetOptions, fixMirrorForReversedDepth } from './fx/depth.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
@@ -34,7 +35,9 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+// Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
+// off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: !/norz/.test(location.hash) });
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 2.1;
 renderer.setClearColor(0x05040f);
@@ -46,12 +49,14 @@ camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
 const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorSize: mobile ? 512 : 1024, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
 let composer, bloomPass, composerSamples = -1;
+// z-fighting: per-frame near plane from the camera's clearance to the park (fx/depth.js); '#fixednear' turns it off
+const depth = createDepth(THREE, camera, { on: !/fixednear/.test(location.hash) });
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   composerSamples = (!mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce
-  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples });
+  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...depthTargetOptions(THREE, renderer, size.x, size.y) });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.10, 0.35, 1.8);
@@ -91,11 +96,18 @@ new ResizeObserver(resize).observe(stage);
 /* ───────────────────────── materials ───────────────────────── */
 const uTime = { value: 0 };
 const bakedMat = new THREE.ShaderMaterial({
-  uniforms: { uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
+  uniforms: { uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uZBias: { value: new THREE.Vector3(0.0018, 0.0018, 0.0005) } },
   vertexShader: /* glsl */`
-    attribute vec4 aCol; uniform float uRange; varying vec3 vCol; varying float vDist;
+    attribute vec4 aCol; attribute float aLay; uniform float uRange; uniform vec3 uZBias; varying vec3 vCol; varying float vDist;
     void main(){ vCol = aCol.rgb * (aCol.a * uRange);
-      vec4 mv = modelViewMatrix * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      vec4 mv = modelViewMatrix * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv;
+      // z-fight tie-break for exactly coplanar floors (the data has some, see fx/depth.js): depth is taken as if the vertex
+      // sat up to 1.8 mm higher (brighter faces) or 1.8 mm lower (pitch-black faces: under-layers that never saw light).
+      // Less than the 1.95 mm position quantum, so it never reorders layers that the data keeps apart.
+      float lum = dot(vCol, vec3(0.3, 0.5, 0.2)), dy = (vCol == vec3(0.0) ? -uZBias.x : uZBias.y * lum / (lum + 0.05)) + aLay * uZBias.z;
+      vec4 cz = projectionMatrix * (mv + viewMatrix[1] * dy);
+      if (cz.w * gl_Position.w > 1e-6) gl_Position.z = cz.z * (gl_Position.w / cz.w);
+    }`,
   fragmentShader: /* glsl */`
     uniform vec3 uFog; uniform float uFogD; varying vec3 vCol; varying float vDist;
     void main(){ float f = 1.0 - exp(-vDist * vDist * uFogD);
@@ -105,6 +117,7 @@ const bakedMat = new THREE.ShaderMaterial({
     }`,
   side: THREE.DoubleSide,
 });
+bakedMat.defaultAttributeValues.aLay = [0];     // optional per-vertex layer rank (manifest mesh 'lay', see fx/depth.js)
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
   vertexShader: /* glsl */`
@@ -228,6 +241,11 @@ function decodeMesh(u8, off, m) {
   }
   off += ni * 4;
   const g = new THREE.BufferGeometry();
+  if (m.lay) {                     // optional coplanar-priority plane (zigzag-delta u8 per vertex): a higher rank wins ties
+    const lay = new Uint8Array(nv); let acc = 0;
+    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
+    off += nv; g.setAttribute('aLay', new THREE.BufferAttribute(lay, 1)); bakedMat.uniforms.uZBias.value.y = 0;   // ranks replace the brightness guess
+  }
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
   g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -296,7 +314,7 @@ function buildWater(lake, y) {
     for (const f of forest) f.visible = Q.forest > 0;
     if (lite) for (const m of landMeshes) m.visible = true;
   };
-  scene.add(water);
+  scene.add(water); fixMirrorForReversedDepth(THREE, renderer, scene, camera, y);
   flatWater = new THREE.Mesh(geo, new THREE.ShaderMaterial({
     uniforms: { uTime },
     vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
@@ -331,6 +349,12 @@ function buildLanterns(f32, count) {
         p.z += (cos(uTime * 0.17 + ph * 1.3) * 0.9 + cos(uTime * 0.47 + ph) * 0.25) * mix(0.25, 1.0, air);
         p.y += sin(uTime * 0.31 + ph * 1.7) * mix(0.03, 0.7, air);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        // a sprite in front of the (dynamic) near plane is drawn on it instead of being clipped: it is closer than any geometry
+        #ifdef USE_REVERSED_DEPTH_BUFFER
+        if (gl_Position.w > 0.0) gl_Position.z = min(gl_Position.z, gl_Position.w);
+        #else
+        if (gl_Position.w > 0.0) gl_Position.z = max(gl_Position.z, -gl_Position.w);
+        #endif
         float px = aPar.y * 1.4 * uScale / max(-mv.z, 0.1);
         float sz = clamp(px, 2.0, 44.0);
         float flick = 0.86 + 0.14 * sin(uTime * (2.0 + fract(ph * 3.3) * 3.0) + ph * 9.0);
@@ -387,7 +411,7 @@ function buildForest(u8, list) {
     }
     im.userData.total = e.count; im.count = Math.floor(e.count * Q.forest);
     im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.matrixAutoUpdate = false;
-    forest.push(im); scene.add(im);
+    forest.push(im); scene.add(im); depth.addInstanced(im);
   }
 }
 
@@ -429,7 +453,7 @@ async function load() {
   totalBytes = manifest.parts.reduce((s, p) => s + p.bytes, 0) + ex.file.bytes + (ex.train_file ? ex.train_file.bytes : 0) + (manifest.nav ? manifest.nav.bytes : 0);
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
   bakedMat.uniforms.uRange.value = manifest.range;
-  initRail(manifest.rail.a, manifest.rail.b);
+  initRail(manifest.rail.a, manifest.rail.b); depth.addRail(manifest.rail.a, manifest.rail.b, manifest.rail.top);
   buildWater(manifest.lake, manifest.water_z);
   setupPlaces();
   const exU8 = await fetchBin(ex.file.file);
@@ -444,7 +468,7 @@ async function load() {
     const u8 = await fetchBin(part.file); let off = 0;
     for (const m of part.meshes) {
       const d = decodeMesh(u8, off, m); off = d.next;
-      const mesh = meshFrom(d.geometry, m); park.add(mesh);
+      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh);
       const cx = (m.bbox[0] + m.bbox[3]) / 2, cz = (m.bbox[2] + m.bbox[5]) / 2;
       if (Math.hypot(cx, cz) > 420) farMeshes.push(mesh);
       if (part.id !== 'core') landMeshes.push(mesh);
@@ -780,10 +804,10 @@ function frame() {
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
-  updateLOD();
+  updateLOD(); depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   if (Q.bloom) { bloomPass.enabled = true; composer.render(dt); } else renderer.render(scene, camera);
   adapt(dt * 1000);
 }
-window.__park = { lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns };
+window.__park = { depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, water: () => water, lanterns: () => lanterns };
 frame();
 load().catch((err) => { console.error(err); veilMsg.textContent = 'The park could not be loaded: ' + err.message; });
