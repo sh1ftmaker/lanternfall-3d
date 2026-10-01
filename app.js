@@ -829,8 +829,14 @@ settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQ
   } });
 if (quality === 'fast') setHD(false);
 const fsBtn = $('#btn-full');
-if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
-fsBtn.addEventListener('click', () => { const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); });
+{ // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
+  const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  if (!req || document.fullscreenEnabled === false || document.webkitFullscreenEnabled === false) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => { const p = fsEl() ? exit.call(document) : req.call(de); if (p && p.catch) p.catch(() => {}); });
+  const sync = () => { const on = !!fsEl(); fsBtn.setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen'); fsBtn.title = on ? 'Leave full screen' : 'Full screen'; };
+  document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
+}
 const perf = { ema: 16, n: 0, step: 0, locked: false, cool: 0 };
 function setForest(f) { Q.forest = f; for (const im of forest) { im.count = Math.floor(im.userData.total * f); im.visible = f > 0; } }
 function adapt(ms) {
