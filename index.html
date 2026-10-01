@@ -97,7 +97,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 #stick{position:fixed;z-index:6;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:1px solid var(--line);background:rgba(13,11,38,.35);pointer-events:none}
 #stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,181,71,.85)}
 #veil{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:radial-gradient(120% 90% at 50% 60%,#1a1647 0%,var(--night) 45%,var(--ink) 100%);transition:opacity 1.2s ease,visibility 1.2s;padding:24px}
-#veil.done{opacity:0;visibility:hidden}
+#veil.done{opacity:0;visibility:hidden;pointer-events:none}
 .veil-in{width:min(360px,100%);text-align:center}
 .veil-in .lamp{width:46px;height:60px;margin:0 auto 18px;border-radius:14px 14px 18px 18px;background:linear-gradient(#ffd68a,var(--amber) 55%,#ff8a3c);box-shadow:0 0 40px rgba(255,181,71,.55),0 0 110px rgba(255,123,92,.35);animation:bob 3.2s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(-9px) rotate(2deg)}}

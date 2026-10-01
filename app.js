@@ -691,13 +691,15 @@ function spawnWalk(x, y, yaw) {
   let found = null;
   for (let r = 0; r < 260 && !found; r++) {
     const n = Math.max(1, Math.round(r * 6));
-    for (let k = 0; k < n; k++) { const a = (k / n) * 6.2831853, px = x + Math.cos(a) * r * 0.5, py = y + Math.sin(a) * r * 0.5; const lv = navLevels(px, py); if (lv && lv[0]) { found = [px, py, navH(lv[0])]; break; } }
+    for (let k = 0; k < n; k++) { const a = (k / n) * 6.2831853, px = x + Math.cos(a) * r * 0.5, py = y + Math.sin(a) * r * 0.5; const lv = navLevels(px, py); if (lv && lv[0] && !inLake(px, py)) { found = [px, py, navH(lv[0])]; break; } }
   }
   if (!found) found = [300, 0, 0.12];
   walk.x = found[0]; walk.y = found[1]; walk.z = found[2];
   walk.yaw = yaw !== undefined ? yaw : Math.atan2(-walk.y, -walk.x);   // face the lake
   walk.pitch = 0.04;
 }
+// the Spire island and the harbour-light rock are walkable but cut off: never drop a visitor there
+function inLake(x, y) { const pl = manifest.lake; let c = false; for (let i = 0, j = pl.length - 1; i < pl.length; j = i++) { const [xi, yi] = pl[i], [xj, yj] = pl[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
 function walkCanStand(x, y, z) {
   const r = 0.28; let h = navHeight(x, y, z); if (h === null) return null;
   for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) if (navHeight(x + dx, y + dy, h, 0.75) === null) return null;
