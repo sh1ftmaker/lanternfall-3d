@@ -737,7 +737,7 @@ function adapt(ms) {
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
-  perf.cool = 150; perf.ema = 20; perf.step++;
+  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step);
   if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.lod = Math.max(Q.lod, 1.8); resize(); }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
   else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }

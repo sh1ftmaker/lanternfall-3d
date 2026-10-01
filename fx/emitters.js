@@ -38,8 +38,8 @@ export function buildEmitters({ uTime, motion = 1, scale = 1 }) {
           float u = fract(t / 3.5 + sd);
           p += vec3((idh - 0.5) * 0.6 + sin(u * 4.0 + sd * 20.0) * 0.25 * u, u * 2.1, (hh(idh) - 0.5) * 0.6 + 0.35 * u);
           size = mix(0.35, 1.5, u);
-          float a = smoothstep(0.0, 0.15, u) * (1.0 - smoothstep(0.45, 1.0, u)) * 0.20;
-          c = vec4(vec3(0.62, 0.58, 0.55) * a, a);
+          float a = smoothstep(0.0, 0.15, u) * (1.0 - smoothstep(0.45, 1.0, u)) * 0.38;
+          c = vec4(vec3(0.95, 0.86, 0.78) * a, a);
         } else if (kind == 1.0) {              // chimney smoke: slow, long, leaning downwind
           float u = fract(t / 14.0 + sd);
           p += vec3(u * u * 9.0 + sin(u * 6.0 + sd * 30.0) * 0.6, u * 11.0, u * 3.0 + cos(u * 5.0 + sd * 17.0) * 0.6);

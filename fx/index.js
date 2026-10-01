@@ -50,6 +50,13 @@ export function fxUpdate(Q, camera, ctx) {
   if (fx.fireworks) fx.fireworks.userData.update(ctx.time, ctx.dt, { tour: ctx.tour, always: Q.fx['fireworks-always'] });
 }
 
+// follows the quality ladder in app.js adapt(): fewer particles first, then drop the fill-heavy layers
+export function fxDegrade(Q, step) {
+  if (fx.motes) fx.motes.userData.setScale(step >= 5 ? 0 : step >= 4 ? 0.35 : step >= 2 ? 0.6 : 1);
+  if (fx.mist) fx.mist.visible = step < 3;
+  if (fx.beams && step >= 5) fx.beams.visible = false;
+}
+
 // called once all park parts are loaded
 export function fxPark(Q, { park, uTime }) {
   if (Q.fx.carousel) { park.updateMatrixWorld(true); fx.animated = buildAnimated({ park, uTime, motion: Q.fx.motion ? 1 : 0 }); }

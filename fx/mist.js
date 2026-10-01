@@ -9,7 +9,7 @@ export function buildMist({ lake, waterY, uTime, motion = 1, layers = 3 }) {
   const geo = new THREE.ShapeGeometry(shape, 4);
   geo.rotateX(-Math.PI / 2);                     // Blender (x, y) -> three (x, 0, -y)
   const grp = new THREE.Group(); grp.name = 'fx-mist';
-  const uDensity = { value: 1 };
+  const uDensity = { value: 1.5 };
   for (let i = 0; i < layers; i++) {
     const mat = new THREE.ShaderMaterial({
       uniforms: { uTime, uMotion: { value: motion }, uLayer: { value: i }, uDensity },

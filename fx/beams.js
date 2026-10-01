@@ -45,7 +45,7 @@ export function buildBeams({ uTime, motion = 1 }) {
   const root = new THREE.Group(); root.name = 'fx-beams';
   // harbour lighthouse: two opposite beams, one turn per 14 s
   const harbour = new THREE.Group(); harbour.position.set(49.7, 11.9, 10.3);
-  const hm = beamMaterial([1.0, 0.82, 0.55], 0.20, uTime);
+  const hm = beamMaterial([1.0, 0.82, 0.55], 0.13, uTime);
   for (const s of [1, -1]) {
     const b = cone(150, 0.35, 7.5); b.material = hm; b.rotation.z = -Math.PI / 2 * s + s * 0.05; b.frustumCulled = false;
     harbour.add(b);

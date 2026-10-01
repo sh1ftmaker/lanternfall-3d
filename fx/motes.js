@@ -62,7 +62,7 @@ export function buildMotes({ lands, uTime, motion = 1, scale = 1 }) {
           float H = far ? 22.0 : 16.0, y0 = far ? -1.0 : max(c.y - 8.0, -1.0);
           p = vec3(xz.x, y0 + fract(s.y - t * 0.38 / H) * H, xz.y);
           p.xz += vec2(sin(t * 0.4 + ph) * 1.6, cos(t * 0.33 + ph * 2.0) * 1.6) + vec2(0.6, 0.2) * sin(t * 1.3 + ph * 7.0) * 0.3;
-          col = mix(vec3(0.85, 0.36, 0.48), vec3(0.95, 0.62, 0.70), fract(ph * 3.7)) * 0.55; size = 0.085;
+          col = mix(vec3(1.0, 0.30, 0.50), vec3(1.0, 0.50, 0.66), fract(ph * 3.7)) * 0.5; size = 0.085;
         } else {                                               // fireflies: hover low over the lawns and blink
           kind = 2.0; w = 1.0;
           p = vec3(xz.x, 0.35 + s.y * 2.6, xz.y);

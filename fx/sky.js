@@ -51,8 +51,9 @@ export function patchSky(scene, { uTime, motion = 1, aurora = false, moonDir }) 
   const el = THREE.MathUtils.degToRad(130), S = M.clone().multiplyScalar(Math.cos(el)).addScaledVector(down, Math.sin(el)).normalize();
   m.uniforms.uFxMotion = { value: motion }; m.uniforms.uFxAurora = { value: aurora ? 1 : 0 }; m.uniforms.uFxSun = { value: S };
   fs = fs.replace(/void\s+main\s*\(\s*\)\s*\{/, (s) => DECL + '\n' + s);
-  const moonRe = /crater\s*\*\s*\(0\.45 \+ 0\.75 \* limb\)/;
-  if (moonRe.test(fs)) { fs = fs.replace(moonRe, (s) => `${s} * mix(0.045, 1.0, smoothstep(-0.06, 0.08, dot(mref * muv.x + mup * muv.y - uMoon * limb, uFxSun)))`); done.push('moon'); }
+  // the unlit part of the disc lets the sky through (with a little earthshine) instead of painting it grey
+  const moonRe = /disc \* \(1\.0 - 0\.55 \* cloud\)\);/;
+  if (moonRe.test(fs)) { fs = fs.replace(moonRe, 'disc * (1.0 - 0.55 * cloud) * mix(0.10, 1.0, smoothstep(-0.05, 0.10, dot(mref * muv.x + mup * muv.y - uMoon * limb, uFxSun))));'); done.push('moon'); }
   const cloudRe = /col \+= cloud \* \(vec3\(0\.018, 0\.022, 0\.046\)/;
   if (cloudRe.test(fs)) { fs = fs.replace(cloudRe, 'col += cloud * vec3(0.075, 0.042, 0.018) * smoothstep(0.42, 0.04, h);\n      $&'); done.push('clouds'); }
   const tailRe = /col = mix\(col, hor \* 0\.55, smoothstep\(0\.0, -0\.12, d\.y\)\);/;
