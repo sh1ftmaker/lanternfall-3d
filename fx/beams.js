@@ -56,8 +56,10 @@ export function buildBeams({ uTime, motion = 1 }) {
   const sm = [beamMaterial([0.45, 1.0, 0.92], 0.07, uTime), beamMaterial([0.95, 0.5, 1.0], 0.07, uTime)];
   const lights = sm.map((m) => { const b = cone(260, 0.3, 9); b.material = m; b.frustumCulled = false; const p = new THREE.Group(); p.add(b); mer.add(p); return p; });
   root.add(mer);
+  root.userData.motion = motion;              // 0 freezes the sweep (reduce motion); fx/index.js fxMotion() sets it
+  let tt = 0, last = null;
   root.userData.update = (t) => {
-    const tt = t * motion;
+    if (last !== null) tt += (t - last) * root.userData.motion; last = t;
     harbour.rotation.y = tt * (Math.PI * 2 / 14);
     lights.forEach((p, i) => {
       const ph = tt * 0.23 + i * 2.6;

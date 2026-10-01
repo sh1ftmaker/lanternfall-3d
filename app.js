@@ -16,14 +16,15 @@ import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createLit, litFromHash } from './fx/lit.js';
 import { trackDisposables, watchContext } from './fx/context.js';
-import { veilFail, unsupported } from './fx/ui.js';
+import { veilFail, unsupported, loadPrefs, buildSettings } from './fx/ui.js';
 
 const DATA = 'data/';
 const $ = (s) => document.querySelector(s);
 const coarse = matchMedia('(pointer: coarse)').matches;
 const small = Math.min(innerWidth, innerHeight) < 620;
 const mobile = coarse || small;
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PREFS = loadPrefs();                                   // settings sheet choices (fx/ui.js), if any were saved
+let reduceMotion = PREFS.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches;
 const B = (x, y, z) => new THREE.Vector3(x, z, -y);          // Blender (x, y, z-up) -> three (x, y-up, z)
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -76,6 +77,12 @@ const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
 Object.assign(Q, { water: HASH.has('oldwater') ? 'old' : 'new', waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
   mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 FX.fxConfig(Q, { mobile, reduceMotion });     // atmosphere / particle systems (fx/index.js) -> Q.fx
+for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean' && !HASH.has(k) && !HASH.has('no-' + k)) Q.fx[k] = PREFS[k];
+// picture quality: 'fast' (no post, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
+// A '#fx=' token in the URL wins over the saved choice.
+const hasFxToken = /(^|[#,&])fx=/.test(location.hash);
+let quality = hasFxToken ? (Q.post.preset === 'legacy' || Q.post.preset === 'off' ? 'hd' : 'cinematic') : (PREFS.quality || 'hd');
+if (!hasFxToken && quality === 'cinematic') Q.post = readFx('#fx=hd');
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
@@ -599,9 +606,9 @@ function setCaption(p) {
 }
 const hintEl = $('#hint'); let hintTimer = 0;
 function showHint() {
-  const txt = mode === 'tour' ? (coarse ? 'Drag to look around · tap a place to fly there' : 'Drag to take over · pick a place to fly there')
-    : mode === 'orbit' ? (coarse ? 'Drag to orbit · pinch to zoom · two fingers to pan' : 'Drag to orbit · scroll to zoom · right-drag to pan')
-    : (coarse ? 'Left thumb walks · right thumb looks' : 'WASD or arrows to walk · drag to look · Shift to run');
+  const txt = mode === 'tour' ? (coarse ? 'Drag to explore yourself · tap a place to fly there' : 'Drag to take over · pick a place to fly there')
+    : mode === 'orbit' ? (coarse ? 'Drag to orbit · pinch to zoom · two fingers to pan' : 'Drag to orbit · scroll to zoom · right-drag or Shift+arrows to pan')
+    : (coarse ? 'Left thumb walks · right thumb looks' : 'WASD or arrows to walk · drag to look · Shift to run · Esc to leave');
   hintEl.textContent = txt; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 5200);
 }
 
@@ -743,10 +750,29 @@ function walkCanStand(x, y, z) {
   return h;
 }
 const keys = new Set(); const stick = { id: -1, x: 0, y: 0, ox: 0, oy: 0 }; const look = { id: -1, x: 0, y: 0 };
-addEventListener('keydown', (e) => { if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return; keys.add(e.code); if (mode === 'walk' && /Arrow|Space/.test(e.code)) e.preventDefault(); });
+addEventListener('keydown', (e) => { if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return; keys.add(e.code); if (mode !== 'tour' && /Arrow|Space|Page/.test(e.code)) e.preventDefault(); });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('keydown', (e) => { if (e.code === 'KeyL' && loaded) lit.set({ on: !lit.state.on }).catch((x) => console.warn('lit:', x.message)); });   // toggle real-time lighting
 addEventListener('blur', () => keys.clear());
+// shortcuts: 1 / 2 / 3 modes, F full screen, Esc closes the settings sheet or leaves Walk for Explore
+addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || !ready) return;
+  if (e.key === 'Escape') { if (settings.open) settings.close(); else if (mode === 'walk') setMode('orbit'); return; }
+  if (e.repeat) return;
+  const m = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk' }[e.code];
+  if (m) { if (m !== mode) setMode(m); return; }
+  if (e.code === 'KeyF' && !fsBtn.hidden) fsBtn.click();
+});
+function orbitKeys(dt) {          // Explore from the keyboard: arrows / WASD orbit and tilt, +/- zoom, Shift + arrows pan
+  const c = controls, k = (a, b) => keys.has(a) || (b && keys.has(b)); if (!keys.size || typeof c._rotateLeft !== 'function') return;
+  const sh = k('ShiftLeft', 'ShiftRight'), r = dt * 1.1, any = [];
+  const L = k('ArrowLeft', 'KeyA'), R = k('ArrowRight', 'KeyD'), U = k('ArrowUp', 'KeyW'), D = k('ArrowDown', 'KeyS');
+  if (sh) { if (L) c._pan(dt * 500, 0); if (R) c._pan(-dt * 500, 0); if (U) c._pan(0, dt * 500); if (D) c._pan(0, -dt * 500); }
+  else { if (L) c._rotateLeft(-r); if (R) c._rotateLeft(r); if (U) c._rotateUp(-r * 0.6); if (D) c._rotateUp(r * 0.6); }
+  if (k('Equal', 'NumpadAdd') || k('PageUp')) c._dollyIn(1 + dt * 1.5);
+  if (k('Minus', 'NumpadSubtract') || k('PageDown')) c._dollyOut(1 + dt * 1.5);
+  if (L || R || U || D || k('Equal', 'Minus') || k('NumpadAdd', 'NumpadSubtract') || k('PageUp', 'PageDown')) { idle = 0; c.autoRotate = false; if (fly.on) { fly.on = false; c.enabled = true; } }
+}
 function updateWalk(dt) {
   let fx = 0, fy = 0;
   if (keys.has('KeyW') || keys.has('ArrowUp')) fy += 1; if (keys.has('KeyS') || keys.has('ArrowDown')) fy -= 1;
@@ -819,12 +845,37 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 
 /* ───────────────────────── quality ───────────────────────── */
 function setHD(on) {
-  Q.hd = on; $('#btn-hd').setAttribute('aria-pressed', String(on));
+  Q.hd = on;
   if (water) { water.visible = on; flatWater.visible = !on; }
   if (fxWater) fxWater.setHD(on);
   Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1); resize();
 }
-$('#btn-hd').addEventListener('click', () => { setHD(!Q.hd); perf.locked = true; });
+function setQuality(q, user) {
+  quality = q; if (user) perf.locked = true;               // a visitor's choice is not overridden by adapt()
+  if (q !== 'fast') {
+    const want = readFx(q === 'cinematic' ? '#fx=hd' : '#fx=legacy');
+    if (want.preset !== Q.post.preset) { Q.post = want; disposeComposer(); buildComposer(); resize(); }
+  }
+  setHD(q !== 'fast'); if (settings) settings.setQuality(q);
+}
+const QUALITIES = [
+  { id: 'fast', label: 'Fast', note: 'No glow or mirror reflections; for older phones and laptops.' },
+  { id: 'hd', label: 'HD', note: 'Glow around the lights and the lake as a mirror.' },
+  { id: 'cinematic', label: 'Cinematic', note: 'HD plus contact shadows and a softer, wider glow. Same speed on most graphics cards.' },
+];
+let settings = null;
+settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQuality(q, true),
+  toggles: [
+    { id: 'fireworks', label: 'Fireworks', on: Q.fx.fireworks },
+    { id: 'mist', label: 'Mist on the lake', on: Q.fx.mist },
+    { id: 'beams', label: 'Searchlights', on: Q.fx.beams },
+    { id: 'reduceMotion', label: 'Reduce motion', on: reduceMotion },
+  ],
+  onToggle(id, on) {
+    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (on) controls.autoRotate = false; return; }
+    FX.fxSet(Q, id, on);
+  } });
+if (quality === 'fast') setHD(false);
 const fsBtn = $('#btn-full');
 if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
 fsBtn.addEventListener('click', () => { const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); });
@@ -839,7 +890,7 @@ function adapt(ms) {
   if (perf.step === 1) { Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); resize(); }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
   else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; resize(); }
-  else if (perf.step === 4) { setHD(false); }
+  else if (perf.step === 4) { setQuality('fast'); }
   else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.75; resize(); }
 }
 let lodTick = 0;
@@ -874,6 +925,7 @@ function frame() {
         controls.target.lerpVectors(fly.t0, fly.t1, w); camera.lookAt(controls.target);
         if (fly.t >= fly.dur) { fly.on = false; controls.enabled = true; }
       } else {
+        orbitKeys(dt);
         idle += dt; controls.autoRotate = idle > 6 && !reduceMotion;
         controls.target.y = clamp(controls.target.y, 1, 70);
         const tr = Math.hypot(controls.target.x, controls.target.z); if (tr > 420) controls.target.multiplyScalar(420 / tr);
@@ -889,7 +941,7 @@ function frame() {
   if ((lodTick & 15) === 0) view.want = coveredBand();
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
-  if (fxWater) fxWater.update(dt, time);
+  if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   if (Q.bloom) { if (bloomPass) bloomPass.enabled = true; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
   prof.poll();

@@ -33,6 +33,7 @@ export function fxLanterns(Q, { f32, count, waterY, uTime }) {
 // called once the manifest is in (before the parts stream)
 export function fxScene(Q, { scene, lands, uTime, lake, waterY, moon }) {
   const motion = Q.fx.motion ? 1 : 0;
+  fx.scene = scene; fx.uTime = uTime;
   if (Q.fx.motes) { fx.motes = buildMotes({ lands, uTime, motion: Q.fx.motion ? 1 : 0, scale: Q.fx.scale }); scene.add(fx.motes); }
   if (Q.fx.fireworks && Q.fx.motion) { fx.fireworks = buildFireworks({ uTime, scale: Q.fx.scale }); scene.add(fx.fireworks); }
   if (Q.fx.emitters) { fx.emitters = buildEmitters({ uTime, motion, scale: Q.fx.scale }); scene.add(fx.emitters); }
@@ -53,7 +54,7 @@ export function fxUpdate(Q, camera, ctx) {
 // follows the quality ladder in app.js adapt(): fewer particles first, then drop the fill-heavy layers
 export function fxDegrade(Q, step) {
   if (fx.motes) fx.motes.userData.setScale(step >= 5 ? 0 : step >= 4 ? 0.35 : step >= 2 ? 0.6 : 1);
-  if (fx.mist) fx.mist.visible = step < 3;
+  if (fx.mist) fx.mist.visible = step < 3 && Q.fx.mist;
   if (fx.beams && step >= 5) fx.beams.visible = false;
 }
 
@@ -63,3 +64,20 @@ export function fxPark(Q, { park, uTime }) {
 }
 
 export function fxState() { return fx; }
+
+// Live switches for the settings sheet (fx/ui.js): show or hide an effect, or freeze everything that drifts.
+const LAYER = { fireworks: 'fireworks', mist: 'mist', beams: 'beams', motes: 'motes' };
+export function fxSet(Q, name, on) {
+  Q.fx[name] = on;
+  if (name === 'fireworks' && on && !fx.fireworks && fx.scene && Q.fx.motion) { fx.fireworks = buildFireworks({ uTime: fx.uTime, scale: Q.fx.scale }); fx.scene.add(fx.fireworks); }
+  const o = fx[LAYER[name]]; if (o) o.visible = on;
+}
+export function fxMotion(Q, on) {
+  Q.fx.motion = on; const m = on ? 1 : 0;
+  for (const k of ['lanterns', 'motes', 'emitters', 'dance']) { const o = fx[k]; if (o && o.material && o.material.uniforms.uMotion) o.material.uniforms.uMotion.value = m; }
+  if (fx.mist) fx.mist.children.forEach((c) => { c.material.uniforms.uMotion.value = m; });
+  if (fx.sky && fx.sky.uniforms.uFxMotion) fx.sky.uniforms.uFxMotion.value = m;
+  if (fx.animated) fx.animated.uniforms.uFxMotion.value = m;
+  if (fx.beams) fx.beams.userData.motion = m;
+  if (on) fxSet(Q, 'fireworks', Q.fx.fireworks); else if (fx.fireworks) fx.fireworks.visible = false;
+}

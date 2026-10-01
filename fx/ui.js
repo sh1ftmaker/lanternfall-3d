@@ -33,3 +33,55 @@ function retryButton() {
   b.addEventListener('click', () => location.reload());
   return b;
 }
+
+// ── Settings sheet ──
+// A small popover under the top-right settings button: picture quality (three levels), a few effect switches and
+// "reduce motion". Choices persist in localStorage (when available); URL hash tokens still win on load.
+const STORE = 'lanternfall.settings';
+export function loadPrefs() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } }
+function savePrefs(p) { try { localStorage.setItem(STORE, JSON.stringify(p)); } catch (e) { /* private mode: not remembered */ } }
+
+// opts: { qualities: [{id, label, note}], quality, onQuality(id), toggles: [{id, label, on}], onToggle(id, on) }
+export function buildSettings(opts) {
+  const btn = $('#btn-set'), sheet = $('#sheet'), prefs = loadPrefs();
+  const qBox = sheet.querySelector('.seg'), note = sheet.querySelector('.seg-note'), tBox = sheet.querySelector('.toggles');
+  const qBtns = opts.qualities.map((q) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = q.label; b.dataset.q = q.id;
+    b.setAttribute('role', 'radio'); b.addEventListener('click', () => { set(q.id, true); opts.onQuality(q.id); });
+    qBox.appendChild(b); return b;
+  });
+  let current = opts.quality;
+  function set(id, user) {
+    current = id;
+    for (const b of qBtns) { const on = b.dataset.q === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+    const q = opts.qualities.find((x) => x.id === id); note.textContent = q ? q.note : '';
+    if (user) { prefs.quality = id; savePrefs(prefs); }
+  }
+  qBox.addEventListener('keydown', (e) => {     // radio group: arrows move the choice
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return; e.preventDefault(); e.stopPropagation();
+    const i = (opts.qualities.findIndex((x) => x.id === current) + d + qBtns.length) % qBtns.length;
+    qBtns[i].focus(); qBtns[i].click();
+  });
+  const tBtns = {};
+  for (const t of opts.toggles) {
+    const row = document.createElement('button'); row.type = 'button'; row.className = 'tog'; row.setAttribute('role', 'switch');
+    row.innerHTML = `<span></span><i aria-hidden="true"></i>`; row.firstChild.textContent = t.label;
+    row.setAttribute('aria-checked', String(t.on));
+    row.addEventListener('click', () => { const on = row.getAttribute('aria-checked') !== 'true'; row.setAttribute('aria-checked', String(on)); prefs[t.id] = on; savePrefs(prefs); opts.onToggle(t.id, on); });
+    tBox.appendChild(row); tBtns[t.id] = row;
+  }
+  set(current, false);
+  const open = (v) => {
+    sheet.hidden = !v; btn.setAttribute('aria-expanded', String(v));
+    if (v) (qBtns.find((b) => b.dataset.q === current) || qBtns[0]).focus();
+  };
+  btn.addEventListener('click', () => open(sheet.hidden));
+  sheet.querySelector('.sheet-close').addEventListener('click', () => { open(false); btn.focus(); });
+  document.addEventListener('pointerdown', (e) => { if (!sheet.hidden && !sheet.contains(e.target) && !btn.contains(e.target)) open(false); }, true);
+  return {
+    get open() { return !sheet.hidden; }, close() { open(false); btn.focus(); },
+    setQuality: (id) => set(id, false),
+    setToggle: (id, on) => { if (tBtns[id]) tBtns[id].setAttribute('aria-checked', String(on)); },
+  };
+}
