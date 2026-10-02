@@ -56,7 +56,7 @@ export function init(game) {
   const saved = () => game.save.get('photo', { shots: [], prefs });
   const st = { aperture: 0, focus: [0.5, 0.5], look: 'natural', vig: 0, crop: [0, 0, 1, 1] };   // read live by the post pass
   const cam = { p: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, fov: 52, minFov: MIN_FOV, maxFov: MAX_FOV, home: new THREE.Vector3(), floor: 0 };
-  let active = false, release = null, prev = null, wasClean = false, aspect = prefs.aspect, thirds = prefs.thirds, tab = 'frame';
+  let active = false, release = null, prev = null, wasClean = false, aspect = ASPECTS.some((a) => a[0] === prefs.aspect) ? prefs.aspect : 'free', thirds = prefs.thirds !== false, tab = 'frame';
   let lensTouched = false, setFov = 0, builtSig = '', passRef = null, want = false, noteT = 0, ringT = 0;
   const keys = new Set(), ptrs = new Map(); let pinch = 0, mid = null;
   const e = new THREE.Euler(0, 0, 0, 'YXZ'), fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmp = new THREE.Vector3();
