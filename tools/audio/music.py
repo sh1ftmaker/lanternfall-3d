@@ -193,7 +193,7 @@ def meridian_signal():
     """Signal Plaza: warm synthwave at 108 bpm, B minor (Bm G D A), pulsing octave bass, gated pad, 16th arp,
     drum machine; the theme enters on a soft saw lead in bars 5-12."""
     P = Piece('meridian_signal', 108, 64, seed=51)
-    P.track('kick', .9, 0); P.track('snr', .5, .25); P.track('hat', .3, .05); P.track('bass', .75, 0, eq=lp(1800))
+    P.track('kick', .9, 0); P.track('snr', .5, .25); P.track('hat', .3, .05); P.track('bass', .55, 0, eq=lp(1800))
     P.track('pad', .5, .35); P.track('arp', .35, .35); P.track('lead', .6, .4)
     prog = ['Bm', 'G', 'D', 'A', 'Bm', 'G', 'D', 'A', 'Bm', 'G', 'Em', 'D', 'Bm', 'G', 'D', 'A']
     prev = None
@@ -326,7 +326,7 @@ def lantern_market():
     """Night market: koto on the theme (pentatonic as written) with grace notes, shamisen pulse on open fifths,
     shakuhachi breathing long notes, a low bowed drone. 72 bpm, 8 bars (no Western chords)."""
     P = Piece('lantern_market', 72, 32, seed=91)
-    P.track('koto', .85, .35); P.track('sham', .45, .25); P.track('shaku', .55, .45); P.track('drone', .25, .4)
+    P.track('koto', 1.0, .35); P.track('sham', .45, .25); P.track('shaku', .35, .45); P.track('drone', .25, .4)
     mel, _ = flat(THEME_A)
     for s, d, m in mel:
         if d >= 2:
