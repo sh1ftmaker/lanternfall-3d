@@ -5,13 +5,13 @@ The Platformer needs no game data: everything below runs from this repository.
 ## 1. Try it (two minutes)
 
 1. Open the park, wait for it to load, choose **Walk** (or press `3`).
-2. Press **P**, or the lantern-pole button that appears in the top bar in Walk mode. The first time, the
+2. Enter Walk mode (the lamplighter is its default player; **P** or the lantern-pole button in the top bar switches to first person and back, `#fp` starts in first person). The first time, the
    status pill says "Waking the lamplighter…" and "Mapping the park for the lamplighter… N %" (about half a second
    of preparation, a few milliseconds per frame). Wick appears where the walker stood, seen from behind.
 3. Controls:
    - Keyboard: **WASD / arrows** move (relative to the camera), **Space** jump, **Shift** or **C** (or Z) crouch,
      **E** or **F** swing the lantern pole (dive when running), **Q** turns the view, mouse **drag** orbits, wheel zooms,
-     **P / Esc** back to Walk at the same spot. `1` `2` `3` still switch modes.
+     **P** to first person at the same spot, **Esc** to Explore. `1` `2` `3` still switch modes.
    - Gamepad: left stick moves, right stick orbits, **A** jump, **X / B** swing, triggers or bumpers crouch.
    - Touch: drag on the left of the screen for a stick, **Jump / Crouch / Swing** buttons on the right, drag
      anywhere else to orbit; the lantern-pole button in the top bar goes back to Walk.
@@ -93,3 +93,6 @@ it when reporting a problem.
 - Collision is the park's base-detail triangles with small walls (< 0.16 m^2: posts, rails, trim) left out, so
   Wick passes through thin railings and lamp posts; some raised spots on the walk grid have no matching floor
   (0-2 % of samples per window in `validate-collision.mjs`).
+
+`tools/platformer/browser/smooth.mjs` measures per-frame smoothness (displayed character and camera speed, frames where the
+character did not move). The display samples the 30 Hz states 1.5 ticks behind the tick being posted (`DELAY` in `index.js`).

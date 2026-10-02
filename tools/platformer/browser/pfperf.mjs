@@ -8,7 +8,7 @@ await page.goto('http://127.0.0.1:8851/index.html' + (HASH || '')); await page.w
 const ev = (js) => page.evaluate(js); const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await ev('__park.perf.locked = true');
 await ev("__park.setMode('walk',{at:[200,0],yaw:Math.PI})"); await wait(800);
-await ev('__park.togglePlatformer()');
+await ev('__park.setPlatformer(true)');
 await page.waitForFunction('__park.platformer && __park.platformer.active && __park.platformer.S.latest > 5', { timeout: 90000 });
 await wait(2500);
 const time = () => ev(`new Promise((res)=>{const gl=__park.renderer.getContext();let n=0,t0=performance.now();const f=()=>{gl.finish();if(++n===90)res((performance.now()-t0)/90);else requestAnimationFrame(f)};requestAnimationFrame(f)})`);

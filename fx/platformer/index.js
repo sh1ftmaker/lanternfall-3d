@@ -47,7 +47,7 @@ export async function createPlatformer(ctx) {
   worker.onmessage = (e) => {
     const m = e.data;
     if (m.type === 'state') { S.pending = false; S.states.set(m.seq, m.s);
-      if (api.test.trace) { const q = m.s; api.test.trace.push({ seq: m.seq, t: +S.t.toFixed(3), x: q.pos[0] / UNITS, y: q.pos[1] / UNITS, z: q.pos[2] / UNITS, vy: q.vel[1] * 30 / UNITS, fwd: q.fwd * 30 / UNITS, act: q.action, anim: q.animID, fr: q.animFrame, floor: q.floorY / UNITS, face: q.faceAngle, n: S.window ? S.window.stats.count : 0 }); } S.latest = Math.max(S.latest, m.seq); S.camFrac = m.cam; S.tickMs = m.tickMs; for (const k of S.states.keys()) if (k < m.seq - 4) S.states.delete(k); return; }
+      if (api.test.trace) { const q = m.s; api.test.trace.push({ seq: m.seq, t: +S.t.toFixed(3), x: q.pos[0] / UNITS, y: q.pos[1] / UNITS, z: q.pos[2] / UNITS, vy: q.vel[1] * 30 / UNITS, fwd: q.fwd * 30 / UNITS, act: q.action, anim: q.animID, fr: q.animFrame, floor: q.floorY / UNITS, face: q.faceAngle, n: S.window ? S.window.stats.count : 0 }); } S.latest = Math.max(S.latest, m.seq); S.camFrac = m.cam; S.tickMs = m.tickMs; for (const k of S.states.keys()) if (k < m.seq - 6) S.states.delete(k); return; }
     if (m.type === 'loaded') { if (m.back) col.recycle(m.back); m.back = null; S.loads++; S.lastLoad = m; S.events.push(`load #${S.loads}: ${m.count} surfaces, ${m.ms} ms (+${m.rayMs} ms rays)`); if (S.events.length > 6) S.events.shift(); }
     if (m.type === 'error') { console.warn('platformer worker:', m.message); }
     const w = waiters[m.type]; if (w) { delete waiters[m.type]; w(m); }
@@ -66,7 +66,7 @@ export async function createPlatformer(ctx) {
   // ── character, animation, input ──
   const ch = createCharacter({ THREE, scene, surface, guests: ctx.guests && ctx.guests(), manifest });
   const anim = createAnimator(THREE);
-  const input = createInput({ canvas: renderer.domElement, coarse: ctx.coarse, onExit: () => api.exit(), onSwitch: () => api.exit() });
+  const input = createInput({ canvas: renderer.domElement, coarse: ctx.coarse, onExit: () => (ctx.onEsc ? ctx.onEsc() : api.exit()), onSwitch: () => (ctx.onSwitch ? ctx.onSwitch() : api.exit()) });
 
   // collision windows: 60 m squares; built a few ms per frame (gatherSteps), then handed to the worker
   let job = null;
@@ -80,11 +80,13 @@ export async function createPlatformer(ctx) {
   const lerp = (a, b, t) => a + (b - a) * t;
   const angLerp = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; };
   const view = { pos: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, vel: new THREE.Vector3(), action: 0, animID: 0, frame: 0, s: null };
+  // The display runs DELAY ticks behind the tick being posted, so both states it blends have normally arrived from the
+  // worker (the newest one is in flight for a frame); never past the newest state that has arrived.
+  const DELAY = 1.5;
   function sample(alphaTick) {
+    alphaTick = Math.min(alphaTick, S.latest);
     const i = Math.floor(alphaTick), f = alphaTick - i;
-    let a = S.states.get(i), b = S.states.get(i + 1);
-    if (!b) { b = S.states.get(S.latest); a = S.states.get(S.latest - 1) || b; return blend(a, b, 1); }
-    if (!a) a = b;
+    const a = S.states.get(i) || S.states.get(S.latest), b = S.states.get(i + 1) || a;
     return blend(a, b, f);
   }
   function blend(a, b, f) {
@@ -104,6 +106,13 @@ export async function createPlatformer(ctx) {
   }
   // ── camera ──
   const tmpV = new THREE.Vector3(), headV = new THREE.Vector3(), look = new THREE.Vector3();
+  // critically damped spring: eases in as well as out, so nothing about the camera starts or stops with a jerk
+  const spring = (o, k, target, time, dt) => {
+    const w = 2 / Math.max(1e-4, time), x = w * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x), vk = k + 'V';
+    const d = o[k] - target, t = ((o[vk] || 0) + w * d) * dt;
+    o[vk] = ((o[vk] || 0) - w * t) * e; o[k] = target + (d + t) * e;
+  };
+  const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   function updateCamera(dt, inp, v) {
     const C = S.cam, rm = ctx.reduceMotion();
     const head = headV.set(v.pos.x, v.pos.y + 1.15, v.pos.z);
@@ -115,21 +124,38 @@ export async function createPlatformer(ctx) {
     C.target.y += (head.y - C.target.y) * (1 - Math.exp(-dt * (swim || Math.abs(head.y - C.target.y) > 3 ? 10 : ky)));
     if (Math.abs(head.y - C.target.y) > 6) C.target.y = head.y - Math.sign(head.y - C.target.y) * 6;
     // user orbit
-    if (inp.orbitX || inp.orbitY) { C.yaw -= inp.orbitX; C.pitch = Math.min(1.25, Math.max(-0.45, C.pitch + inp.orbitY)); C.lastUser = S.t; }
+    // (drag deltas arrive in uneven bursts on touch screens: they are spent over a few frames)
+    if (inp.orbitX || inp.orbitY) { C.ox = (C.ox || 0) + inp.orbitX; C.oy = (C.oy || 0) + inp.orbitY; C.lastUser = S.t; C.followK = 0; C.yawV = 0; }
+    if (C.ox || C.oy) {
+      const k = rm ? 1 : 1 - Math.exp(-dt * 28), ux = C.ox * k, uy = C.oy * k;
+      C.ox = Math.abs(C.ox - ux) < 1e-5 ? 0 : C.ox - ux; C.oy = Math.abs(C.oy - uy) < 1e-5 ? 0 : C.oy - uy;
+      C.yaw -= ux; C.pitch = Math.min(1.25, Math.max(-0.45, C.pitch + uy));
+    }
     if (inp.zoom) C.dist = Math.min(12, Math.max(2.5, C.dist * (inp.zoom > 0 ? 1.12 : 1 / 1.12)));
     // gentle follow: when moving and not steered for a while, swing behind the direction of travel (not with Reduce motion)
     const sp = Math.hypot(v.vel.x, v.vel.z);
-    if (!rm && S.t - C.lastUser > 1.2 && sp > 1.5 && !inp.dragging) {
+    // (the turn rate fades in with speed and with time since the last drag, fades out towards running at the camera,
+    // and is itself eased, so the swing has no start or stop you can see)
+    let rate = 0;
+    if (!rm && !inp.dragging && sp > 0.5) {
       const behind = Math.atan2(-v.vel.x, -v.vel.z);
-      let d = ((behind - C.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-      if (Math.abs(d) < 2.6) C.yaw += d * Math.min(1, dt * 0.55 * Math.min(1, sp / 6));
+      const d = ((behind - C.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      const ad = Math.abs(d), shape = ad < 1.2 ? ad : 1.2 * (1 - sstep(1.2, 2.9, ad));
+      rate = Math.sign(d) * shape * 0.6 * sstep(1, 5, sp) * sstep(1.0, 2.6, S.t - C.lastUser);
     }
+    C.yawV = (C.yawV || 0) + (rate - (C.yawV || 0)) * (1 - Math.exp(-dt * 3.5));
+    if (Math.abs(C.yawV) > 1e-5) C.yaw += C.yawV * dt;
     // collision: the worker casts head -> wanted camera each tick. A blocked view first lifts the camera (low walls,
     // railings, benches), then pulls it in fast; both ease back when clear
+    // (the cast is per tick and flickers when something thin crosses the view: the lift waits for a view that stays
+    // blocked, and both it and the distance move on springs)
     const want = C.dist, frac = S.camFrac ?? 1;
-    C.lift = Math.min(0.75, Math.max(0, (C.lift || 0) + (frac < 0.85 ? dt * 1.6 : -dt * 0.5)));
+    C.blocked = frac < 0.85 ? Math.min(1, (C.blocked || 0) + dt * 5) : Math.max(0, (C.blocked || 0) - dt * 1.5);
+    if (C.blocked >= 1) C.liftOn = true; else if (C.blocked <= 0) C.liftOn = false;
+    if (C.lift === undefined) C.lift = 0;
+    spring(C, 'lift', C.liftOn ? 0.6 : 0, C.liftOn ? 0.45 : 1.1, dt); C.lift = Math.max(0, C.lift);
     const lim = frac < 1 ? Math.max(1.4, want * frac - 0.35) : want;
-    C.distNow += (lim - C.distNow) * (1 - Math.exp(-dt * (lim < C.distNow ? 10 : 2.5)));
+    spring(C, 'distNow', lim, lim < C.distNow ? 0.16 : 0.7, dt);
     const pitch = Math.min(1.3, C.pitch + C.lift);
     const cp = Math.cos(pitch), off = tmpV.set(Math.sin(C.yaw) * cp, Math.sin(pitch), Math.cos(C.yaw) * cp);
     camera.position.copy(C.target).addScaledVector(off, C.distNow);
@@ -158,6 +184,7 @@ export async function createPlatformer(ctx) {
       worker.postMessage({ type: 'spawn', x: x * UNITS, y: (y + 0.05) * UNITS, z: z * UNITS, yaw: face });
       S.states.clear(); S.latest = -1; S.posted = 0; S.acc = 0; S.pending = false; S.lastSafe = [x, y, z, face];
       S.cam.yaw = face + Math.PI; S.cam.pitch = 0.3; S.cam.init = false; S.cam.distNow = S.cam.dist; S.cam.lastUser = -10;
+      Object.assign(S.cam, { distNowV: 0, lift: 0, liftV: 0, liftOn: false, blocked: 0, yawV: 0, ox: 0, oy: 0 });
       S.active = true; ch.setVisible(true); input.setActive(true); document.body.classList.add('pf-on'); pressed(true);
       if (ctx.setFov) ctx.setFov(58);
       if (dbgOn) ensureDebug();
@@ -183,7 +210,7 @@ export async function createPlatformer(ctx) {
       let inp;
       if (api.test.input) {      // scripted: { mx, my } camera-relative, or { world: [dx, dz] } in three.js x / z; the camera holds still
         inp = { mx: 0, my: 0, a: false, b: false, z: false, orbitX: 0, orbitY: 0, zoom: 0, dragging: false, device: 'test', ...api.test.input(S.t, view) };
-        S.cam.lastUser = S.t;
+        if (!inp.follow) S.cam.lastUser = S.t;
         // inp.world is turned into a stick below, against the same camera direction the tick sends
       } else inp = input.read(dt);
       // fixed 30 Hz ticks in the worker; never more than one in flight
@@ -204,7 +231,7 @@ export async function createPlatformer(ctx) {
           input: { camLookX: lx, camLookZ: lz, stickX: -mx, stickY: my, a: btn.a ? 1 : 0, b: btn.b ? 1 : 0, z: btn.z ? 1 : 0 } });
         S.pending = true;
       }
-      const v = S.latest > 0 ? sample(S.posted - 1 + S.acc / STEP) : null;
+      const v = S.latest > 0 ? sample(S.posted - DELAY + S.acc / STEP) : null;
       if (!v) { lastFrameMs = performance.now() - t0; return; }
       const s = v.s;
       // collision window: re-centre ahead of the player when they near its edge (hysteresis: 12 m of 36)

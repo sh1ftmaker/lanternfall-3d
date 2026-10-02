@@ -5,7 +5,7 @@ export default async (page, ctx) => {
   const only = (ctx.opt('only', '') || '').split(',').filter(Boolean), shots = ctx.args.includes('--shots');
   await page.evaluate(() => __park.setMode('walk', { at: [288, 0], yaw: Math.PI }));
   await ctx.sleep(500);
-  await page.evaluate(() => __park.togglePlatformer());
+  await page.evaluate(() => __park.setPlatformer(true));
   await page.waitForFunction(() => __park.platformer && __park.platformer.active && __park.platformer.S.latest > 5, { timeout: 90000 });
   // helpers inside the page
   await page.evaluate(() => {

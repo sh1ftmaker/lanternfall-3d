@@ -681,7 +681,7 @@ function setMode(m, opts = {}) {
   const prev = mode; mode = m;
   for (const k of ['tour', 'orbit', 'walk']) $('#m-' + k).setAttribute('aria-pressed', String(k === m));
   controls.enabled = m === 'orbit'; fly.on = false;
-  $('#stick').hidden = true; hopBtn.hidden = !(m === 'walk' && coarse);
+  $('#stick').hidden = true; hopBtn.hidden = !(m === 'walk' && coarse && !pfWant);
   if (m === 'tour') { startBlend(prev === 'walk' ? 3.5 : 2.6); lastShot = -1; baseFov = 52; }
   if (m === 'orbit') {
     baseFov = 52;
@@ -698,6 +698,7 @@ function setMode(m, opts = {}) {
     baseFov = 66;
     const g = opts.at || groundUnder();
     spawnWalk(g[0], g[1], opts.yaw);
+    if (pfWant) enterPlatformer();            // platformer hook: Walk is the lamplighter unless first person was chosen
   }
   camera.near = m === 'walk' ? 0.22 : 0.6; applyFov();
   showHint();
@@ -710,7 +711,7 @@ function groundUnder() {
 }
 function gotoPlace(p) {
   setCaption(p);
-  if (mode === 'walk') { spawnWalk(p.walk[0], p.walk[1], p.yaw); return; }
+  if (mode === 'walk') { spawnWalk(p.walk[0], p.walk[1], p.yaw); if (pfWant) enterPlatformer(); return; }
   if (mode === 'tour') { setMode('orbit', { keepTarget: true }); controls.target.copy(camLook); }
   fly.on = true; fly.t = 0; fly.dur = reduceMotion ? 0.01 : 2.2; fly.p0.copy(camera.position); fly.t0.copy(controls.target); fly.p1.copy(p.pos); fly.t1.copy(p.target);
   controls.enabled = false; idle = 0;
@@ -1027,27 +1028,34 @@ function frame() {
 }
 window.__park = { sound, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
-// ── platformer hook ── (fx/platformer/: an alternative player for Walk mode, switched with #btn-pf or P;
-// nothing is downloaded or built until the first switch)
-let pf = null, pfLoading = null;
+// ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
+// switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of
+// it is downloaded or built until Walk is first entered)
+const PF_KEY = 'lanternfall-walk';
+let pf = null, pfLoading = null, pfWant = !HASH.has('fp') && (() => { try { return localStorage.getItem(PF_KEY) !== 'fp'; } catch (e) { return true; } })();
 function platformer() {
   if (!pfLoading) pfLoading = import('./fx/platformer/index.js').then((M) => M.createPlatformer({ THREE, scene, camera, renderer, park, lodMeshes, manifest, nav, depth, surface, walk, Q, mobile, coarse,
     guests: () => guests, reduceMotion: () => reduceMotion, setMode, setFov: (f) => { if (f) { baseFov = f; applyFov(); } },
+    onEsc: () => { if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => setPlatformer(false),
     status: (t) => { const p = $('#loadpill'); p.hidden = !t; if (t) p.textContent = t; },
     hint: (t) => { hintEl.textContent = t; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 6500); } })).then((p) => (pf = p))
-    .catch((e) => { console.warn('platformer:', e); pfLoading = null; $('#loadpill').hidden = true; });
+    .catch((e) => { console.warn('platformer:', e); pfLoading = null; pfWant = false; $('#loadpill').hidden = true; if (mode === 'walk') hopBtn.hidden = !coarse; });
   return pfLoading;
 }
-function togglePlatformer() {
+// (re)spawns the lamplighter where the walker stands; the last call wins while the module is still loading
+let pfEnterSeq = 0;
+function enterPlatformer() { const k = ++pfEnterSeq; platformer().then((p) => { if (p && k === pfEnterSeq && mode === 'walk' && pfWant) p.enter(); }); }
+function setPlatformer(on) {
   if (!ready || !nav) return;
-  if (pf && pf.active) { pf.exit(); return; }
-  if (mode !== 'walk') setMode('walk');
-  platformer().then((p) => { if (p && mode === 'walk' && !p.active) p.enter(); });
+  pfWant = on; try { localStorage.setItem(PF_KEY, on ? 'pf' : 'fp'); } catch (e) { /* private mode: not remembered */ }
+  if (!on) { if (pf && pf.active) pf.exit(); else if (mode === 'walk') hopBtn.hidden = !coarse; return; }   // exit() puts the walker where the lamplighter stood
+  if (mode !== 'walk') setMode('walk'); else { hopBtn.hidden = true; enterPlatformer(); }
 }
+const togglePlatformer = () => setPlatformer(!(mode === 'walk' && pfWant));
 $('#btn-pf').addEventListener('click', togglePlatformer);
 addEventListener('keydown', (e) => { if (e.code === 'KeyP' && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
 Object.defineProperty(window.__park, 'platformer', { get: () => pf });
-window.__park.loadPlatformer = platformer; window.__park.togglePlatformer = togglePlatformer;
+Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 frame();
 let loadFailed = false;
 load().catch(async (err) => {

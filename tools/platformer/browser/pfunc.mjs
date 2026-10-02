@@ -13,12 +13,10 @@ const run = async (mobile) => {
   const ev = (js) => page.evaluate(js).catch((e) => { add('eval: ' + e.message.slice(0, 160)); }); const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const out = { mobile };
   out.btnHiddenInTour = await ev("getComputedStyle(document.querySelector('#btn-pf')).display");
+  out.lazyBefore = await ev("performance.getEntriesByType('resource').filter(e=>/platformer/.test(e.name)).length");      // must be 0: nothing loads before Walk
   await ev("document.querySelector('#m-walk').click()"); await wait(500);
   await ev("__park.setMode('walk',{at:[288,0],yaw:Math.PI})"); await wait(300);
   out.btnInWalk = await ev("getComputedStyle(document.querySelector('#btn-pf')).display");
-  const req0 = await ev("performance.getEntriesByType('resource').filter(e=>/platformer/.test(e.name)).length");
-  out.lazyBefore = req0;      // must be 0: nothing loads before the switch
-  if (mobile) await page.tap('#btn-pf'); else await page.click('#btn-pf');
   await page.waitForFunction('__park.platformer && __park.platformer.active && __park.platformer.S.latest > 5', { timeout: 90000 }).catch(() => add('platformer did not start'));
   out.loaded = await ev("performance.getEntriesByType('resource').filter(e=>/platformer/.test(e.name)).map(e=>e.name.split('/').pop()+':'+Math.round(e.transferSize||e.encodedBodySize))");
   await wait(800);

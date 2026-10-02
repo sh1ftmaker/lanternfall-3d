@@ -2,7 +2,7 @@
 export default async (page, ctx) => {
   await page.evaluate(() => __park.setMode('walk', { at: [270, 0], yaw: Math.PI }));
   await ctx.sleep(500);
-  await page.evaluate(() => __park.togglePlatformer());
+  await page.evaluate(() => __park.setPlatformer(true));
   await page.waitForFunction(() => __park.platformer && __park.platformer.active && __park.platformer.S.latest > 5, { timeout: 90000 });
   const pf = 'const pf = __park.platformer;';
   const place = (x, y, z, face, camYaw, dist, pitch) => page.evaluate(`(()=>{${pf} pf.test.input = () => ({}); pf.teleport(${x}, ${y}, ${z}, ${face}); pf.S.cam.yaw = ${camYaw}; pf.S.cam.dist = ${dist}; pf.S.cam.distNow = ${dist}; pf.S.cam.pitch = ${pitch};})()`);
