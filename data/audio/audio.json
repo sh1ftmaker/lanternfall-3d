@@ -870,6 +870,38 @@
    ]
   },
   {
+   "id": "tavern_hearth",
+   "file": "fx/torch_loop.m4a",
+   "gain": 0.5,
+   "ref": 2,
+   "max": 12,
+   "pos": [
+    139.75,
+    -15.57,
+    1.1
+   ],
+   "loop": [
+    0.5,
+    9.5
+   ]
+  },
+  {
+   "id": "tavern_room",
+   "file": "beds/crowd_murmur.m4a",
+   "gain": 0.45,
+   "ref": 3,
+   "max": 14,
+   "pos": [
+    137.28,
+    -25.52,
+    2.0
+   ],
+   "loop": [
+    0.5,
+    17.5
+   ]
+  },
+  {
    "id": "lantern_shrine_bell",
    "file": "oneshots/shrine_bell_1.m4a",
    "gain": 0.7,
