@@ -127,11 +127,11 @@ export function createPrecip({ scene, camera, uTime, cover, mobile }) {
         vec3 box = vec3(22.0, 1.0, 22.0);
         vec3 p = wrapBox(vec3((aSeed.x + hs(id * 1.37 + aSeed.y * 91.0)) * box.x, 0.0, (aSeed.y + hs(id * 2.11 + aSeed.x * 53.0)) * box.z), box);
         p.y = covH(p.xz) + 0.03;
-        float r = 0.02 + 0.075 * sqrt(u);
+        float r = 0.015 + 0.055 * sqrt(u);
         vec4 c = projectionMatrix * viewMatrix * vec4(p + vec3(position.x, 0.0, position.y * 2.0 - 1.0) * r, 1.0);
         gl_Position = c; vQ = vec2(position.x, position.y * 2.0 - 1.0); vR = u;
         float dist = length(p - cameraPosition);
-        vC = dropLight(p) * 0.9 * (1.0 - u) * smoothstep(0.0, 0.08, u) * smoothstep(11.0, 4.0, dist) * uCovOn;
+        vC = dropLight(p) * 0.55 * (1.0 - u) * (1.0 - u) * smoothstep(0.0, 0.08, u) * smoothstep(11.0, 4.0, dist) * uCovOn;
       }`,
     fragmentShader: /* glsl */`
       varying vec3 vC; varying vec2 vQ; varying float vR;

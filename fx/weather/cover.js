@@ -22,9 +22,12 @@ export function createCover({ renderer, scene, mobile, hdr }) {
   const mat = (glass) => new THREE.ShaderMaterial({
     defines: hdr ? {} : { LDR: '' },
     uniforms: { uRange: { value: 32 } },
-    vertexShader: /* glsl */`attribute vec4 aCol; uniform float uRange; varying vec3 vC; varying float vY;
+    // rgb: only what glows (lamps, neon, lit windows: emissive class or bright enough), so its blurred mips are halos
+    // around light sources, which is what a wet floor mirrors and what lights the rain
+    vertexShader: /* glsl */`attribute vec4 aCol; attribute vec4 aAux; uniform float uRange; varying vec3 vC; varying float vY;
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vY = w.y;
-        vC = ${glass ? 'aCol.rgb * aCol.rgb * 0.25' : 'aCol.rgb * (aCol.a * uRange)'};
+        vec3 c = ${glass ? 'aCol.rgb * aCol.rgb * 0.25' : 'aCol.rgb * (aCol.a * uRange)'}; float m = max(c.r, max(c.g, c.b));
+        vC = c * max(step(6.5, aAux.a * 255.0) * step(aAux.a * 255.0, 7.5), smoothstep(0.9, 3.0, m));
         gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */`varying vec3 vC; varying float vY;
       void main(){
@@ -37,6 +40,7 @@ export function createCover({ renderer, scene, mobile, hdr }) {
     side: THREE.DoubleSide,
   });
   const solid = mat(false), glass = mat(true);
+  solid.defaultAttributeValues.aAux = glass.defaultAttributeValues.aAux = [0, 0, 0, 0];
   const cam = new THREE.OrthographicCamera(-COVER_R, COVER_R, COVER_R, -COVER_R, 1, 1200);
   cam.position.set(0, 600, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();   // screen right = +x, up = -z
 

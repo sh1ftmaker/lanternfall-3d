@@ -15,11 +15,13 @@ import { createShade } from './shade.js';
 // fog: fog density multiplier, mist: lake-mist density multiplier, wind: 0..1, storm: lightning on
 export const STATES = {
   clear: { rain: 0, snow: 0, wet: 0, dust: 0, cloud: 0, fog: 1, mist: 1, wind: 0, storm: 0 },
-  mist: { rain: 0, snow: 0, wet: 0.3, dust: 0, cloud: 0.55, fog: 9, mist: 2.6, wind: 0, storm: 0 },
-  rain: { rain: 1, snow: 0, wet: 1, dust: 0, cloud: 0.9, fog: 3.2, mist: 1.6, wind: 0.15, storm: 0 },
-  storm: { rain: 1.6, snow: 0, wet: 1, dust: 0, cloud: 1, fog: 4, mist: 1.3, wind: 1, storm: 1 },
-  snow: { rain: 0, snow: 1, wet: 0, dust: 1, cloud: 0.8, fog: 4.5, mist: 1.2, wind: 0.2, storm: 0 },
+  mist: { rain: 0, snow: 0, wet: 0.3, dust: 0, cloud: 0.8, fog: 45, mist: 2.6, wind: 0, storm: 0 },
+  rain: { rain: 1, snow: 0, wet: 1, dust: 0, cloud: 0.9, fog: 12, mist: 1.6, wind: 0.15, storm: 0 },
+  storm: { rain: 1.6, snow: 0, wet: 1, dust: 0, cloud: 1, fog: 16, mist: 1.3, wind: 1, storm: 1 },
+  snow: { rain: 0, snow: 1, wet: 0, dust: 1, cloud: 0.8, fog: 20, mist: 1.2, wind: 0.2, storm: 0 },
 };
+// fog colour (linear, before tone mapping) the air takes on; Clear keeps the park's own
+const FOGC = { mist: [0.040, 0.041, 0.060], rain: [0.026, 0.028, 0.046], storm: [0.022, 0.024, 0.040], snow: [0.046, 0.048, 0.066] };
 const LABELS = { clear: 'Clear', mist: 'Mist', rain: 'Rain', storm: 'Storm', snow: 'Snow' };
 const NOTES = { clear: 'A clear, starlit night.', mist: 'Fog over the lake and between the lands.', rain: 'Steady rain: wet paving, rain on the lake.', storm: 'Wind, heavy rain and distant lightning (no flashes with Reduce motion).', snow: 'Slow snow settling on the park.' };
 // seconds to ease most of the way (wetness and snow cover change slowly, like the real thing)
@@ -32,7 +34,7 @@ export function createWeather(opts) {
   let state = 'clear', target = STATES.clear, reduceMotion = !!opts.reduceMotion, degrade = 0;
   const cover = createCover({ renderer, scene, mobile, hdr: Q.hdr !== false });
   let precip = null, shade = null, audio = null, audioLoading = null;
-  const shadeAll = () => (shade ||= createShade({ THREE, scene, camera, renderer, Q, surface, cover, getWater: opts.getWater, FOG: opts.FOG, uTime, mobile }));
+  const shadeAll = () => (shade ||= createShade({ THREE, scene, surface, cover, getWater: opts.getWater, getFx: opts.getFx, FOG: opts.FOG, uTime }));
   shadeAll();                                  // patches the shaders now, before they first compile (Clear = untouched path)
   const idle = () => Object.keys(now).every((k) => now[k] === STATES.clear[k]);
 
@@ -56,15 +58,16 @@ export function createWeather(opts) {
     builtAt = n;
   }
 
-  let wasIdle = true;
+  let wasIdle = true, patched = false;
   function update(dt, time) {
     // ease toward the target
     for (const k in now) {
       const t = target[k], d = t - now[k];
       if (d === 0) continue;
       now[k] += d * Math.min(1, dt / TAU[k]);
-      if (Math.abs(t - now[k]) < (k === 'fog' ? 0.002 : 0.0015)) now[k] = t;
+      if (Math.abs(t - now[k]) < (k === 'fog' ? 0.002 * Math.max(1, t) : 0.0015)) now[k] = t;
     }
+    if (!patched) patched = shade.patch();
     const isIdle = idle();
     if (isIdle && wasIdle) return;                                   // Clear and settled: nothing runs, nothing is drawn
     wasIdle = isIdle;
@@ -72,7 +75,7 @@ export function createWeather(opts) {
     const scale = (Q.fx ? Q.fx.scale : 1) * (Q.hd ? 1 : 0.6) * (degrade >= 4 ? 0.5 : degrade >= 2 ? 0.75 : 1);
     if (now.rain > 0 || now.snow > 0) precip ||= createPrecip({ scene, camera, uTime, cover, mobile });
     if (precip) precip.update({ rainAmt: now.rain, snowAmt: now.snow, wind: now.wind, scale, motion: !reduceMotion });
-    shade.update(dt, time, now, { reduceMotion, state });
+    shade.update(dt, time, now, { reduceMotion, state, wxFog: FOGC[state] });
     if (audio) audio.update(dt, time, now, shade);
     else if (!audioLoading && !isIdle && opts.getSound && opts.getSound()) audioLoading = import('./audio.js').then((m) => { audio = m.createWeatherAudio({ ...opts, cover, getEngine: opts.getSound }); }).catch((e) => console.warn('weather: no sound', e));
   }
