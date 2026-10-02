@@ -98,6 +98,18 @@ STAGES = [  # (regex, name, radius from the stage centre to the first row, rows,
     (r"^meridian_arena_floor$", "Meridian training arena", 0, 0, 0),
 ]
 
+# hand-placed standing spots inside interiors and enclosed places (land-local x, y of the spot and of what it looks at)
+HAND = [
+    ("brinewatch", "view", "The Brine & Barrel: the bar", (-21.5, -40.2), (-21.5, -38.0)),
+    ("brinewatch", "view", "The Brine & Barrel: the bar", (-19.4, -40.8), (-19.4, -38.0)),
+    ("brinewatch", "view", "The Brine & Barrel: the hearth", (-30.2, -41.0), (-32.7, -41.0)),
+    ("rosewick", "view", "The Rose Maze: the secret garden", (-48.2, 14.6), (-48.0, 12.0)),
+    ("rosewick", "view", "The Rose Maze: the secret garden", (-50.6, 12.0), (-48.0, 12.0)),
+    ("guildhollow", "view", "Guildhollow: the castle well", (17.4, 25.0), (20.0, 25.0)),
+    ("guildhollow", "view", "Guildhollow: the castle well", (20.0, 22.4), (20.0, 25.0)),
+    ("guildhollow", "view", "Guildhollow: the castle courtyard", (-6.0, 26.0), (0.0, 37.0)),
+]
+
 TABLES = [  # (regex, name)
     (r"^guildhollow_table_top", "Tavern table"), (r"^brinewatch_prop_table_set", "Dockside table"),
 ]
@@ -265,5 +277,10 @@ def extract(geo, nav, log=print):
                 if free >= 2: break
             if free == 0: log("  table without room:", k); continue
             pois.append(dict(type="table", x=cx, y=cy, z=ztop, yaw=0.0, land=o["part"], cap=int(min(4, free)), r=rad, name=nm, src=k))
+    for land, typ, nm, (sx, sy), (tx, ty) in HAND:
+        (x, y), (wx, wy) = pc.to_world(land, (sx, sy)), pc.to_world(land, (tx, ty))
+        h = C.nav_height(nav, x, y)
+        if np.isnan(h) or not walk.solid[walk.kd.query([x, y])[1]]: log("  hand spot not walkable:", nm, sx, sy); continue
+        pois.append(dict(type=typ, x=x, y=y, z=float(h), yaw=math.atan2(wy - y, wx - x), land=land, cap=2, name=nm, src="hand"))
     log("places: %d pois" % len(pois))
     return pois

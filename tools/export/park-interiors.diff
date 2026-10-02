@@ -1,0 +1,234 @@
+--- a/parts/brinewatch.py
++++ b/parts/brinewatch.py
+@@ -519,13 +519,25 @@
+     rail((x0d, -46.0), (x0d, -55.2)); rail((x0d, -55.2), (x1d - 4.0, -55.2)); rail((x1d - 4.0, -55.2), (x1d + 2.5, -55.2))
+     rail((x1d + 2.5, -55.2), (x1d + 2.5, -50.0)); rail((x1d + 2.5, -46.5), (x1d + 2.5, -36.0))
+     # steps down to the wharf on the east side
+-    for i in range(3):
+-        deck.box((x1d + 3.1 + i * 0.4, -48.25, Z + fz - 0.25 - i * 0.17), (0.4, 3.4, 0.17 + 0.0), m["deck"])
++    # (interiors) eight shallow solid steps (was three 0.17 m slabs): guests' paths take steps of up to ~0.35 m per 0.5 m
++    for i in range(8):
++        deck.box((x1d + 2.5 + 0.15 + i * 0.3, -48.25, Z), (0.3, 3.4, fz * (8 - i) / 9), m["deck"])
+     deck.build("tavern_deck", col)
+     base = fz
+     # ground floor
+     mb.box((0, 0, base - 0.5), (w + 0.2, d + 0.2, 0.5), m["stone"])
+-    mb.box((0, 0, base), (w, d, 3.6), sid)
++    # (interiors) the ground floor is an open taproom: four plank walls with two doorways (south to the deck, east to
++    # the wharf deck), a plank floor and the jetty's underside as the ceiling. Furnished in tavern_interior().
++    t, H1 = 0.3, 3.6
++    xi, yi = w / 2 - t, d / 2 - t
++    DS, DE, DN, DH = (-1.8, 0.2), (-1.0, 1.0), (-1.0, 1.0), 2.6   # south / east / north doorway ranges, doorway height
++    def wall_seg(x0, x1, y0, y1, z0=0.0, z1=H1):
++        mb.box(((x0 + x1) / 2, (y0 + y1) / 2, base + z0), (x1 - x0, y1 - y0, z1 - z0), sid)
++    wall_seg(-w / 2, DS[0], -d / 2, -yi); wall_seg(DS[1], w / 2, -d / 2, -yi); wall_seg(DS[0], DS[1], -d / 2, -yi, DH)
++    wall_seg(-w / 2, DN[0], yi, d / 2); wall_seg(DN[1], w / 2, yi, d / 2); wall_seg(DN[0], DN[1], yi, d / 2, DH)
++    wall_seg(-w / 2, -xi, -yi, yi)
++    wall_seg(xi, w / 2, -yi, DE[0]); wall_seg(xi, w / 2, DE[1], yi); wall_seg(xi, w / 2, DE[0], DE[1], DH)
++    mb.box((0, 0, base), (w - 0.02, d - 0.02, 0.03), m["deck"])
+     # jettied, slightly crooked upper floor
+     up = Matrix.Translation((0, 0, base + 3.6)) @ Matrix.Rotation(0.012, 4, 'Y') @ Matrix.Rotation(0.01, 4, 'Z')
+     mb.box((0, 0, base + 3.6), (w + 1.0, d + 1.0, 0.3), trim)
+@@ -537,8 +549,10 @@
+     # half-timber cross braces on the upper floor (south face)
+     for i in range(6):
+         x0 = -w / 2 + i * w / 6; x1 = x0 + w / 6
+-        mb.beam((x0, -(d + 0.8) / 2 - 0.06, 0.4), (x1, -(d + 0.8) / 2 - 0.06, 3.3), 0.16, 0.08, trim) if i % 2 == 0 else \
+-            mb.beam((x1, -(d + 0.8) / 2 - 0.06, 0.4), (x0, -(d + 0.8) / 2 - 0.06, 3.3), 0.16, 0.08, trim)
++        # (interiors) in the upper floor's frame, as intended (they hung in front of the ground floor and crossed the doorway)
++        ya = -(d + 0.8) / 2 - 0.06
++        a, b = ((x0, ya, 0.4), (x1, ya, 3.3)) if i % 2 == 0 else ((x1, ya, 0.4), (x0, ya, 3.3))
++        mb.beam(tuple(up @ Vector(a)), tuple(up @ Vector(b)), 0.16, 0.08, trim)
+     # main roof + crooked cross gables facing the lake (south)
+     roofM = up @ Matrix.Translation((0, 0, 0))
+     mb.gable(w + 0.8, d + 0.8, 3.5, 4.6, m["shingle_red"], m["sid_ochre"], over=0.7, M=up)
+@@ -555,9 +569,10 @@
+     for px in (-7.5, -4.5, 3.0, 6.0):
+         mb.box((px, -d / 2 - 0.06, base + 0.9), (1.9, 0.14, 1.9), trim)
+         mb.box((px, -d / 2 - 0.1, base + 1.0), (1.6, 0.06, 1.65), m["bottle_glass"])
+-    mb.box((-0.8, -d / 2 - 0.06, base), (2.0, 0.14, 2.9), trim)
+-    mb.box((-0.8, -d / 2 - 0.1, base), (1.6, 0.08, 2.6), m["win_dim"])
+-    for py in (-2.5, 2.0):
++    # open doorway to the deck: a trim frame round the opening (was a closed door)
++    mb.box((DS[0] - 0.1, -d / 2 - 0.06, base), (0.2, 0.14, DH + 0.2), trim); mb.box((DS[1] + 0.1, -d / 2 - 0.06, base), (0.2, 0.14, DH + 0.2), trim)
++    mb.box(((DS[0] + DS[1]) / 2, -d / 2 - 0.06, base + DH), (DS[1] - DS[0] + 0.4, 0.14, 0.2), trim)
++    for py in (-2.6, 2.6):
+         for sx in (-1, 1):
+             mb.box((sx * (w / 2 + 0.06), py, base + 1.0), (0.12, 1.8, 1.6), trim)
+             mb.box((sx * (w / 2 + 0.1), py, base + 1.1), (0.06, 1.5, 1.35), m["bottle_glass"])
+@@ -571,15 +586,19 @@
+     for px in (-6.5, -3.0, 3.0, 6.5):
+         mb.box((px, d / 2 + 0.06, base + 0.9), (1.9, 0.14, 1.9), trim)
+         mb.box((px, d / 2 + 0.1, base + 1.0), (1.6, 0.06, 1.65), m["bottle_glass"])
+-    mb.box((0, d / 2 + 0.06, base), (1.8, 0.14, 2.8), trim)
+-    mb.box((0, d / 2 + 0.1, base), (1.4, 0.08, 2.5), m["wood_red"])
++    # back doorway to the Ring Promenade (open) with three steps down to the paving
++    mb.box((DN[0] - 0.1, d / 2 + 0.06, base), (0.2, 0.14, DH + 0.2), trim); mb.box((DN[1] + 0.1, d / 2 + 0.06, base), (0.2, 0.14, DH + 0.2), trim)
++    mb.box(((DN[0] + DN[1]) / 2, d / 2 + 0.06, base + DH), (DN[1] - DN[0] + 0.4, 0.14, 0.2), trim)
++    for i in range(7):
++        mb.box(((DN[0] + DN[1]) / 2, d / 2 + 0.1 + 0.15 + i * 0.3, 0.0), (DN[1] - DN[0] + 0.6, 0.3, base * (7 - i) / 8), m["stone"])
+     mb.box((0, d / 2 + 0.12, base + 2.95), (8.6, 0.1, 0.62), m["sign_board"])
+     for px in (-1.4, 1.4):
+         mb.beam((px, d / 2, base + 2.6), (px, d / 2 + 0.6, base + 2.6), 0.06, 0.06, m["iron"])
+         props._lantern(mb, (px, d / 2 + 0.6, base + 2.2), m["lamp"], m["iron"], 0.14, 0.36)
+     # east door (main entrance from the wharf) + porch roof
+-    mb.box((w / 2 + 0.06, 0, base), (0.14, 2.0, 2.9), trim)
+-    mb.box((w / 2 + 0.1, 0, base), (0.08, 1.6, 2.6), m["win_warm"])
++    mb.box((w / 2 + 0.06, DE[0] - 0.1, base), (0.14, 0.2, DH + 0.2), trim); mb.box((w / 2 + 0.06, DE[1] + 0.1, base), (0.14, 0.2, DH + 0.2), trim)
++    mb.box((w / 2 + 0.06, 0, base + DH), (0.14, DE[1] - DE[0] + 0.4, 0.2), trim)
++    tavern_interior(col, m, mb, Pl, x, y, base, w, d, xi, yi, H1, DS, DE)
+     mb.quad((w / 2, -2.0, base + 3.4), (w / 2, 2.0, base + 3.4), (w / 2 + 2.4, 2.0, base + 2.7), (w / 2 + 2.4, -2.0, base + 2.7), m["shingle"])
+     # chimneys
+     mb.box((-6.5, 2.0, base + 3.6), (1.0, 1.0, 9.4), m["brick"]); mb.box((5.5, 2.5, base + 3.6), (0.9, 0.9, 8.6), m["brick"])
+@@ -636,7 +655,7 @@
+     st.build("tavern_stage", col)
+     sign_text("stage_sign", "SHANTY CORNER", (sx0, sy0 + 1.68, Z + fz + 2.75), 0.0, col, 0.3, m["sign_gold"], 0.02)
+     # deck furniture: barrel tables, lamps
+-    for i, (tx, ty) in enumerate(((-31.0, -48.5), (-27.5, -52.5), (-24.0, -48.6), (-20.5, -52.8), (-17.0, -48.8), (-11.8, -41.0), (-11.6, -37.2))):
++    for i, (tx, ty) in enumerate(((-31.0, -48.5), (-27.5, -52.5), (-23.6, -50.2), (-20.5, -52.8), (-17.0, -48.8), (-11.8, -41.0), (-11.6, -37.2))):
+         Pl("table_set", tx, ty, Z + fz, rz=rnd.uniform(0, 3))
+     for (lx, ly) in ((-33.0, -55.0), (-23.0, -55.0), (-10.5, -55.0)):
+         Pl("lamp_post", lx, ly + 0.2, Z + fz, rz=-math.pi / 2, scale=0.85)
+@@ -649,6 +668,75 @@
+     return ob
+ 
+ 
++def tavern_interior(col, m, mb, Pl, x, y, base, w, d, xi, yi, H1, DS, DE):
++    """The Brine & Barrel taproom: bar with bottle shelves, hearth, barrel tables, beams and hanging lanterns.
++    mb is the tavern's builder (tavern-local frame, z from the land's paving); x, y = tavern centre (land-local)."""
++    fl = base + 0.03                                   # floor top
++    trim = m["wood_dark"]
++    fire = bl.glowm("hearth_fire", (1.0, 0.42, 0.12, 1), 9.0)
++    # ceiling beams across the room
++    for bx in (-7.5, -5.0, -2.5, 0.0, 2.5, 5.0, 7.5):
++        mb.box((bx, 0, base + H1 - 0.24), (0.22, 2 * yi, 0.24), trim)
++    # bar along the north wall (east half)
++    bx0, bx1 = 1.0, 7.4; bc = (bx0 + bx1) / 2
++    mb.box((bc, 2.3, fl), (bx1 - bx0, 0.55, 1.0), m["wood_red"])
++    mb.box((bc, 2.25, fl + 1.0), (bx1 - bx0 + 0.12, 0.72, 0.06), m["wood_light"])
++    mb.beam((bx0, 1.92, fl + 0.22), (bx1, 1.92, fl + 0.22), 0.05, 0.05, m["gold"])
++    for sx in (1.8, 3.2, 4.6, 6.0):
++        mb.cyl((sx, 1.45, fl), (sx, 1.45, fl + 0.72), 0.17, m["barrel"], segs=8)
++    # back shelves with bottles, a sign board above
++    mb.box((bc, yi - 0.2, fl), (bx1 - bx0, 0.4, 2.3), trim)
++    rnd = random.Random(5)
++    for z in (1.15, 1.6, 2.05):
++        mb.box((bc, yi - 0.47, fl + z), (bx1 - bx0, 0.14, 0.04), m["wood_light"])
++        bxp = bx0 + 0.18
++        while bxp < bx1 - 0.15:
++            mat = m["bottle"] if rnd.random() < 0.55 else (m["gold"] if rnd.random() < 0.4 else m["wood_red"])
++            hgt = rnd.uniform(0.22, 0.32)
++            mb.cyl((bxp, yi - 0.47, fl + z + 0.04), (bxp, yi - 0.47, fl + z + 0.04 + hgt), 0.045, mat, segs=5, smooth=False)
++            bxp += rnd.uniform(0.16, 0.3)
++    mb.box((bc, yi - 0.04, fl + 2.45), (5.2, 0.06, 0.6), m["sign_board"])
++    sign_text("tavern_bar_sign", "BRINE & BARREL", (x + bc, y + yi - 0.09, Z + fl + 2.6), 0.0, col, 0.3, m["sign_gold"], 0.01)
++    # hearth on the west wall
++    hx = -xi
++    mb.box((hx + 0.35, 0, fl), (0.7, 2.0, 1.35), m["stone"])
++    mb.box((hx + 0.25, 0, fl + 1.35), (0.5, 1.5, H1 - 0.03 - 1.35), m["stone"])
++    mb.box((hx + 0.42, 0, fl + 1.35), (0.84, 2.3, 0.12), trim)
++    mb.box((hx + 0.71, 0, fl + 0.12), (0.02, 1.1, 0.75), m["port_dark"])
++    for k, (dy, rz) in enumerate(((-0.25, 0.2), (0.2, -0.15))):
++        mb.cyl((hx + 0.76, -0.45 + dy, fl + 0.18 + 0.1 * k), (hx + 0.76, 0.45 + dy, fl + 0.18 + 0.1 * k), 0.08, m["wood_dark"], segs=6)
++    mb.box((hx + 0.76, 0, fl + 0.24), (0.04, 0.8, 0.5), fire)
++    # an anchor and a ship's wheel on the walls
++    mb.cyl((hx + 0.5, 0, fl + 2.3), (hx + 0.54, 0, fl + 2.3), 0.42, trim, segs=12)
++    for k in range(4):
++        a = k * math.pi / 4
++        mb.beam((hx + 0.57, -0.55 * math.cos(a), fl + 2.3 - 0.55 * math.sin(a)), (hx + 0.57, 0.55 * math.cos(a), fl + 2.3 + 0.55 * math.sin(a)), 0.05, 0.05, trim)
++    # inner window panes (bottle glass) matching the windows outside
++    for px in (-7.5, -4.5, 3.0, 6.0):
++        mb.box((px, -yi + 0.03, fl + 0.95), (1.75, 0.06, 1.75), trim)
++        mb.box((px, -yi + 0.07, fl + 1.02), (1.5, 0.03, 1.6), m["win_dark"])
++    for px in (-6.5, -3.0):
++        mb.box((px, yi - 0.03, fl + 0.95), (1.75, 0.06, 1.75), trim)
++        mb.box((px, yi - 0.07, fl + 1.02), (1.5, 0.03, 1.6), m["win_dark"])
++    for py in (-2.6, 2.6):
++        for sx in (-1, 1):
++            mb.box((sx * (xi - 0.03), py, fl + 0.95), (0.06, 1.65, 1.55), trim)
++            mb.box((sx * (xi - 0.07), py, fl + 1.02), (0.03, 1.4, 1.4), m["win_dark"])
++    # hanging lanterns from the beams
++    for (lx, ly) in ((-5.0, 0.0), (-2.5, -2.4), (0.0, 1.6), (2.5, -2.6), (5.0, -0.2), (5.0, 3.1)):
++        mb.cyl((lx, ly, base + H1 - 0.24), (lx, ly, base + H1 - 0.62), 0.012, m["iron"], segs=3, cap=False, smooth=False)
++        props._lantern(mb, (lx, ly, base + H1 - 0.82), m["lantern"], m["iron"], 0.14, 0.34)
++    # barrel tables (the same sets as on the deck), barrels by the bar
++    for i, (tx, ty) in enumerate(((-5.8, 2.4), (-5.8, -2.5), (-3.0, 2.9), (3.4, -2.8), (6.6, -2.8))):
++        Pl("table_set", x + tx, y + ty, Z + fl, rz=0.7 + i * 1.3)
++    for (bx, by) in ((8.15, 3.3), (8.15, 4.05), (-8.2, -4.1)):
++        Pl("barrel", x + bx, y + by, Z + fl, rz=bx)
++    light("tavern_in_w", (x - 5.0, y, Z + fl + 2.55), col, 70)
++    light("tavern_in_c", (x + 0.5, y - 1.2, Z + fl + 2.6), col, 55)
++    light("tavern_in_bar", (x + 4.2, y + 2.4, Z + fl + 2.55), col, 60)
++    light("tavern_hearth", (x - xi + 1.1, y, Z + fl + 0.6), col, 60, (1.0, 0.5, 0.2))
++
++
+ def stack(Pl, rnd, x, y, n, rz0=0.0):
+     """A deterministic pile of barrels / crates / coils around (x, y)."""
+     for i in range(n):
+--- a/parts/guildhollow.py
++++ b/parts/guildhollow.py
+@@ -519,10 +519,11 @@
+     lion(mb, M, (-4.6, 12.4, pc.Z_PAVE), 0.0)
+     lion(mb, M, (4.6, 12.4, pc.Z_PAVE), 0.0)
+     # fountain
+-    fx, fy = 0.0, 8.6
+-    mb.cyl(3.2, 0.7, (fx, fy, pc.Z_PAVE), M['stone'], segs=24)
+-    mb.cyl(3.4, 0.15, (fx, fy, pc.Z_PAVE + 0.7), M['trim'], segs=24)
+-    mb.cyl(2.95, 0.05, (fx, fy, pc.Z_PAVE + 0.55), M['water'], segs=24)
++    # (interiors) smaller and 1 m further out than before, so there is a clear 2 m way between its rim and the lions
++    fx, fy = 0.0, 7.6
++    mb.cyl(2.6, 0.7, (fx, fy, pc.Z_PAVE), M['stone'], segs=24)
++    mb.cyl(2.8, 0.15, (fx, fy, pc.Z_PAVE + 0.7), M['trim'], segs=24)
++    mb.cyl(2.35, 0.05, (fx, fy, pc.Z_PAVE + 0.55), M['water'], segs=24)
+     mb.cyl(0.4, 1.9, (fx, fy, pc.Z_PAVE), M['stone_pale'], segs=10)
+     mb.cyl(1.2, 0.25, (fx, fy, pc.Z_PAVE + 1.9), M['stone_pale'], segs=16, r_top=0.6)
+     mb.cyl(1.0, 0.05, (fx, fy, pc.Z_PAVE + 2.08), M['water'], segs=16)
+--- a/parts/rosewick.py
++++ b/parts/rosewick.py
+@@ -268,7 +268,7 @@
+     floor.add(p_torus(3.4, 0.08, 40, 4), M['rosestone'], T(cx, cy, 0.1))
+     # gateposts: taller clipped hedge piers with topiary balls at the entrances
+     for (gx, gy, horiz) in ((x0 + 6 * c, y0, True), (x0 + 7 * c, y0, True), (x0 + W, y0 + 11 * c, False), (x0 + W, y0 + 12 * c, False)):
+-        hedge.add(p_box(1.0, 1.0, h + 0.5), M['hedge'], T(gx, gy, 0.06))
++        hedge.add(p_box(0.8, 0.8, h + 0.5), M['hedge'], T(gx, gy, 0.06))   # (interiors) as thick as the hedges (was 1.0: pinched the ways in)
+         hedge.add(p_sphere(0.5, 10, 6), M['box'], T(gx, gy, h + 1.05), True)
+     ho = hedge.obj(P + "maze_hedges", col)
+     bv = ho.modifiers.new("bevel", 'BEVEL'); bv.width = 0.16; bv.segments = 2; bv.limit_method = 'NONE'
+@@ -281,7 +281,7 @@
+         an = math.pi / 4 + k * math.pi / 2
+         g.merge(PR.urn(M, rnd, 0.6), T(cx + 3.0 * math.cos(an), cy + 3.0 * math.sin(an), 0.12) @ S(0.8))
+     bm = PR.bench(M)
+-    for k in range(4):
++    for k in (0, 3):     # (interiors) east and south only: the north and west benches stood in the two ways in
+         an = k * math.pi / 2
+         g.merge(bm, T(cx + 2.4 * math.cos(an), cy + 2.4 * math.sin(an), 0.12) @ RZ(an - math.pi / 2))
+     g.obj(P + "maze_secret_garden", col)
+--- a/parts/wanderers_interior.py
++++ b/parts/wanderers_interior.py
+@@ -56,7 +56,7 @@
+             faces.append((k, j, j + m, k + m))
+         G.faces(key, verts, faces)
+         return pts_i
+-    span = ARC_SPAN + math.radians(5.5)
++    span = ARC_SPAN + math.radians(3.5)     # (interiors) was 5.5: the dais ends left too narrow a way into the aisles
+     sector('dais', ARC_R - 2.6, ARC_R + 2.4, -span, span, z0, z0 + DAIS_H)
+     s1 = sector('dais', ARC_R - 3.15, ARC_R - 2.6, -span + 0.02, span - 0.02, z0, z0 + DAIS_H * 0.66)
+     s2 = sector('dais', ARC_R - 3.7, ARC_R - 3.15, -span + 0.04, span - 0.04, z0, z0 + DAIS_H * 0.33)
+@@ -264,7 +264,7 @@
+ def build_signing_tables(col):
+     G = wg.Geo("tables")
+     rnd = pc.rng(4711)
+-    x0, x1 = -NX + 2.0, -TX - 2.2
++    x0, x1 = -NX + 2.0, -TX - 6.6    # (interiors) two table columns shorter: a clear way between the crossing and the aisle
+     k = 0
+     for (yd, yt_front, yt_back) in ((14.6, 13.2, 16.0), (25.4, 24.0, 26.8)):
+         _drape_line(G, x0, x1, yd, rnd, 'art')
+@@ -316,7 +316,7 @@
+     """East nave: merch booths, display vitrines and the 'Tonight's Visitors' board."""
+     G = wg.Geo("gallery")
+     rnd = pc.rng(99)
+-    x0, x1 = TX + 2.2, NX - 2.0
++    x0, x1 = TX + 6.6, NX - 2.0     # (interiors) see build_signing_tables
+     k = 3
+     for (yd, yt_front, yt_back, kind) in ((14.6, 13.2, 16.0, 'merch'), (25.4, 24.0, 26.8, 'art')):
+         _drape_line(G, x0, x1, yd, rnd, kind)
