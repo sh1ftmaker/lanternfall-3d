@@ -934,13 +934,14 @@ function frame() {
       }
       camLook.copy(controls.target);
     } else if (mode === 'walk') {
-      updateWalk(dt);
+      if (pf && pf.active) pf.update(dt); else updateWalk(dt);       // platformer hook (fx/platformer/)
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
   if ((lodTick & 15) === 0) view.want = coveredBand();
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
+  if (pf) pf.frame(dt, mode);                                                 // platformer hook: leaves it when the mode changes
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
@@ -952,6 +953,27 @@ function frame() {
 }
 window.__park = { get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
+// ── platformer hook ── (fx/platformer/: an alternative player for Walk mode, switched with #btn-pf or P / Tab;
+// nothing is downloaded or built until the first switch)
+let pf = null, pfLoading = null;
+function platformer() {
+  if (!pfLoading) pfLoading = import('./fx/platformer/index.js').then((M) => M.createPlatformer({ THREE, scene, camera, renderer, park, lodMeshes, manifest, nav, depth, surface, walk, Q, mobile, coarse,
+    guests: () => guests, reduceMotion: () => reduceMotion, setMode, setFov: (f) => { if (f) { baseFov = f; applyFov(); } },
+    status: (t) => { const p = $('#loadpill'); p.hidden = !t; if (t) p.textContent = t; },
+    hint: (t) => { hintEl.textContent = t; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 6500); } })).then((p) => (pf = p))
+    .catch((e) => { console.warn('platformer:', e); pfLoading = null; $('#loadpill').hidden = true; });
+  return pfLoading;
+}
+function togglePlatformer() {
+  if (!ready || !nav) return;
+  if (pf && pf.active) { pf.exit(); return; }
+  if (mode !== 'walk') setMode('walk');
+  platformer().then((p) => { if (p && mode === 'walk' && !p.active) p.enter(); });
+}
+$('#btn-pf').addEventListener('click', togglePlatformer);
+addEventListener('keydown', (e) => { if ((e.code === 'KeyP' || e.code === 'Tab') && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
+Object.defineProperty(window.__park, 'platformer', { get: () => pf });
+window.__park.loadPlatformer = platformer; window.__park.togglePlatformer = togglePlatformer;
 frame();
 let loadFailed = false;
 load().catch(async (err) => {
