@@ -40,13 +40,14 @@ export const PARAMS = {
   radius: 0.24,                      // body radius used against walls
   personal: 0.75,                    // m, separation distance between walkers
   lane: 1.6,                         // m, max lane offset to the right of a route (keep right)
-  lookahead: 3,                      // coarse cells along the flow field
+  lookahead: 4,                      // coarse cells along the flow field
   groupMix: [0.36, 0.36, 0.17, 0.11],// share of parties of 1, 2, 3, 4
   railShare: 0.38, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.03,
   arrivalEvery: 3.5,                 // s between parties arriving at the gate (a party far from the camera leaves for each)
   reach: 45,                         // m: sites this far away are picked e^-1 as often as next-door ones
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
   integrateNear: 25, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
+  ghostAfter: 5,                     // s blocked before a guest may slip through others (the last resort)
   budget: 0.4,                       // ms per frame: the LOD distances shrink (down to 40 %) while the sim costs more
   hush: false,                       // game hook: clock: the silent four minutes: walkers inside the lake ring stop and face the Spire
   bias: null,                        // game hook: clock: where the evening draws people: { lands: { id: k }, pts: [{ x, y, r, k }], rail: k } (weights on picking a goal; null = none)
@@ -186,7 +187,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
   const GK = new Int32Array(CAP).fill(-1), OCCK = new Int32Array(CAP).fill(-1), STMASK = new Uint16Array(CAP), JAM = new Float32Array(CAP), GHOST = new Float32Array(CAP);       // fine cell where a standing guest stamped the occupancy grid
   let OCC = null;                                    // Uint8 per fine cell: standing guests (walkers steer round them)
   const TX = new Float32Array(CAP), TY = new Float32Array(CAP), RT = new Float32Array(CAP), DFOC = new Float32Array(CAP), AVX = new Float32Array(CAP), AVY = new Float32Array(CAP);
-  const GXA = new Float32Array(CAP), GYA = new Float32Array(CAP), IMP = new Float32Array(CAP), PRI = new Float32Array(CAP), PROGD = new Float32Array(CAP).fill(1e9), PAX = new Float32Array(CAP), PAY = new Float32Array(CAP);   // own goal point; impatience (0..1) while blocked
+  const GXA = new Float32Array(CAP), GYA = new Float32Array(CAP), IMP = new Float32Array(CAP), PRI = new Float32Array(CAP), PROGD = new Float32Array(CAP).fill(1e9), PAX = new Float32Array(CAP), PAY = new Float32Array(CAP), FILE = new Float32Array(CAP), CALM = new Uint8Array(CAP);   // own goal point; impatience (0..1) while blocked
   const BLK = new Uint8Array(CAP), WANT = new Float32Array(CAP);      // blocked at the last think; the speed wanted before avoidance
   const LEAVING = new Uint8Array(CAP), TACC = new Float32Array(CAP), UX = new Float32Array(CAP), UY = new Float32Array(CAP);
   const rnd = mulberry(seed * 104729 + 7);
@@ -237,7 +238,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     X[i] = x; Y[i] = y; Z[i] = z; ZT[i] = z; YAW[i] = yaw; DYAW[i] = yaw; SPD[i] = 0; DSPD[i] = 0; PH[i] = rnd() * 4; SEED[i] = rnd();
     PREF[i] = params.speedMin + (params.speedMax - params.speedMin) * rnd(); LANE[i] = (0.25 + 0.75 * rnd()) * params.lane;
     ANI[i] = ANIM.stand; STT[i] = ST.WAIT; TIMER[i] = 0.3 + rnd(); SITE[i] = -1; SLOT[i] = -1; LEAD[i] = -1; GI[i] = 0; GS[i] = 1; MODE[i] = 0;
-    STUCK[i] = 0; JAM[i] = 0; GHOST[i] = 0; IMP[i] = 0; GK[i] = -1; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
+    STUCK[i] = 0; JAM[i] = 0; GHOST[i] = 0; IMP[i] = 0; FILE[i] = 0; GK[i] = -1; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
     for (let k = 0; k < 4; k++) MEM[i * 4 + k] = -1;
     crowd.active++; orderDirty = true;
     return i;
@@ -392,7 +393,12 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
         const d = Math.hypot(s.x - X[L], s.y - Y[L]);
         if (d < minDist) continue;
         const kl = B && B.lands && B.lands[s.land] || 1;                                  // game hook: clock: a favoured land is reached from further away
-        let w = s.weight * s.pop * (Math.exp(-d / (params.reach * kl)) + 0.05) * kl;
+        // the lake rail is one long feature: guests spread along it (a longer reach) instead of all taking the nearest stretch
+        let w = s.weight * s.pop * (Math.exp(-d / (params.reach * kl * (s.kind === 'rail' ? 1.8 : 1))) + 0.05) * kl;
+        // capacity and crowding: a spot that is nearly full, or in a crowded square, is chosen less (it would only fill
+        // up and the people walking there would press into the crowd)
+        if (s.kind !== 'walk') { const sl = s.slots; let fr = 0; for (let q = 0; q < sl.length; q++) if (D.P.slots.occ[sl[q]] < 0) fr++; const ff = fr / sl.length; w *= 0.15 + 0.85 * ff * ff; }
+        { const dn = densAt(s.x, s.y); if (dn > 6) w /= 1 + ((dn - 6) / 8) * ((dn - 6) / 8); }
         if (want === 'walk' && d < 25) w *= 0.1;
         if (B) { if (B.pts) for (const q of B.pts) { const dq = Math.hypot(s.x - q.x, s.y - q.y); if (dq < q.r * 3) w *= 1 + (q.k - 1) * Math.exp(-dq / q.r); } }   // game hook: clock
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
@@ -507,12 +513,13 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       // jams (a narrow lane, two streams): someone who wants to walk but cannot for 2.5 s may pass through others briefly
       if (st === ST.GO || st === ST.FOLLOW) {
         if (GHOST[i] > 0) GHOST[i] -= dt;
-        else if (WANT[i] > 0.3 && SPD[i] < 0.2) { JAM[i] += dt; if (JAM[i] > 5) { JAM[i] = 0; GHOST[i] = 1.6; debug.ev.ghost++; if (debug.onGhost) debug.onGhost(i); } }   // the last resort, after impatience and a new goal
+        else if (WANT[i] > 0.3 && SPD[i] < 0.2) { JAM[i] += dt; if (JAM[i] > params.ghostAfter) { JAM[i] = 0; GHOST[i] = 1.6; debug.ev.ghost++; if (debug.onGhost) debug.onGhost(i); } }   // the last resort, after impatience and a new goal
         else if (JAM[i] > 0) JAM[i] = Math.max(0, JAM[i] - dt * 2);
       } else if (GHOST[i] > 0) GHOST[i] = 0;
       // level of detail: distance to the focus, refreshed every 8th frame (staggered)
       if (((frameNo + i) & 7) === 0 || DFOC[i] === 0) { const dx = X[i] - focus.x, dy = Y[i] - focus.y, dz = Z[i] - focus.z; DFOC[i] = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.01; }
-      const d = DFOC[i] * lodInv, iv = d < p.lodNear ? 2 : d < p.lodMid ? 4 : d < p.lodFar ? 6 : 10;
+      // think less often with nobody near and nothing in the way (CALM, set by the steering)
+      const d = DFOC[i] * lodInv, iv = (d < p.lodNear ? 2 : d < p.lodMid ? 4 : d < p.lodFar ? 6 : 10) << CALM[i];
       ACC[i] += dt; TACC[i] += dt;
       const think_ = (frameNo + i) % iv === 0;
       if (think_) { think(i, TACC[i] > 0.5 ? 0.5 : TACC[i]); TACC[i] = 0; thinkers++; }
@@ -549,9 +556,14 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       state[o] = X[i]; state[o + 1] = Y[i]; state[o + 2] = Z[i]; state[o + 3] = YAW[i]; state[o + 4] = SPD[i]; state[o + 5] = ANI[i]; state[o + 6] = PH[i]; state[o + 7] = SEED[i];
     }
   }
+  // head count per 6 m square (all guests), refreshed twice a second: goal choice avoids crowded squares
+  let DG = null, DGW = 0;
+  function densAt(x, y) { const i = ((x - D.N.x0) / 6) | 0, j = ((y - D.N.y0) / 6) | 0; return i < 0 || j < 0 || i >= DGW || j * DGW >= DG.length ? 0 : DG[j * DGW + i]; }
   function buildGrid() {
     const head = HG.head, next = HG.next, gw = HG.w, gh = HG.h, x0 = D.N.x0, y0 = D.N.y0;
     head.fill(-1);
+    if (!DG) { DGW = Math.ceil(D.N.W * D.N.cell / 6); DG = new Uint16Array(DGW * Math.ceil(D.N.H * D.N.cell / 6)); }
+    if (frameNo % 30 === 1) { DG.fill(0); for (let i = 0; i < CAP; i++) { if (STT[i] === ST.OFF) continue; const a = ((X[i] - x0) / 6) | 0, b = ((Y[i] - y0) / 6) | 0; if (a >= 0 && b >= 0 && a < DGW) { const k = b * DGW + a; if (k < DG.length && DG[k] < 65535) DG[k]++; } } }
     for (let i = 0; i < CAP; i++) {
       if (STT[i] === ST.OFF) continue;
       const gx = Math.floor((X[i] - x0) / 2), gy = Math.floor((Y[i] - y0) / 2);
@@ -661,16 +673,22 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
         }
         if (steps === 0) { tx = gx; ty = gy; }
         else {
-          // the farthest cell along the route in plain sight (targets = the most open spot of each 1 m cell)
-          const R = params.radius + 0.04;
-          let k = steps; tx = fineX(N, PATH[k]); ty = fineY(N, PATH[k]);
-          for (; k > 1; k--) { tx = fineX(N, PATH[k]); ty = fineY(N, PATH[k]); if (lineClear(N, X[i], Y[i], tx, ty, R)) break; }
-          if (k === 1) { tx = fineX(N, PATH[1]); ty = fineY(N, PATH[1]); }
+          // Where to head: the route's next metres moved sideways to start where I am (so a crowd keeps its spread across
+          // a promenade instead of everyone aiming at the same spot), the farthest such point in plain sight; failing
+          // that, the farthest cell of the route in plain sight (the most open spot of each 1 m cell)
+          const R = 0.2, ax = fineX(N, PATH[0]), ay = fineY(N, PATH[0]);
+          let k = steps, ok = false;
+          for (; k > 1 && !ok; k--) { tx = fineX(N, PATH[k]) - ax + X[i]; ty = fineY(N, PATH[k]) - ay + Y[i]; ok = lineClear(N, X[i], Y[i], tx, ty, R); }
+          if (!ok) {
+            k = steps; tx = fineX(N, PATH[k]); ty = fineY(N, PATH[k]);
+            for (; k > 1; k--) { tx = fineX(N, PATH[k]); ty = fineY(N, PATH[k]); if (lineClear(N, X[i], Y[i], tx, ty, R)) break; }
+            if (k === 1) { tx = fineX(N, PATH[1]); ty = fineY(N, PATH[1]); }
+          }
           // keep right: offset the target to the right of the route, as far as clearance allows
           const rx = ty - Y[i], ry = -(tx - X[i]), rl = Math.hypot(rx, ry) || 1;
           for (let lane = LANE[i]; lane > 0.3; lane *= 0.5) {
             const ox = tx + rx / rl * lane, oy = ty + ry / rl * lane;
-            if (clearance(N, ox, oy) > 0.6 && lineClear(N, X[i], Y[i], ox, oy, R)) { tx = ox; ty = oy; break; }
+            if (clearance(N, ox, oy) > 0.6 && lineClear(N, X[i], Y[i], ox, oy, 0.28)) { tx = ox; ty = oy; break; }
           }
         }
       }
@@ -689,7 +707,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     if (d < PROGD[i] - 0.5 || ax * ax + ay * ay > 6.25) { PROGD[i] = Math.min(PROGD[i], d); PAX[i] = X[i]; PAY[i] = Y[i]; STUCK[i] = 0; }   // closer, or 2.5 m on along the route
     else if (WANT[i] > 0.2 || SPD[i] > 0.2) {
       STUCK[i] += dt;
-      if (STUCK[i] > 8 && !isFollowerGoing) { STUCK[i] = 0; MODE[i] = 0; debug.ev.repick = (debug.ev.repick || 0) + 1; if (debug.trace) debug.trace.push(X[i], Y[i], site.id); if (!pickGoal(i, SITE[i])) { STT[i] = ST.WAIT; TIMER[i] = 2; } }
+      if (STUCK[i] > 8 && !isFollowerGoing) { STUCK[i] = 0; MODE[i] = 0; debug.ev.repick = (debug.ev.repick || 0) + 1; if (debug.trace) debug.trace.push(X[i], Y[i], site.id); if (debug.onRepick) debug.onRepick(i); if (!pickGoal(i, SITE[i])) { STT[i] = ST.WAIT; TIMER[i] = 2; } }
     }
   }
   // within 3 m of one of the site's approach points (its local field's sources)
@@ -776,7 +794,9 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     formation(GS[L], GI[i], SIDE[L]);
     let tx = X[L] + s * FO[0] - c * FO[1], ty = Y[L] - c * FO[0] - s * FO[1];
     const N = D.N;
-    if ((clrByte(N, tx, ty) < 7 && clearance(N, tx, ty) < 0.35) || (clrByte(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 7 && clearance(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 0.3)) { tx = X[L] - c * 0.85 * GI[i]; ty = Y[L] - s * 0.85 * GI[i]; }
+    // single file: in a narrow place, when people come the other way (the leader saw them), or when the side-by-side
+    // place is not walkable. Parties walking abreast closed lanes and two of them meeting made a wall
+    if (FILE[L] > 0 || (clrByte(N, tx, ty) < 7 && clearance(N, tx, ty) < 0.35) || (clrByte(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 7 && clearance(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 0.3)) { tx = X[L] - c * 0.8 * GI[i]; ty = Y[L] - s * 0.8 * GI[i]; }
     const dx = tx - X[i], dy = ty - Y[i], d = Math.hypot(dx, dy), dl = Math.hypot(X[L] - X[i], Y[L] - Y[i]);
     if (dl > 10 || (d > 1.5 && !lineClear(N, X[i], Y[i], tx, ty, 0.2))) {
       // lost sight: take the leader's route (same goal)
@@ -807,7 +827,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
   // fans of headings, ordered by angle from the wanted one (0, +a, -a, +2a, ...): the search stops as soon as no wider
   // heading can beat the best so far. FANK = signed step index (positive = to the left)
   const FANC = [], FANS = [], FANK = [];
-  for (const [n, st] of [[6, 0.26], [4, 0.33], [2, 0.5]]) {
+  for (const [n, st] of [[6, 0.26], [4, 0.33], [2, 0.5], [12, 0.2618]]) {      // near, mid, far; the last one is a full circle (someone blocked)
     const c = [], s = [], kk = [];
     for (let m = 0; m <= 2 * n; m++) { const k = m === 0 ? 0 : (m & 1 ? (m + 1) >> 1 : -(m >> 1)); c.push(Math.cos(k * st)); s.push(Math.sin(k * st)); kk.push(k); }
     FANC.push(c); FANS.push(s); FANK.push(kk);
@@ -824,7 +844,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     const xi = X[i], yi = Y[i], head = HG.head, next = HG.next, gw = HG.w, gh = HG.h, N = D.N;
     const gx = Math.floor((xi - N.x0) / 2), gy = Math.floor((yi - N.y0) / 2);
     const want = Math.hypot(vx, vy); WANT[i] = want;
-    let fx = 0, fy = 0, nb = 0, cxs = 0, cys = 0;
+    let fx = 0, fy = 0, nb = 0, cxs = 0, cys = 0, oncoming = false, calm = 0;
     const ghost = GHOST[i] > 0;
     const lead = LEAD[i] >= 0 ? LEAD[i] : i;
     const ux0 = want > 1e-3 ? vx / want : Math.cos(YAW[i]), uy0 = want > 1e-3 ? vy / want : Math.sin(YAW[i]);
@@ -849,7 +869,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
           if (r2 < 1.44 && PRI[j] > PRI[i] && WANT[j] > 0.3) {
             const sj = STT[j];
             if (sj === ST.GO || sj === ST.FOLLOW) {
-              const cj = Math.cos(DYAW[j]), sn = Math.sin(DYAW[j]), ahead = -(px * cj + py * sn), lat = -(px * -sn + py * cj);   // my position in their frame
+              const vl = Math.hypot(VX[j], VY[j]) || 1, cj = VX[j] / vl, sn = VY[j] / vl, ahead = -(px * cj + py * sn), lat = -(px * -sn + py * cj);   // my position in their frame
               if (ahead > 0 && ahead < 1.2 && lat > -0.7 && lat < 0.7) { const side = lat > 0.05 ? 1 : lat < -0.05 ? -1 : SIDE[i], k = (0.7 - Math.abs(lat)) * 0.9 * (1.2 - ahead); fx += -sn * side * k; fy += cj * side * k; }
             }
           }
@@ -861,6 +881,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
           let R = SPD[j] < 0.1 ? 0.5 : 0.56;
           const sj = STT[j]; if ((sj === ST.GO || sj === ST.FOLLOW) && WANT[j] > 0.3 && PRI[j] < pri) R -= 0.12;
           NBX[nb] = px; NBY[nb] = py; NBU[nb] = AVX[j]; NBV[nb] = AVY[j]; NBR[nb] = R - imp * 0.1; nb++;
+          if (GS[i] > 1 && lead === i) { const ah = px * ux0 + py * uy0, la = px * uy0 - py * ux0; if (ah > 0 && ah < 4.5 && la < 1.6 && la > -1.6 && (AVX[j] * ux0 + AVY[j] * uy0 < -0.2 || SPD[j] < 0.1)) oncoming = true; }
         }
       }
     }
@@ -874,12 +895,14 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       const horizon = Math.min(4, 1.2 + want * 2.2);
       const fi = ((xi - N.x0) / N.cell) | 0, fj = ((yi - N.y0) / N.cell) | 0;
       const open = clrByte(N, xi, yi) >= 3 * (horizon + params.radius + 0.25) / N.cell;      // no wall within the horizon
-      if (nb === 0 && (open || wallFree(N, xi, yi, ux0, uy0, horizon) >= horizon)) { /* straight on */ }
+      if (nb === 0 && (open || wallFree(N, xi, yi, ux0, uy0, horizon) >= horizon)) { calm = open && imp === 0 ? 1 : 0; }
       else {
-        const dl = DFOC[i] * lodInv, fan = dl < params.lodNear || imp > 0.3 ? 0 : dl < params.lodMid ? 1 : 2, C = FANC[fan], S = FANS[fan], K = FANK[fan], h2 = horizon * horizon;
+        // someone blocked for a while looks all round, and values free room for itself: it sidesteps, slides along a wall
+        // or turns away instead of waiting for good (the plain measure never prefers a step that does not get closer)
+        const dl = DFOC[i] * lodInv, fan = imp > 0.25 ? 3 : dl < params.lodNear ? 0 : dl < params.lodMid ? 1 : 2, C = FANC[fan], S = FANS[fan], K = FANK[fan], h2 = horizon * horizon, kf = imp * 1.6 * horizon;
         let best = 1e9, bf = 0;
         for (let k = 0; k < C.length; k++) {
-          if (h2 * S[k] * S[k] > best) break;                                 // no wider heading can do better
+          if (h2 * S[k] * S[k] - kf * horizon > best && C[k] > -0.99) { if (!kf) break; continue; }   // no wider heading can do better
           const ux = ux0 * C[k] - uy0 * S[k], uy = ux0 * S[k] + uy0 * C[k];
           let f = horizon;
           // neighbours: first contact along u at my speed, with each one moving at its velocity
@@ -895,7 +918,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
           }
           if (f > 0 && !open) f = Math.min(f, wallFree(N, xi, yi, ux, uy, f));
           // distance left to the point `horizon` ahead on the wanted line; turning left costs a little more
-          let dd = h2 + f * f - 2 * horizon * f * C[k];
+          let dd = h2 + f * f - 2 * horizon * f * C[k] - kf * f;
           if (K[k] > 0) dd += 0.06 * horizon * K[k]; else if (K[k] === 0) dd -= 0.02 * horizon;
           if (dd < best) { best = dd; bux = ux; buy = uy; bf = f; }
         }
@@ -904,6 +927,8 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
         if (bf > 0.06 && sp < imp * 0.4) sp = Math.min(want, imp * 0.4);
       }
     }
+    // a party leader puts the party in single file for a while when people come the other way or the way narrows
+    if (GS[i] > 1 && lead === i) { if (oncoming || clrByte(N, xi, yi) < 8) FILE[i] = 2.5; else if (FILE[i] > 0) FILE[i] -= thinkDt; }
     // impatience grows while blocked (full after ~3 s) and fades when walking again
     const blk = want > 0.3 && sp < want * 0.35;
     IMP[i] = blk ? Math.min(1, imp + thinkDt / 3) : Math.max(0, imp - thinkDt / 2);
@@ -927,6 +952,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     else if (s2 > 0.02) DYAW[i] = Math.atan2(vy, vx);
     DSPD[i] = s2;
     BLK[i] = blk ? 1 : 0;      // blocked by people or a wall this think
+    CALM[i] = calm && !ghost && focus.mode !== 'walk' ? 1 : 0;
   }
 
   // ── movement (every frame near the camera) ──
@@ -1031,7 +1057,8 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     if (fi < 1 || fj < 1 || fi >= N.W - 1 || fj >= N.H - 1) return false;
     const cv = N.clr[fj * N.W + fi];
     // near a wall: keep the body radius clear, or at least do not get any closer (so nobody is ever pinned)
-    if (cv < (params.radius + 0.25 + 0.36) * 6) { const c = clearance(N, x, y); if (c < params.radius && c < clearance(N, X[i], Y[i]) + 0.002) return false; }
+    // near a wall: keep most of the body clear (a 1 m doorway leaves 0.25 m each side), or at least do not get closer
+    if (cv < (params.radius + 0.25 + 0.36) * 6) { const c = clearance(N, x, y); if (c < params.radius * 0.7 && c < clearance(N, X[i], Y[i]) + 0.002) return false; }
     if (OCC[fj * N.W + fi] && OCCK[i] < 0 && GHOST[i] <= 0 && standingBlocks(i, x, y)) return false;   // a standing guest there
     const g = ground(D.N, x, y); if (!(g === g) || Math.abs(g - Z[i]) > 0.45) return false;
     return true;
@@ -1095,7 +1122,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
   // debug access for the overlay and the tests
   Object.defineProperty(debug, 'D', { get: () => D });
   Object.assign(debug, {
-    local, ST, arrays: { X, Y, Z, YAW, SPD, ANI, STT, SITE, SLOT, LEAD, GS, MODE, DSPD, DYAW, GHOST, DFOC, WANT, BLK, TX, TY, VX, VY, AVX, AVY },
+    local, ST, arrays: { X, Y, Z, YAW, SPD, ANI, STT, SITE, SLOT, LEAD, GS, MODE, DSPD, DYAW, GHOST, DFOC, WANT, BLK, TX, TY, VX, VY, AVX, AVY, GXA, GYA, PRI, IMP, FILE },
     focus,
     measure() {          // pairs closer than 0.35 m (walkers involved) and walkers inside blocked cells
       let pairs = 0, inside = 0;
@@ -1117,6 +1144,8 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       return { pairs, inside };
     },
     pumpLocal(n = 1e9) { while (n-- > 0 && pumpOne()); },   // tests: the Worker's job, outside the timed frame
+    // tests: a party of `size` at (x, y) facing `yaw`, bound for site `siteId` (or the walk site nearest (gx, gy)); returns its leader
+    spawnTest(x, y, yaw, size, siteId) { const L = spawnParty(x, y, yaw, size); if (L < 0) return -1; if (!assign(L, D.P.sites[siteId])) { removeParty(L); return -1; } return L; },
     countStates() { const c = {}; const names = Object.keys(ST); for (let i = 0; i < CAP; i++) { if (STT[i] === ST.OFF) continue; const n = names[STT[i]]; c[n] = (c[n] || 0) + 1; } return c; },
   });
   if (groundP) groundP.then((g) => { groundGrid = g; if (!disposed) start(); }); else start();

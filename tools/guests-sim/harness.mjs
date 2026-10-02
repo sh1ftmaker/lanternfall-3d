@@ -93,7 +93,7 @@ const GC = 2, GW = Math.ceil(W * NV.cell / GC), GH = Math.ceil(H * NV.cell / GC)
 function run(scen) {
   const crowd = createCrowd({ nav, manifest, pois, count: COUNT, max: Math.ceil(Math.max(COUNT, 400) * 1.7), seed: 1, sync: true, manualLocal: true, ground });
   if (!crowd.ready) throw new Error('not ready: ' + crowd.debug.error);
-  crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: 2.0 });     // the Worker's budget (sim-worker.js)
+  crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: 2.0, ...(process.env.PARAMS ? JSON.parse(process.env.PARAMS) : {}) });     // the Worker's budget (sim-worker.js)
   const dbg = crowd.debug, A = dbg.arrays, ST = dbg.ST, CAP = crowd.count, D = dbg.D, sites = D.P.sites, S = D.P.slots;
   const { X, Y, Z, STT, SITE, SLOT, LEAD, ANI } = A, DSPD = A.WANT || A.DSPD;      // the speed wanted before avoidance (older sims: after)
   const dt = 1 / FPS, steps = Math.round(MIN * 60 * FPS), warm = Math.round(WARM * 60 * FPS), every = Math.round(FPS / 2);
@@ -106,10 +106,10 @@ function run(scen) {
   const siteOcc = new Float32Array(sites.length), siteFull = new Float32Array(sites.length), siteUsed = new Uint8Array(sites.length);
   const inReg = new Uint8Array(CAP * REG.length), regEnt = new Float64Array(REG.length), regOcc = new Float64Array(REG.length);
   // trips (leaders)
-  const tSite = new Int32Array(CAP).fill(-2), tX = new Float32Array(CAP), tY = new Float32Array(CAP), tT = new Float32Array(CAP), tLen = new Float32Array(CAP), lX = new Float32Array(CAP), lY = new Float32Array(CAP);
+  const tSite = new Int32Array(CAP).fill(-2), tX = new Float32Array(CAP), tY = new Float32Array(CAP), tT = new Float32Array(CAP), tLen = new Float32Array(CAP), lX = new Float32Array(CAP), lY = new Float32Array(CAP), tGX = new Float32Array(CAP), tGY = new Float32Array(CAP);
   const trips = { done: 0, len: 0, straight: 0, time: 0, abandoned: 0, ratioN: 0, ratio: 0 };
   // pass-throughs
-  const close = new Map(), passWhy = {}; let passes = 0, ghost0 = 0, hushOn = false;
+  const close = new Map(), passWhy = {}; let repick0 = 0, passes = 0, ghost0 = 0, hushOn = false;
   const PG = new Int32Array(GW * GH).fill(-1), PN = new Int32Array(CAP);
   const party = (i) => (LEAD[i] >= 0 ? LEAD[i] : i);
   let t = 0;
@@ -119,7 +119,7 @@ function run(scen) {
     t += dt;
     const measuring = f >= warm;
     if (measuring) { ms.push(t1 - t0); pump.push(t2 - t1); }
-    if (f === warm) ghost0 = dbg.ev.ghost;
+    if (f === warm) { ghost0 = dbg.ev.ghost; repick0 = dbg.ev.repick || 0; }
     // trips: path length every step for leaders
     for (let i = 0; i < CAP; i++) {
       const st = STT[i];
@@ -131,8 +131,9 @@ function run(scen) {
       if (tSite[i] >= 0 && (s !== tSite[i] || !going)) {
         // trip over: arrived (settling / acting / pausing at a waypoint) or the goal changed
         const site = sites[tSite[i]], sl = SLOT[i];
-        const gx = sl >= 0 && s === tSite[i] ? S.ax[sl] : site.x, gy = sl >= 0 && s === tSite[i] ? S.ay[sl] : site.y;
-        const near = Math.hypot(X[i] - gx, Y[i] - gy) < (site.kind === 'walk' ? 3 : site.kind === 'gate' ? 5 : 2.5) || st === ST.SETTLE || st === ST.ACT || st === ST.QUEUE || st === ST.PAUSE;
+        const own = s === tSite[i] && A.GXA, gx = own ? A.GXA[i] : sl >= 0 && s === tSite[i] ? S.ax[sl] : site.x, gy = own ? A.GYA[i] : sl >= 0 && s === tSite[i] ? S.ay[sl] : site.y;
+        const ex = A.GXA ? tGX[i] : gx, ey = A.GXA ? tGY[i] : gy;         // the goal point the trip started with
+        const near = Math.hypot(X[i] - ex, Y[i] - ey) < (site.kind === 'walk' ? 3 : site.kind === 'gate' ? 8 : 2.5) || st === ST.SETTLE || st === ST.ACT || st === ST.QUEUE || st === ST.PAUSE;
         if (measuring) {
           const straight = Math.hypot(X[i] - tX[i], Y[i] - tY[i]), time = t - tT[i];
           if (near && straight > 8) { trips.done++; trips.len += tLen[i]; trips.straight += straight; trips.time += time; trips.ratio += tLen[i] / straight; trips.ratioN++; }
@@ -140,7 +141,7 @@ function run(scen) {
         }
         tSite[i] = -1;
       }
-      if (going && tSite[i] !== s) { tSite[i] = s; tX[i] = X[i]; tY[i] = Y[i]; tT[i] = t; tLen[i] = 0; }
+      if (going && tSite[i] !== s) { tSite[i] = s; tX[i] = X[i]; tY[i] = Y[i]; tT[i] = t; tLen[i] = 0; if (A.GXA) { tGX[i] = A.GXA[i]; tGY[i] = A.GYA[i]; } }
     }
     // pass-throughs every 3rd step
     if (measuring && f % 3 === 0) {
@@ -224,7 +225,7 @@ function run(scen) {
     tag: TAG, scen, minutes: MIN, warm: WARM, count: COUNT, active: Math.round(acc.act / n), focus,
     stuck5: +(acc.stuck5 / n).toFixed(4), stuck20: +(acc.stuck20 / n).toFixed(4), wantWalk: Math.round(acc.wantN / n),
     overlapsOther: +(acc.over / n).toFixed(1), overlapsParty: +(acc.overParty / n).toFixed(1),
-    passesPerMin: +(passes / mins).toFixed(1), passWhy: Object.fromEntries(Object.entries(passWhy).map(([k, v]) => [k, +(v / mins).toFixed(1)])), ghostPerMin: +((dbg.ev.ghost - ghost0) / mins).toFixed(1),
+    passesPerMin: +(passes / mins).toFixed(1), passWhy: Object.fromEntries(Object.entries(passWhy).map(([k, v]) => [k, +(v / mins).toFixed(1)])), ghostPerMin: +((dbg.ev.ghost - ghost0) / mins).toFixed(1), giveUpPerMin: +(((dbg.ev.repick || 0) - repick0) / mins).toFixed(1),
     density: { median: q(dM, 0.5), p95: q(d95, 0.5), maxMedian: q(dMax, 0.5), maxMax: Math.max(...dMax), crowdShare: +(acc.crowdShare / n).toFixed(3), crowdShareWalkers: +(acc.crowdWalk / n).toFixed(3) },
     poi, regions,
     trips: { perMin: +(trips.done / mins).toFixed(1), meanLen: +(trips.len / Math.max(1, trips.done)).toFixed(1), detour: +(trips.ratio / Math.max(1, trips.ratioN)).toFixed(3), speedMadeGood: +(trips.straight / Math.max(1e-6, trips.time)).toFixed(3), meanTime: +(trips.time / Math.max(1, trips.done)).toFixed(1), abandonedPerMin: +(trips.abandoned / mins).toFixed(1) },
@@ -264,5 +265,5 @@ for (const c of crops) {
 }
 if (+opt('minutes', 20) > 0) for (const s of SCEN) {
   const T = Date.now(), r = run(s);
-  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
+  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
 }
