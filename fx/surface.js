@@ -8,6 +8,7 @@
 // Normals come from screen-space derivatives (flat, which suits the low-poly park), so the data needs none.
 // Old data without the albedo/class attribute renders as plain baked colour (class 255 = "leave alone").
 import * as THREE from 'three';
+import { DN_DECL, DN_LAMP, createDayUniforms } from './game/daynight/uniforms.js';      // game hook: daynight
 
 const GLSL_DETAIL = /* glsl */`
   float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -68,13 +69,15 @@ const GLSL_DETAIL = /* glsl */`
     return l > 1e-20 ? r * inversesqrt(l) : n;
   }`;
 
-export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
+export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = createDayUniforms() }) {
   const uniforms = {
     uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: fogD }, uZBias: { value: new THREE.Vector3(0.0018, 0.0018, 0.0005) },
     uMoon: { value: moonDir.clone().normalize() }, uMoonCol: { value: new THREE.Vector3().fromArray(moonCol || [0.108, 0.129, 0.175]) },
     uMoonOn: { value: 0 },                       // 1 once the data says the moon is not baked in
     tShadow: { value: null }, uShadowM: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 }, uSSize: { value: 2048 }, uSTexel: { value: 0.3 },
     uDetail: { value: 1 }, uBump: { value: 0.012 },
+    ...DN,                                       // game hook: daynight (sun, sky light, lamps; all at their night values until the module moves them)
+    tShadowS: { value: null }, uShadowMS: { value: new THREE.Matrix4() }, uShadowOnS: { value: 0 }, uSSizeS: { value: 2048 }, uSTexelS: { value: 0.3 },   // the sun's shadow map
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -95,6 +98,10 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
       precision highp float;
       uniform vec3 uFog; uniform float uFogD; uniform vec3 uMoon, uMoonCol; uniform float uMoonOn, uShadowOn, uSSize, uSTexel, uDetail, uBump;
       uniform sampler2D tShadow; uniform mat4 uShadowM;
+      // game hook: daynight
+      ${DN_DECL}
+      uniform sampler2D tShadowS; uniform mat4 uShadowMS; uniform float uShadowOnS, uSSizeS, uSTexelS;
+      ${DN_LAMP}
       varying vec3 vCol; varying float vDist; varying vec3 vW; varying vec3 vAlb; varying float vCls;
       #include <packing>
       ${GLSL_DETAIL}
@@ -106,9 +113,29 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
         vec2 t = q.xy * uSSize - 0.5, f = fract(t), b = (floor(t) + 0.5) / uSSize, o = vec2(1.0 / uSSize, 0.0);
         return mix(mix(shTap(b, z), shTap(b + o.xy, z), f.x), mix(shTap(b + o.yx, z), shTap(b + o.xx, z), f.x), f.y);
       }
+      float shTapS(vec2 uv, float z){ return step(z, unpackRGBAToDepth(texture2D(tShadowS, uv))); }
+      float sunShadowAt(vec3 p, vec3 n){
+        vec4 sc = uShadowMS * vec4(p + n * (uSTexelS * 1.4), 1.0); vec3 q = sc.xyz * 0.5 + 0.5;
+        if (any(lessThan(q.xy, vec2(0.002))) || any(greaterThan(q.xy, vec2(0.998))) || q.z > 0.999) return 1.0;
+        float z = q.z - 0.00035;
+        vec2 t = q.xy * uSSizeS - 0.5, f = fract(t), b = (floor(t) + 0.5) / uSSizeS, o = vec2(1.0 / uSSizeS, 0.0);
+        return mix(mix(shTapS(b, z), shTapS(b + o.xy, z), f.x), mix(shTapS(b + o.yx, z), shTapS(b + o.xx, z), f.x), f.y);
+      }
+      // sun + sky light on albedo (game hook: daynight)
+      vec3 dnLight(vec3 nb, vec3 ng, vec3 p){
+        float nl = max(dot(nb, uSunDir), 0.0);
+        if (nl > 0.0 && uSunOn > 0.5 && uShadowOnS > 0.5) nl *= sunShadowAt(p, ng);
+        vec2 sh = normalize(uSunDir.xz + vec2(1e-5));
+        return uSunCol * nl + mix(uAmbGnd, uAmbSky, nb.y * 0.5 + 0.5) + uAmbGlow * max(dot(nb, vec3(sh.x, 0.0, sh.y)), 0.0);
+      }
       void main(){
         vec3 col = vCol;
-        if (vCls < 6.5 && (uDetail > 0.5 || uMoonOn > 0.5)) {
+        if (uDay > 0.0) {                                           // game hook: daynight (lamps: lit things fade up; unlit lamp housings, signs and windows are painted by the sky)
+          float lk = dnLamp(vW.xz);
+          col *= lk;
+          if (vCls > 6.5 && lk < 1.0) col += max(vAlb, vec3(0.02)) * (uAmbSky * 1.1 + uSunCol * 0.12 + uAmbGnd * 0.3) * (1.0 - lk);
+        }
+        if (vCls < 6.5 && (uDetail > 0.5 || uMoonOn > 0.5 || uDay > 0.0)) {
           vec3 dx = dFdx(vW), dy = dFdy(vW);
           vec3 nv = normalize(cross(dx, dy));                    // faces the viewer
           vec3 ng = gl_FrontFacing ? nv : -nv;                   // the side the bake lit
@@ -116,12 +143,15 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
           vec2 dt = vec2(1.0, 0.5);
           if (uDetail > 0.5 && vCls < 5.5) dt = detail(vCls, vW, ng, fw);
           col *= dt.x;
-          if (uMoonOn > 0.5) {
+          if (uMoonOn > 0.5 || uDay > 0.0) {
             vec3 nb = ng;
             if (uDetail > 0.5 && vCls > 0.5 && vCls < 5.5 && (vCls < 3.5 || vCls > 4.5)) { nb = bumpN(vW, nv, dt.y * uBump); if (!gl_FrontFacing) nb = -nb; }   // only classes with joints
-            float ndl = max(dot(nb, uMoon), 0.0);
-            if (ndl > 0.0 && uShadowOn > 0.5) ndl *= shadowAt(vW, ng);
-            col += max(vAlb, vec3(0.015)) * dt.x * uMoonCol * ndl;
+            if (uMoonOn > 0.5) {
+              float ndl = max(dot(nb, uMoon), 0.0);
+              if (ndl > 0.0 && uShadowOn > 0.5) ndl *= shadowAt(vW, ng);
+              col += max(vAlb, vec3(0.015)) * dt.x * uMoonCol * ndl;
+            }
+            if (uDay > 0.0) col += max(vAlb, vec3(0.015)) * dt.x * dnLight(nb, ng, vW);       // game hook: daynight
           }
         }
         float f = 1.0 - exp(-vDist * vDist * uFogD);
@@ -134,8 +164,10 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
   material.defaultAttributeValues.aLay = [0];
   material.defaultAttributeValues.aAux = [0, 0, 0, 1];      // no albedo/class in the data: class 255, baked colour only
 
-  // ── moon shadow map: the whole park, once (again whenever more of it has loaded) ──
+  // ── shadow maps: the whole park from one direction. The moon's is rendered once (again whenever more of the park has
+  // loaded); the sun's (game hook: daynight) only while the sun is up, again when it has moved ──
   const shadow = { rt: null, size: mobile ? 2048 : 4096, ms: 0, count: 0 };
+  const sunShadow = { rt: null, size: mobile ? 2048 : 4096, ms: 0, count: 0, dir: new THREE.Vector3() };
   const depthMat = new THREE.ShaderMaterial({
     uniforms: { uShadowM: uniforms.uShadowM },
     vertexShader: `uniform mat4 uShadowM; varying float vZ;
@@ -144,36 +176,42 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile }) {
       varying float vZ; void main(){ gl_FragColor = packDepthToRGBA(clamp(vZ, 0.0, 0.9999)); }`,
     side: THREE.DoubleSide,
   });
-  function buildShadow(renderer, scene, meshes) {
-    const t0 = performance.now(), S = Math.min(shadow.size, renderer.capabilities.maxTextureSize);
-    const moon = uniforms.uMoon.value;
+  const sunDepthMat = depthMat.clone(); sunDepthMat.uniforms = { uShadowM: uniforms.uShadowMS };
+  function renderShadow(st, dirV, mat, U, renderer, scene, meshes) {
+    const t0 = performance.now(), S = Math.min(st.size, renderer.capabilities.maxTextureSize);
+    const moon = dirV;
     const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 2000);
     cam.position.copy(moon).multiplyScalar(800); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
     const inv = cam.matrixWorldInverse, v = new THREE.Vector3(), lo = new THREE.Vector3(1e9, 1e9, 1e9), hi = new THREE.Vector3(-1e9, -1e9, -1e9);
     for (const x of [-372, 372]) for (const y of [-6, 72]) for (const z of [-372, 372]) { v.set(x, y, z).applyMatrix4(inv); lo.min(v); hi.max(v); }
     cam.left = lo.x; cam.right = hi.x; cam.bottom = lo.y; cam.top = hi.y; cam.near = -hi.z - 10; cam.far = -lo.z + 10; cam.updateProjectionMatrix();
     // our own standard (0..1 after *0.5+0.5) orthographic matrix, independent of the renderer's depth convention
-    uniforms.uShadowM.value.makeOrthographic(cam.left, cam.right, cam.top, cam.bottom, cam.near, cam.far).multiply(cam.matrixWorldInverse);
-    if (!shadow.rt || shadow.rt.width !== S) {
-      if (shadow.rt) shadow.rt.dispose();
-      shadow.rt = new THREE.WebGLRenderTarget(S, S, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
+    U.M.value.makeOrthographic(cam.left, cam.right, cam.top, cam.bottom, cam.near, cam.far).multiply(cam.matrixWorldInverse);
+    if (!st.rt || st.rt.width !== S) {
+      if (st.rt) st.rt.dispose();
+      st.rt = new THREE.WebGLRenderTarget(S, S, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
     }
     const set = new Set(meshes), hidden = [], swapped = [];
     scene.traverse((o) => {
       if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite) || !o.visible) return;
-      if (set.has(o)) { swapped.push([o, o.material, o.geometry.drawRange.count]); o.material = depthMat; o.geometry.setDrawRange(0, Infinity); }
+      if (set.has(o)) { swapped.push([o, o.material, o.geometry.drawRange.count]); o.material = mat; o.geometry.setDrawRange(0, Infinity); }
       else { o.visible = false; hidden.push(o); }
     });
     const prevRT = renderer.getRenderTarget(), prevCol = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
     const obr = scene.onBeforeRender, oar = scene.onAfterRender; scene.onBeforeRender = () => {}; scene.onAfterRender = () => {};
-    renderer.setRenderTarget(shadow.rt); renderer.setClearColor(0xffffff, 1); renderer.autoClear = true; renderer.clear();
+    renderer.setRenderTarget(st.rt); renderer.setClearColor(0xffffff, 1); renderer.autoClear = true; renderer.clear();
     renderer.render(scene, cam);
     renderer.setRenderTarget(prevRT); renderer.setClearColor(prevCol, prevA); renderer.autoClear = prevAuto;
     scene.onBeforeRender = obr; scene.onAfterRender = oar;
     for (const o of hidden) o.visible = true;
     for (const [o, m, c] of swapped) { o.material = m; o.geometry.setDrawRange(0, c); }
-    uniforms.tShadow.value = shadow.rt.texture; uniforms.uSSize.value = S; uniforms.uSTexel.value = (hi.x - lo.x) / S; uniforms.uShadowOn.value = 1;
-    shadow.ms = Math.round(performance.now() - t0); shadow.count++;
+    U.tex.value = st.rt.texture; U.size.value = S; U.texel.value = (hi.x - lo.x) / S; U.on.value = 1;
+    st.ms = Math.round(performance.now() - t0); st.count++;
   }
-  return { material, uniforms, buildShadow, shadow };
+  const moonU = { M: uniforms.uShadowM, tex: uniforms.tShadow, size: uniforms.uSSize, texel: uniforms.uSTexel, on: uniforms.uShadowOn };
+  const sunU = { M: uniforms.uShadowMS, tex: uniforms.tShadowS, size: uniforms.uSSizeS, texel: uniforms.uSTexelS, on: uniforms.uShadowOnS };
+  function buildShadow(renderer, scene, meshes) { renderShadow(shadow, uniforms.uMoon.value, depthMat, moonU, renderer, scene, meshes); }
+  // game hook: daynight. The sun's map for direction dir (three.js axes); keeps a note of it in sunShadow.dir.
+  function buildSunShadow(renderer, scene, meshes, dir) { sunShadow.dir.copy(dir); renderShadow(sunShadow, sunShadow.dir, sunDepthMat, sunU, renderer, scene, meshes); }
+  return { material, uniforms, buildShadow, buildSunShadow, shadow, sunShadow, dn: DN };
 }
