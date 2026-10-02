@@ -204,6 +204,7 @@ export function createAudio(opts) {
     for (const c of spec.crowd || []) addSource('crowd', c, 'crowd', { range: c.density || [0, 1] });
     spec.shots = {};
     for (const [name, list] of Object.entries(spec.oneshots || {})) spec.shots[name] = (Array.isArray(list) ? list : [list]).map((f) => { const a = asset(typeof f === 'string' ? { file: f } : f, 'oneshot'); a.name = name; return a; });
+    for (const s of sources) if (s.shots) { const a = s.shots[0]; if (a.name && !spec.shots[a.name]) spec.shots[a.name] = [a]; }   // play('owl') etc.
     for (const name of ['firework_launch', 'firework_burst', 'lantern_release', 'splash', 'footstep_stone', 'footstep_wood', 'footstep_snow', 'footstep_grass', 'footstep_gravel', 'ui_click'])
       if (!spec.shots[name]) { const a = asset({ synth: 'one:' + name }, 'oneshot'); a.name = name; spec.shots[name] = [a]; }
   }
@@ -249,7 +250,7 @@ export function createAudio(opts) {
       src.connect(ch.gain); src.start(now, ls + Math.random() * Math.max(0.01, le - ls));   // random offset: copies of a loop never phase
       s.node = src; a.used = time;
     }
-    s.playing = true; s.stopAt = 0; s.started = now;
+    s.playing = true; s.stopAt = 0; s.started = now; s.swapAt = 0; s.swapUntil = 0; s.hrtfSince = 0;
   }
   function stopVoice(s, now, fade = 0.12) {
     if (!s.playing || s.stopAt) return;
@@ -277,6 +278,7 @@ export function createAudio(opts) {
   // without pos the sound is at the listener (UI, footsteps). delay in seconds from now.
   function play(name, pos, o = {}) {
     if (!st.enabled || !ctx || (ctx.state !== 'running' && !opts.offline)) return false;
+    if (solo && !o.force && !solo.test(name)) return false;
     const a = o.a || pick(name); if (!a) return false;
     if (a.state !== 'ready') { request(a, 0); pump(); return false; }
     const now = ctx.currentTime, p = toThree(pos, _sp);
@@ -443,11 +445,11 @@ export function createAudio(opts) {
         const vr = clamp(tmp2.subVectors(s.vel, L.v).dot(tmp), -25, 25);
         s.dop = C / (C + vr); s.node.playbackRate.setTargetAtTime(s.rate * s.dop, now, 0.12);
       }
-      if (ch.hrtf !== s.hrtfWant) {                         // HRTF <-> equal-power: only after a second, with a dip
+      if (s.swapAt && now >= s.swapAt) { ch.hrtf = !ch.hrtf; ch.panner.panningModel = ch.hrtf ? 'HRTF' : 'equalpower'; s.swapAt = 0; s.swapUntil = 0; }
+      else if (ch.hrtf !== s.hrtfWant && !s.swapAt) {                         // HRTF <-> equal-power: only after a second, with a dip
         if (!s.hrtfSince) s.hrtfSince = time;
         else if (time - s.hrtfSince > 1.5 && now >= s.swapUntil) {
-          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.008); s.swapUntil = now + 0.06;
-          const want = s.hrtfWant; setTimeout(() => { ch.panner.panningModel = want ? 'HRTF' : 'equalpower'; ch.hrtf = want; }, 45);
+          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.008); s.swapUntil = 1e9; s.swapAt = now + 0.045;
           s.hrtfSince = 0;
         }
       } else s.hrtfSince = 0;
@@ -520,11 +522,12 @@ export function createAudio(opts) {
   let footSide = 1;
   function shoot(s) {
     const a = s.shots[0], def = s.def;
+    if (solo && !solo.test(s.id)) return;
     if (s.pos.distanceTo(L.p) > (def.max ?? 150) + (def.area ? def.area.r : 0)) return;
     if (a.state !== 'ready') { request(a, 5); return; }
     const p = s.pos.clone();
     if (def.area) { const r = def.area.r * Math.sqrt(Math.random()), t = Math.random() * Math.PI * 2; p.x += r * Math.cos(t); p.z += r * Math.sin(t); }
-    play(a.name, p, { a, gain: def.gain ?? 0.6, ref: def.ref, max: def.max, rate: def.rate || 1, delay: s.pos.distanceTo(L.p) / C });
+    play(a.name, p, { a, force: true, gain: def.gain ?? 0.6, ref: def.ref, max: def.max, rate: def.rate || 1, delay: s.pos.distanceTo(L.p) / C });
   }
   let lakePoly = null;
   function inLake(x, y) {
@@ -651,7 +654,7 @@ export function createAudio(opts) {
       voices: () => sources.filter((s) => s.playing && !s.stopAt).map((s) => ({ id: s.id, kind: s.kind, zone: s.zone, db: +db(s.target).toFixed(1), d: s.positional ? +s.d.toFixed(1) : null, hrtf: s.ch && s.ch.hrtf, dop: s.dop ? +s.dop.toFixed(4) : undefined, x: s.pos.x, z: s.pos.z })),
       latency: () => ctx ? { base: ctx.baseLatency, output: ctx.outputLatency, rate: ctx.sampleRate, state: ctx.state } : null,
       loaded: () => { let n = 0, r = 0; for (const a of assets.values()) { n++; if (a.state === 'ready' || a.stream) r++; } return { assets: n, ready: r, bytes: st.bytes, decodedMB: +(st.decoded / 1048576).toFixed(1) }; },
-      distGain, play, get solo() { return solo; }, set solo(r) { solo = r ? new RegExp(r) : null; },
+      distGain, play: (n, p, o = {}) => play(n, p, { ...o, force: true }), get solo() { return solo; }, set solo(r) { solo = r ? new RegExp(r) : null; },
     },
   };
   return api;
