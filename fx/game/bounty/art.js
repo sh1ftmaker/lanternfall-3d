@@ -44,7 +44,7 @@ export function createArt(game) {
       const mesh = new T.Mesh(geometry, m); mesh.position.set(x, y, z); mesh.rotation.copy(tmpO.rotation); mesh.scale.copy(tmpO.scale);
       g.add(mesh); return mesh;
     };
-    const finish = () => { if (!parts.length) return null; const geo = merge(parts), mesh = new T.Mesh(geo, shared); g.add(mesh); return geo; };
+    const finish = () => { g.traverse((o) => { o.userData.bounty = 1; }); if (!parts.length) return null; const geo = merge(parts), mesh = new T.Mesh(geo, shared); mesh.userData.bounty = 1; g.add(mesh); return geo; };
     return { g, add, mats, finish };
   }
 

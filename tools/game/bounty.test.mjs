@@ -115,6 +115,27 @@ async function run(mobile) {
   ok('a lantern colour earned', (await B('b.state().colors.length')) === 2, await B('b.state().colors'));
   await wait(1200); const col = await ev(`(()=>{const u=__park.platformer.character.uniforms.uLanternCol;const v=u.value||u;return [v.x??v.r,v.y??v.g,v.z??v.b]})()`);
   ok("Wick's lantern uses the new colour", Math.abs(col[0] - 0.42) < 0.02 && Math.abs(col[1] - 1) < 0.02, col); await ev(`__park.game.modules.bounty.closeCard()`); await shot('lantern_colour');
+  // ── fixes: culling, tracker, carry-over, date guard, candle, wording, net ──
+  const visBounty = () => ev(`(()=>{let n=0;__park.scene.traverse((o)=>{if(o.isMesh&&o.userData.bounty){let v=true;for(let q=o;q;q=q.parent)if(!q.visible)v=false;if(v)n++}});return n})()`);
+  await ev(`__park.setMode('walk',{at:[288,0],yaw:Math.PI})`); await wait(1800);
+  const atGate = await visBounty(); ok('at the East Gate only the nearby postcard draws (merged, <= 3 meshes)', atGate >= 1 && atGate <= 3, atGate);
+  await ev(`__park.setMode('tour')`); await wait(1500); ok('nothing from bounty draws in Tour', (await visBounty()) === 0, await visBounty());
+  ok('merged props: one mesh per prop', await ev(`(()=>{const b=__park.game.modules.bounty;let m=0;__park.scene.traverse((o)=>{if(o.isMesh&&o.userData.bounty)m++});return m<=40})()`));
+  await ev(`__park.setMode('walk',{at:[288,0],yaw:Math.PI})`); await wait(800);
+  await ev(`__park.game.modules.bounty.test.setJobs(['letter','balloon','bow'])`); await ev(`(()=>{const b=__park.game.modules.bounty;['letter','balloon','bow'].forEach((id)=>b.accept(id))})()`); await wait(1700);
+  const trk = await ev(`document.getElementById('game-track').textContent`); ok('tracker shows one job and "+2 more"', /\(\+2 more\)/.test(trk), trk);
+  // midnight: a half-done job is carried over, not lost
+  await B(`b.test.newDay('2099-01-01')`); await wait(300);
+  ok('a job half done is carried to the new day', (await B('b.jobsToday()')).some((j) => j.state === 'active') && (await B(`b.state().carry.includes('letter')`)), await B('b.jobsToday()'));
+  ok('the date going back does not start a new day', await B(`(()=>{b.state().day='2999-01-01';const r=b.test.rollDay();return r===false&&b.state().day==='2999-01-01'})()`));
+  // the candle
+  await ev(`(()=>{const b=__park.game.modules.bounty;b.test.setJobs(['candle','bell','boats']);b.accept('candle')})()`); await wait(300);
+  await ev(`__park.game.interactables.find(i=>i.id==='job-candle').use()`); await wait(300); ok('candle lit by the job', await B('b.test.candle()'));
+  await B(`b.test.newDay('2099-01-02')`); await wait(300); ok('candle prop removed when the night ends', !(await B('b.test.candle()')));
+  // wording and the net
+  const names = await ev(`import('/fx/game/bounty/data.js').then((d)=>d.LOST.map((l)=>l.name))`);
+  ok('lost and found names are capitalised, no full stop', names.every((n) => /^[A-Z]/.test(n) && !/\.$/.test(n)), names);
+  const nt = await B('b.lostPos().net'); ok('the net is out of the carousel prompt reach', Math.hypot(nt.x + 128, nt.y + 118.9) > 7.4 + 1, nt);
   ok('no console errors', ![...errs.keys()].some((k) => /pageerror|error/.test(k)), [...errs]);
   const out = { mobile, checks: checks.length, failed: checks.filter((c) => !c.ok).map((c) => c.name), errs: [...errs].map(([k, v]) => v + 'x ' + k) };
   await browser.close(); return out;

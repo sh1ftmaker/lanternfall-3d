@@ -486,7 +486,7 @@ export function init(game) {
     boatCount: () => boatCount(S.day), shelfProps: () => Object.keys(shelfProps), stampPosts: () => Object.fromEntries(Object.entries(posts).map(([k, o]) => [k, o.p])), lostPos: () => Object.fromEntries(Object.entries(lostThings).map(([k, t]) => [k, t.p])),
     positions: () => ({ board: P(SPOTS.board), hut: P(SPOTS.hut), bell: bellP, tower: towerP, desk: P(SPOTS.desk), shelf: shelfSlot(0), signing: P(SPOTS.signing), tavern: P(SPOTS.tavern), logTable: P(SPOTS.logTable), dock: P(SPOTS.dock), gatekeeper: P(SPOTS.gatekeeper), shrine: P(SPOTS.shrine), balloon: P(SPOTS.balloon), child: P(SPOTS.child), bow: P(SPOTS.bow), busker: P(SPOTS.busker) }),
     lanternColour: () => colorOf(S.color), applyColor,
-    test: { setJobs(ids) { stopAllJobs(); S.ids = ids; S.jobs = {}; S.carry = S.carry.filter((c) => c.startsWith('lost:')); commit(); refreshTrack(); renderCard(); }, newDay(key) { rollDay(key); resume(); renderCard(); }, reset() { stopAllJobs(); Object.assign(S, fresh()); commit(); location.reload(); } },
+    test: { rollDay: () => rollDay(), candle: () => !!candleThing, setJobs(ids) { stopAllJobs(); S.ids = ids; S.jobs = {}; S.carry = S.carry.filter((c) => c.startsWith('lost:')); commit(); refreshTrack(); renderCard(); }, newDay(key) { rollDay(key); resume(); renderCard(); }, reset() { stopAllJobs(); Object.assign(S, fresh()); commit(); location.reload(); } },
   };
   return api;
 }
