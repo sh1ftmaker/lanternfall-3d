@@ -202,7 +202,8 @@ export function init(game) {
   document.body.append(wish, card);
   const winp = wish.querySelector('input'), wn = wish.querySelector('.n'); let railAt = null;
   const closeWish = () => { wish.hidden = true; winp.blur(); };
-  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; winp.focus(); setTimeout(() => winp.focus(), 60); }
+  let wishAt = null;
+  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wishAt = railAt; wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; winp.focus(); setTimeout(() => winp.focus(), 60); }
   function release() {
     const text = winp.value.trim().slice(0, 80); if (!text) { winp.focus(); return; }
     const w = { t: Date.now(), text }; st.wishes.unshift(w); st.wishes = st.wishes.slice(0, 12); persist(); closeWish();
@@ -223,6 +224,9 @@ export function init(game) {
     const p = game.player; railAt = null; let bd = 1e9;
     if (p.mode === 'walk') for (const q of rail) { const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; railAt = q; } }
     if (railAt && bd > 3.2 * 3.2) railAt = null; if (railAt) railIt.move(railAt.x, railAt.y, railAt.z ?? 0);
+    // walking away puts the sheet or the note down (they stayed open, stacked under the next card, anywhere in the park)
+    if (!wish.hidden && wishAt && (wishAt.x - p.x) ** 2 + (wishAt.y - p.y) ** 2 > 8 * 8) closeWish();
+    if (!card.hidden && (HIDDEN.pole[0] - p.x) ** 2 + (HIDDEN.pole[1] - p.y) ** 2 > 8 * 8) closeCard();
   }
   // past wishes hang low over the lake, a little brighter than the rest
   const hung = [];
