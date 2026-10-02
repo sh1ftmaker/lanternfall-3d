@@ -88,6 +88,6 @@ export function createCarousel(game, session, { count }) {
     run.start = performance.now();
     count('carousel'); game.emit('rides:board', { ride: 'carousel' });
   }
-  const it = game.interact({ id: 'rides:carousel', x: board.x, y: board.y, z: 0.7, r: 5.2, label: 'Ride the Pavilion of Wings', show: () => !game.cameraHeld && !!fx(), use: begin });
+  const it = game.interact({ id: 'rides:carousel', x: board.x, y: board.y, z: 0.7, r: 5.2, label: 'Ride the carousel at the Pavilion of Wings', show: () => !game.cameraHeld && !!fx(), use: begin });
   return { mesh, seats, horse: (i, time, motion) => horse(seats[i], time, motion, { p: new THREE.Vector3(), yaw: 0 }), board, begin };
 }

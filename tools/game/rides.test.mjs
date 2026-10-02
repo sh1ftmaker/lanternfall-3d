@@ -63,6 +63,7 @@ async function run(mobile, fp) {
   // ───────────────────────── monorail ─────────────────────────
   const mono = await ev('(() => { const r = __park.game.modules.rides.monorail; return { x: r.board.x, y: r.board.y, z: r.board.z, yaw: r.faceYaw }; })()');
   await standAt(mono.x, mono.y, mono.z, mono.yaw);
+  await page.waitForFunction('!document.querySelector("#game-prompt").hidden', { timeout: 8000 }).catch(() => {});
   let pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
   check(tag + ' monorail prompt', !pr[0] && /Board the Meridian Loop/.test(pr[1]), pr[1]);
   const pl = await player(); check(tag + ' standing on the platform', Math.abs(pl[2] - 10) < 0.6, pl[2]);
@@ -111,6 +112,7 @@ async function run(mobile, fp) {
     const pp = await ev(`(() => { const c = __park.game.modules.rides.cruise, o = []; for (let s = 0; s < 270; s += 1.35) o.push(c.plan(s)); return { n: o.length, held: o.filter((p) => p.delay > 0).length, minClear: +Math.min(...o.map((p) => p.clear)).toFixed(1), maxDelay: Math.max(...o.map((p) => p.delay)) }; })()`);
     check(tag + ' cruise plan keeps clear of the lantern punt', pp.minClear >= 6 && pp.held > 0 && pp.maxDelay < 60, pp);
     await standAt(cr.x, cr.y, 0, 0);
+    await page.waitForFunction('!document.querySelector("#game-prompt").hidden', { timeout: 8000 }).catch(() => {});
     pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
     check(tag + ' cruise prompt', !pr[0] && /Take the Harbor Cruise/.test(pr[1]), pr[1]);
     await shot('5-jetty');
@@ -149,8 +151,9 @@ async function run(mobile, fp) {
     { const hs = poses.map((p) => p.riders[0][1]); check(tag + ' riders rise and fall', Math.max(...hs) - Math.min(...hs) > 0.02, hs.map((h) => +h.toFixed(3))); }   // two of three samples may sit either side of a crest at the same height: ask only that they move
     await ev('__rel()');
     await standAt(car.x, car.y, 0.7, Math.atan2(cy - car.y, cx - car.x));
+    await page.waitForFunction('!document.querySelector("#game-prompt").hidden', { timeout: 8000 }).catch(() => {});
     pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
-    check(tag + ' carousel prompt', !pr[0] && /Ride the Pavilion of Wings/.test(pr[1]), pr[1]);
+    check(tag + ' carousel prompt', !pr[0] && /Ride the carousel at the Pavilion of Wings/.test(pr[1]), pr[1]);
     await use(); check(tag + ' carousel camera borrowed', await until('__park.game.cameraHeld === "rides"', 4000, tag + ' carousel board'));
     await wait(2500);
     const r1 = await ev('(() => { const c = __park.camera.position; return [Math.hypot(c.x + 135.04, c.z - 125.18), c.y, Math.atan2(c.z - 125.18, c.x + 135.04)]; })()'); await wait(2000);
