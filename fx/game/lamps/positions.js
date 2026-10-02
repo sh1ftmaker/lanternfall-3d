@@ -5,7 +5,7 @@ export const LAMPS = {
   'guildhollow': [
     [-193.8, 44.4, 0.12],
     [-149.8, -12.8, 0.06],
-    [-136, 8.1, 0.12],
+    [-139, 4, 0.12],   // (moved from (-136, 8.1): it took the strength bell's prompt from 2 m away)
     [-159.2, -33.3, 0.12],
     [-173.5, 1.9, 0.12],
     [-212, -4.4, 0.12],
