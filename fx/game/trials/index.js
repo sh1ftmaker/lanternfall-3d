@@ -180,7 +180,7 @@ export function init(game) {
     const cp = c.pts[r.n], hr = cp[3] || 5, hz = cp[4] || 7;
     if (Math.abs(player.z - cp[2]) < hz && segDist(cp[0], cp[1], r.px, r.py, player.x, player.y) < hr) {
       r.n++; r.splits.push(r.t);
-      const bs = r.best && r.best.sp && r.best.sp[r.n - 1], d = bs !== undefined ? r.t - bs : null;
+      const bs = r.best && Array.isArray(r.best.sp) ? r.best.sp[r.n - 1] : null, d = Number.isFinite(bs) ? r.t - bs : null;
       game.emit('trials:checkpoint', { course: c.id, index: r.n, count: c.pts.length, time: +r.t.toFixed(2), best: r.best ? r.best.t : null });
       if (r.n >= c.pts.length) { r.px = player.x; r.py = player.y; finish(); return; }
       game.toast(`<b>${r.n} / ${c.pts.length}</b> ${fmt(r.t)}` + (d === null ? '' : ` <b>${d <= 0 ? '' : '+'}${d.toFixed(1)}</b>`), { ms: 1900, tone: d !== null && d <= 0 ? 'good' : '' });
