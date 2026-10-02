@@ -1,6 +1,15 @@
 --- a/parts/brinewatch.py
 +++ b/parts/brinewatch.py
-@@ -525,7 +525,18 @@
+@@ -519,13 +519,25 @@
+     rail((x0d, -46.0), (x0d, -55.2)); rail((x0d, -55.2), (x1d - 4.0, -55.2)); rail((x1d - 4.0, -55.2), (x1d + 2.5, -55.2))
+     rail((x1d + 2.5, -55.2), (x1d + 2.5, -50.0)); rail((x1d + 2.5, -46.5), (x1d + 2.5, -36.0))
+     # steps down to the wharf on the east side
+-    for i in range(3):
+-        deck.box((x1d + 3.1 + i * 0.4, -48.25, Z + fz - 0.25 - i * 0.17), (0.4, 3.4, 0.17 + 0.0), m["deck"])
++    # (interiors) eight shallow solid steps (was three 0.17 m slabs): guests' paths take steps of up to ~0.35 m per 0.5 m
++    for i in range(8):
++        deck.box((x1d + 2.5 + 0.15 + i * 0.3, -48.25, Z), (0.3, 3.4, fz * (8 - i) / 9), m["deck"])
+     deck.build("tavern_deck", col)
      base = fz
      # ground floor
      mb.box((0, 0, base - 0.5), (w + 0.2, d + 0.2, 0.5), m["stone"])
@@ -20,7 +29,20 @@
      # jettied, slightly crooked upper floor
      up = Matrix.Translation((0, 0, base + 3.6)) @ Matrix.Rotation(0.012, 4, 'Y') @ Matrix.Rotation(0.01, 4, 'Z')
      mb.box((0, 0, base + 3.6), (w + 1.0, d + 1.0, 0.3), trim)
-@@ -555,9 +566,10 @@
+@@ -537,8 +549,10 @@
+     # half-timber cross braces on the upper floor (south face)
+     for i in range(6):
+         x0 = -w / 2 + i * w / 6; x1 = x0 + w / 6
+-        mb.beam((x0, -(d + 0.8) / 2 - 0.06, 0.4), (x1, -(d + 0.8) / 2 - 0.06, 3.3), 0.16, 0.08, trim) if i % 2 == 0 else \
+-            mb.beam((x1, -(d + 0.8) / 2 - 0.06, 0.4), (x0, -(d + 0.8) / 2 - 0.06, 3.3), 0.16, 0.08, trim)
++        # (interiors) in the upper floor's frame, as intended (they hung in front of the ground floor and crossed the doorway)
++        ya = -(d + 0.8) / 2 - 0.06
++        a, b = ((x0, ya, 0.4), (x1, ya, 3.3)) if i % 2 == 0 else ((x1, ya, 0.4), (x0, ya, 3.3))
++        mb.beam(tuple(up @ Vector(a)), tuple(up @ Vector(b)), 0.16, 0.08, trim)
+     # main roof + crooked cross gables facing the lake (south)
+     roofM = up @ Matrix.Translation((0, 0, 0))
+     mb.gable(w + 0.8, d + 0.8, 3.5, 4.6, m["shingle_red"], m["sid_ochre"], over=0.7, M=up)
+@@ -555,9 +569,10 @@
      for px in (-7.5, -4.5, 3.0, 6.0):
          mb.box((px, -d / 2 - 0.06, base + 0.9), (1.9, 0.14, 1.9), trim)
          mb.box((px, -d / 2 - 0.1, base + 1.0), (1.6, 0.06, 1.65), m["bottle_glass"])
@@ -34,7 +56,7 @@
          for sx in (-1, 1):
              mb.box((sx * (w / 2 + 0.06), py, base + 1.0), (0.12, 1.8, 1.6), trim)
              mb.box((sx * (w / 2 + 0.1), py, base + 1.1), (0.06, 1.5, 1.35), m["bottle_glass"])
-@@ -571,15 +583,19 @@
+@@ -571,15 +586,19 @@
      for px in (-6.5, -3.0, 3.0, 6.5):
          mb.box((px, d / 2 + 0.06, base + 0.9), (1.9, 0.14, 1.9), trim)
          mb.box((px, d / 2 + 0.1, base + 1.0), (1.6, 0.06, 1.65), m["bottle_glass"])
@@ -43,8 +65,8 @@
 +    # back doorway to the Ring Promenade (open) with three steps down to the paving
 +    mb.box((DN[0] - 0.1, d / 2 + 0.06, base), (0.2, 0.14, DH + 0.2), trim); mb.box((DN[1] + 0.1, d / 2 + 0.06, base), (0.2, 0.14, DH + 0.2), trim)
 +    mb.box(((DN[0] + DN[1]) / 2, d / 2 + 0.06, base + DH), (DN[1] - DN[0] + 0.4, 0.14, 0.2), trim)
-+    for i in range(3):
-+        mb.box(((DN[0] + DN[1]) / 2, d / 2 + 0.1 + 0.2 + i * 0.4, 0.0), (DN[1] - DN[0] + 0.6, 0.4, base * (3 - i) / 4), m["stone"])
++    for i in range(7):
++        mb.box(((DN[0] + DN[1]) / 2, d / 2 + 0.1 + 0.15 + i * 0.3, 0.0), (DN[1] - DN[0] + 0.6, 0.3, base * (7 - i) / 8), m["stone"])
      mb.box((0, d / 2 + 0.12, base + 2.95), (8.6, 0.1, 0.62), m["sign_board"])
      for px in (-1.4, 1.4):
          mb.beam((px, d / 2, base + 2.6), (px, d / 2 + 0.6, base + 2.6), 0.06, 0.06, m["iron"])
@@ -58,7 +80,7 @@
      mb.quad((w / 2, -2.0, base + 3.4), (w / 2, 2.0, base + 3.4), (w / 2 + 2.4, 2.0, base + 2.7), (w / 2 + 2.4, -2.0, base + 2.7), m["shingle"])
      # chimneys
      mb.box((-6.5, 2.0, base + 3.6), (1.0, 1.0, 9.4), m["brick"]); mb.box((5.5, 2.5, base + 3.6), (0.9, 0.9, 8.6), m["brick"])
-@@ -636,7 +652,7 @@
+@@ -636,7 +655,7 @@
      st.build("tavern_stage", col)
      sign_text("stage_sign", "SHANTY CORNER", (sx0, sy0 + 1.68, Z + fz + 2.75), 0.0, col, 0.3, m["sign_gold"], 0.02)
      # deck furniture: barrel tables, lamps
@@ -67,7 +89,7 @@
          Pl("table_set", tx, ty, Z + fz, rz=rnd.uniform(0, 3))
      for (lx, ly) in ((-33.0, -55.0), (-23.0, -55.0), (-10.5, -55.0)):
          Pl("lamp_post", lx, ly + 0.2, Z + fz, rz=-math.pi / 2, scale=0.85)
-@@ -649,6 +665,75 @@
+@@ -649,6 +668,75 @@
      return ob
  
  

@@ -11,6 +11,6 @@ Blender project (they import its `park_common.py` and `studio.py`), which is not
 4. `zfight_measure.py`: reports remaining near-coplanar overlaps from a `--dump-tris` file.
 
 `park-interiors.diff`: the changes the `interiors` branch made to the Blender park source (`parts/*.py`, not in git):
-the Brine & Barrel's open taproom (three doorways, bar, hearth, tables, lamps), a smaller Guildhollow gate fountain,
+the Brine & Barrel's open taproom (three doorways, bar, hearth, tables, lamps; shallow steps at the back door and the deck; the upper floor's braces moved up where they belong), a smaller Guildhollow gate fountain,
 shorter Signing Tables / Gallery rows and a narrower Paper Doors dais in the Wanderers' Hall, the Rose Maze's centre
 benches and gateposts. Parts re-baked: brinewatch, guildhollow, rosewick, wanderers.
