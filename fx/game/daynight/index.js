@@ -97,8 +97,8 @@ export function init(game) {
   const dim = new Map();
   function dimThings(lamps) {
     const fx = ctx.getFx && ctx.getFx(); if (!fx) return;
-    if (fx.beams && fx.beams.children) fx.beams.traverse((o) => { const u = o.material && o.material.uniforms && o.material.uniforms.uStrength; if (u) { if (!dim.has(u)) dim.set(u, u.value); u.value = dim.get(u) * lamps; } });
-    for (const k of ['emitters', 'dance']) { const u = fx[k] && fx[k].material && fx[k].material.uniforms.uGain; if (u) { if (!dim.has(u)) dim.set(u, u.value); u.value = dim.get(u) * (k === 'dance' ? lamps : 0.4 + 0.6 * lamps); } }
+    if (fx.beams && fx.beams.children) fx.beams.traverse((o) => { const u = o.material && o.material.uniforms && o.material.uniforms.uStrength; if (u) { if (!dim.has(u)) dim.set(u, u.value); u.value = lamps >= 1 ? dim.get(u) : dim.get(u) * lamps; } });
+    for (const k of ['emitters', 'dance']) { const u = fx[k] && fx[k].material && fx[k].material.uniforms.uGain; if (u) { if (!dim.has(u)) dim.set(u, u.value); u.value = lamps >= 1 ? dim.get(u) : dim.get(u) * (k === 'dance' ? lamps : 0.4 + 0.6 * lamps); } }
   }
 
   // ── the sun's shadow map: rendered for the sun's direction, again when the sun has moved ~1.2 degrees ──

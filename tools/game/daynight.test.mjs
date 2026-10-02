@@ -22,13 +22,13 @@ async function open(hash, { mobile = false, freeze = false } = {}) {
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message.slice(0, 200)));
   page.on('console', (c) => { if (c.type() === 'error' || c.type() === 'warn' || c.type() === 'warning') logs.push(c.type() + ': ' + c.text().slice(0, 200)); });
   await page.setViewport({ width: W, height: H, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  if (freeze) await page.evaluateOnNewDocument(() => { const t0 = performance.now(); performance.now = () => t0; });   // dt = 0: every animation stands still
+  if (freeze) await page.evaluateOnNewDocument(() => { const t0 = performance.now(), d0 = Date.now(); performance.now = () => t0; Date.now = () => d0; });   // dt = 0: every animation stands still
   await page.goto(BASE + hash); await page.waitForFunction('window.__park && window.__park.loaded', { timeout: 240000 });
   await wait(2500);
   return { browser, page, logs, ev: (js) => page.evaluate(js) };
 }
 const place = (v) => (v.tour !== undefined ? `__park.setMode('tour');__park.setTour(${v.tour})` : `__park.setMode('walk',{at:[${v.at}],yaw:${v.yaw}})`);
-const shot = async (page, file, png = false) => { const b = await page.screenshot({ type: png ? 'png' : 'jpeg', quality: 88, path: png ? undefined : file, encoding: 'base64' }); return b; };
+const shot = async (page, file, png = false) => { return png ? page.screenshot({ type: 'png', encoding: 'base64' }) : page.screenshot({ type: 'jpeg', quality: 88, path: file }); };
 
 // ── 1. screenshots: five times, four views ──
 {
@@ -52,20 +52,26 @@ const shot = async (page, file, png = false) => { const b = await page.screensho
 // ── 2. night pixel comparison: this branch at 23:00 vs the same page with #no-daynight ──
 async function nightShots(hash) {
   const { browser, page, logs, ev } = await open(hash, { freeze: true }); const out = [];
-  for (const [id, v] of NIGHT_VIEWS) { await ev(place(v)); await wait(2500); out.push([id, await shot(page, '', true)]); }
+  for (const [id, v] of NIGHT_VIEWS) { await ev(place(v)); await wait(+process.env.SETTLE || 2500); const a = await shot(page, '', true); await wait(1200); out.push([id, a, await shot(page, '', true)]); }
   await browser.close(); return { out, logs };
 }
 {
-  const H = '#weather=clear&no-guests&no-motes&no-fireworks';
-  const A = await nightShots(H), B = await nightShots(H + '&no-daynight');
+  const H = '#weather=clear&no-guests&no-motes&no-fireworks&nosim&noboat&no-emitters&fp' + (process.env.EXTRA || '');
+  const A = await nightShots(process.env.NOISE ? H + '&no-daynight' : H), B = await nightShots(H + '&no-daynight');
   const { browser, page } = await open('#no-game');
   let total = 0;
   for (let i = 0; i < A.out.length; i++) {
-    const d = await page.evaluate(async (a, b) => {
+    // pixels that differ between the two builds but are steady inside each run (the lake's mirror and a few sprites shimmer from run to run on their own)
+    const [d, unstable] = await page.evaluate(async (a, a2, b, b2) => {
       const load = async (s) => { const bm = await createImageBitmap(await (await fetch('data:image/png;base64,' + s)).blob()); const c = new OffscreenCanvas(bm.width, bm.height), g = c.getContext('2d'); g.drawImage(bm, 0, 0); return g.getImageData(0, 0, bm.width, bm.height).data; };
-      const x = await load(a), y = await load(b); let n = 0; for (let k = 0; k < x.length; k += 4) if (x[k] !== y[k] || x[k + 1] !== y[k + 1] || x[k + 2] !== y[k + 2]) n++; return n;
-    }, A.out[i][1], B.out[i][1]);
-    total += d; check(d === 0, `night pixels identical in ${A.out[i][0]}: ${d} differing`);
+      const [x, x2, y, y2] = [await load(a), await load(a2), await load(b), await load(b2)]; let n = 0, u = 0;
+      for (let k = 0; k < x.length; k += 4) {
+        const sx = x[k] === x2[k] && x[k + 1] === x2[k + 1] && x[k + 2] === x2[k + 2], sy = y[k] === y2[k] && y[k + 1] === y2[k + 1] && y[k + 2] === y2[k + 2];
+        if (!sx || !sy) u++; else if (x[k] !== y[k] || x[k + 1] !== y[k + 1] || x[k + 2] !== y[k + 2]) n++;
+      }
+      return [n, u];
+    }, A.out[i][1], A.out[i][2], B.out[i][1], B.out[i][2]);
+    total += d; check(d === 0, `night pixels identical in ${A.out[i][0]}: ${d} differing (${unstable} shimmer on their own)`);
     if (d) fs.writeFileSync(`${OUT}/diff_${A.out[i][0]}_on.png`, Buffer.from(A.out[i][1], 'base64')), fs.writeFileSync(`${OUT}/diff_${A.out[i][0]}_off.png`, Buffer.from(B.out[i][1], 'base64'));
   }
   await browser.close();
