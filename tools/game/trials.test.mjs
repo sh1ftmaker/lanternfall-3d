@@ -59,7 +59,7 @@ const INSTALL = AGENT + `;window.__tr = {
         if (t < un.until) { const a = un.sign * Math.min(2.6, 0.8 + 0.5 * (un.n || 1)), c1 = Math.cos(a), s1 = Math.sin(a); out = { world: [dx * c1 - dz * s1, dx * s1 + dz * c1], a: Math.floor(t * 4) % 2 === 0 }; }   // blocked: jump and sidestep
         if ((v.s.action & 0x1C0) === 0xC0) {            // swimming: strokes, and the stick only turns him (a forward push would dive)
           let err = Math.atan2(dx, dz) - v.yaw; err = Math.atan2(Math.sin(err), Math.cos(err));
-          out = { a: (t % 0.5) < 0.15, mx: Math.max(-1, Math.min(1, err * 2)) };
+          out = { a: (t % 0.5) < 0.15, mx: Math.max(-1, Math.min(1, -err * 2)) };      // in water the stick turns him the way it points (it was reversed)
         }
         return { ...out, ...(plan ? plan(r.t, v, cp, r.n, l) : {}) };
       };
