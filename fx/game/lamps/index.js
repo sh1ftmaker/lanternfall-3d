@@ -28,8 +28,10 @@ export function init(game) {
   const { THREE, scene, camera } = game;
   const hash = game.hash;
   const lands = game.manifest.lands, landBy = Object.fromEntries(lands.map((l) => [l.id, l]));
-  const st = game.save.get('lamps', null) || {};
-  st.lit = st.lit || []; st.read = st.read || []; st.done = st.done || []; st.wishes = st.wishes || []; st.all = !!st.all; st.pole = !!st.pole;
+  const raw = game.save.get('lamps', null), st = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};   // an old or damaged save must not stop the module
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  st.lit = arr(st.lit).filter((x) => typeof x === 'string'); st.read = arr(st.read); st.done = arr(st.done); st.all = !!st.all; st.pole = !!st.pole;
+  st.wishes = arr(st.wishes).filter((w) => w && typeof w.text === 'string' && Number.isFinite(w.t));
   const persist = () => game.save.set('lamps', st);
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
 
