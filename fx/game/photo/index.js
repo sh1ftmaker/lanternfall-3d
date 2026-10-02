@@ -29,6 +29,7 @@ const CSS = `
 .ph-sl input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:rgba(245,236,220,.28)} .ph-sl input::-moz-range-track{height:4px;border-radius:2px;background:rgba(245,236,220,.28)}
 .ph-sl input::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-11px;border-radius:50%;background:var(--amber);border:2px solid rgba(13,11,38,.7)}
 .ph-sl input::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--amber);border:2px solid rgba(13,11,38,.7)}
+.ph-s{display:none} @media (max-width:480px){ .ph-l{display:none} .ph-s{display:inline} }
 .ph-hint{font-size:12.5px;opacity:.82;line-height:1.35;margin:0}
 .ph-main{display:flex;align-items:center;gap:6px}
 .ph-tabs{display:flex;gap:6px;flex:1;min-width:0;justify-content:center} .ph-tab{flex:1 1 0;min-height:44px;border-radius:14px;border:1px solid transparent;background:transparent;font-size:13px}
@@ -39,7 +40,7 @@ const CSS = `
 #ph-lightbox img{max-width:min(92vw,720px);max-height:72vh;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6)}
 .ph-sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px} .ph-sheet button{appearance:none;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0d0b26;cursor:pointer;aspect-ratio:1;display:block} .ph-sheet img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-take{appearance:none;border:1px solid var(--amber);border-radius:999px;background:transparent;color:var(--amber);font:600 13px var(--ui);padding:8px 16px;cursor:pointer}
-body.photo-on #hop,body.photo-on #stick,body.photo-on #hint,body.photo-on #btn-show,body.photo-on #game-track{display:none!important}
+body.photo-on .pf-touch,body.photo-on #hop,body.photo-on #stick,body.photo-on #hint,body.photo-on #btn-show,body.photo-on #game-track{display:none!important}
 #btn-photo{display:none} @media (min-width:641px){ #btn-photo{display:grid} }
 @media (prefers-reduced-motion:reduce){ #ph-flash.go{animation:none} #ph-ring,#ph-note{transition:none} }
 `;
@@ -56,7 +57,7 @@ export function init(game) {
   const st = { aperture: 0, focus: [0.5, 0.5], look: 'natural', vig: 0, crop: [0, 0, 1, 1] };   // read live by the post pass
   const cam = { p: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, fov: 52, minFov: MIN_FOV, maxFov: MAX_FOV, home: new THREE.Vector3(), floor: 0 };
   let active = false, release = null, prev = null, wasClean = false, aspect = prefs.aspect, thirds = prefs.thirds, tab = 'frame';
-  let builtSig = '', passRef = null, want = false, noteT = 0, ringT = 0;
+  let lensTouched = false, setFov = 0, builtSig = '', passRef = null, want = false, noteT = 0, ringT = 0;
   const keys = new Set(), ptrs = new Map(); let pinch = 0, mid = null;
   const e = new THREE.Euler(0, 0, 0, 'YXZ'), fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmp = new THREE.Vector3();
 
@@ -69,7 +70,7 @@ export function init(game) {
     <div class="ph-panel" data-p="frame"><div class="ph-chips" role="radiogroup" aria-label="Crop">${ASPECTS.map(([id, t]) => `<button type="button" data-asp="${id}" aria-pressed="false">${t}</button>`).join('')}<button type="button" data-thirds aria-pressed="false">Thirds</button></div>
       <div class="ph-two">${slider('ph-lens', 'Lens', 0, 1000, 1)}${slider('ph-roll', 'Roll', -15, 15, 0.5)}</div></div>
     <div class="ph-panel" data-p="focus" hidden><p class="ph-hint" id="ph-fhint">Tap the picture to focus there.</p><div class="ph-two one">${slider('ph-blur', 'Blur', 0, 100, 1)}</div></div>
-    <div class="ph-panel" data-p="look" hidden><div class="ph-chips" role="radiogroup" aria-label="Look">${Object.entries(LOOKS).map(([id, k]) => `<button type="button" data-look="${id}" aria-pressed="false">${k.name}</button>`).join('')}</div>
+    <div class="ph-panel" data-p="look" hidden><div class="ph-chips" role="radiogroup" aria-label="Look">${Object.entries(LOOKS).map(([id, k]) => `<button type="button" data-look="${id}" aria-pressed="false" aria-label="${k.name}" title="${k.name}"><span class="ph-l">${k.name}</span><span class="ph-s">${k.short}</span></button>`).join('')}</div>
       <div class="ph-two">${slider('ph-vig', 'Vignette', 0, 100, 1)}<div class="ph-sl"><button type="button" class="ph-btn" id="ph-pose" hidden>Pose</button></div></div></div>
     <div class="ph-main"><button type="button" class="ph-done" id="ph-done">Done</button>
       <div class="ph-tabs" role="tablist"><button type="button" class="ph-tab" role="tab" data-tab="frame">Frame</button><button type="button" class="ph-tab" role="tab" data-tab="focus">Focus</button><button type="button" class="ph-tab" role="tab" data-tab="look">Look</button></div>
@@ -110,7 +111,7 @@ export function init(game) {
   for (const b of $$('[data-asp]')) b.addEventListener('click', () => { aspect = b.dataset.asp; remember(); syncUI(); layoutCrop(); });
   $('[data-thirds]').addEventListener('click', () => { thirds = !thirds; remember(); syncUI(); layoutCrop(); });
   for (const b of $$('[data-look]')) b.addEventListener('click', () => { st.look = b.dataset.look; remember(); syncUI(); syncPass(); });
-  lens.addEventListener('input', () => { cam.fov = fovOf(+lens.value); syncUI(); });
+  lens.addEventListener('input', () => { lensTouched = true; cam.fov = fovOf(+lens.value); syncUI(); });
   roll.addEventListener('input', () => { cam.roll = +roll.value * Math.PI / 180; syncUI(); });
   $('label[for=ph-roll]').addEventListener('click', (ev) => { ev.preventDefault(); cam.roll = 0; roll.value = 0; syncUI(); });
   blur.addEventListener('input', () => { st.aperture = +blur.value / 100; syncUI(); syncPass(); });
@@ -142,7 +143,7 @@ export function init(game) {
     st.look = prefs.look in LOOKS ? prefs.look : 'natural'; st.aperture = 0; st.vig = 0; st.focus = [0.5, 0.5];
     lens.value = sOf(clamp(cam.fov, MIN_FOV, cam.maxFov)); roll.value = clamp(cam.roll * 180 / Math.PI, -15, 15); blur.value = 0; vig.value = 0;
     $('#ph-pose').hidden = !(game.player.wick && game.player.mode === 'walk');
-    keys.clear(); ptrs.clear(); tab = 'frame'; syncUI(); layoutCrop(); syncPass();
+    keys.clear(); ptrs.clear(); tab = 'frame'; lensTouched = false; setFov = 0; syncUI(); layoutCrop(); syncPass();
     release = game.takeCamera(drive, { name: 'photo' });
     Q.afterRender = afterRender;
     game.emit('photo:mode', { on: true });
@@ -178,7 +179,10 @@ export function init(game) {
     const g = game.ground(cam.p.x, -cam.p.z, cam.p.y), floor = g === null ? Math.min(cam.home.y, 0.5) : Math.min(g + 0.45, Math.max(cam.home.y, g + 0.45));
     if (cam.p.y < floor) cam.p.y = floor;
     camera.position.copy(cam.p); e.set(cam.pitch, cam.yaw, cam.roll, 'YXZ'); camera.quaternion.setFromEuler(e);
+    // the viewer re-derives its fov when the clean view takes the interface's offset away: follow it until the lens is touched
+    if (!lensTouched && camera.fov !== setFov && setFov) { cam.fov = camera.fov; cam.maxFov = Math.max(MAX_FOV, cam.fov); lens.value = sOf(clamp(cam.fov, MIN_FOV, cam.maxFov)); syncUI(); }
     if (camera.fov !== cam.fov) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+    setFov = camera.fov;
   }
   /* ── input: drag looks, two fingers (or right-drag) slide and pinch moves, wheel and keys move, a tap focuses ── */
   const sens = () => cam.fov * Math.PI / 180 / innerHeight;

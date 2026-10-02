@@ -6,11 +6,11 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { VERT, DEPTH_GLSL, depthDefines, depthUniforms, updateDepthUniforms } from '../../depthtex.js';
 
 export const LOOKS = {   // sat, gain (rgb), lift (rgb, added toward the shadows), contrast (+ S-curve, - flatter)
-  natural: { name: 'Natural', sat: 1, gain: [1, 1, 1], lift: [0, 0, 0], con: 0 },
-  warm: { name: 'Warm lantern', sat: 1.08, gain: [1.1, 1.0, 0.82], lift: [0.025, 0.01, -0.012], con: 0.12 },
-  cold: { name: 'Cold moon', sat: 0.88, gain: [0.86, 0.98, 1.14], lift: [-0.006, 0.006, 0.03], con: 0.08 },
-  faded: { name: 'Faded print', sat: 0.7, gain: [1.03, 1.0, 0.95], lift: [0.085, 0.075, 0.066], con: -0.22 },
-  mono: { name: 'Black and white', sat: 0, gain: [1, 1, 1], lift: [0.01, 0.01, 0.01], con: 0.3 },
+  natural: { name: 'Natural', short: 'Natural', sat: 1, gain: [1, 1, 1], lift: [0, 0, 0], con: 0 },
+  warm: { name: 'Warm lantern', short: 'Lantern', sat: 1.08, gain: [1.1, 1.0, 0.82], lift: [0.025, 0.01, -0.012], con: 0.12 },
+  cold: { name: 'Cold moon', short: 'Moon', sat: 0.88, gain: [0.86, 0.98, 1.14], lift: [-0.006, 0.006, 0.03], con: 0.08 },
+  faded: { name: 'Faded print', short: 'Faded', sat: 0.7, gain: [1.03, 1.0, 0.95], lift: [0.085, 0.075, 0.066], con: -0.22 },
+  mono: { name: 'Black and white', short: 'Mono', sat: 0, gain: [1, 1, 1], lift: [0.01, 0.01, 0.01], con: 0.3 },
 };
 
 const FRAG = /* glsl */`
@@ -76,7 +76,7 @@ export function makePhotoPass(ctx, composer, st, dof) {
     const prev = r.getRenderTarget(); r.setRenderTarget(zrt); zq.render(r); r.setRenderTarget(prev);
   };
   cap.dispose = () => { zrt.dispose(); zmat.dispose(); zq.dispose(); };
-  let i = composer.passes.findIndex((p) => p.__name === 'Scene' || p.__name === 'N8AO'); i = i < 0 ? 0 : i + 1;
+  let i = composer.passes.findIndex((p) => p.__name === 'Scene' || p.__name === 'N8AO' || (p.scene && p.camera)); i = i < 0 ? 0 : i + 1;
   if (dof) composer.insertPass(cap, i);
   const u = Object.assign(depthUniforms(), {
     tDiffuse: { value: null }, tZ: { value: zrt.texture }, uFocusUV: { value: new THREE.Vector2(0.5, 0.5) }, uRes: { value: new THREE.Vector2(1, 1) },

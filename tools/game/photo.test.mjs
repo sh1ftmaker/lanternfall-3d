@@ -29,6 +29,7 @@ async function run(mobile, quality) {
   const cam = () => ev('(()=>{const c=__park.camera;return [c.position.x,c.position.y,c.position.z,c.fov]})()');
   const same = (a, b, t = 0.02) => a && b && a.every((v, i) => Math.abs(v - b[i]) < t);
   const modes = [['tour', 'tour'], ['orbit', 'explore'], ['wick', 'walk as Wick'], ['fp', 'walk first person']];
+  let a0 = 0;
   for (const [m, label] of modes) {
     if (quality !== 'cinematic' && m !== 'wick' && m !== 'tour') continue;          // other qualities: two modes are enough
     console.log(' -- ' + label);
@@ -45,7 +46,7 @@ async function run(mobile, quality) {
     else { await page.keyboard.press('KeyO'); }
     await wait(900);
     check(await ev("__park.game.modules.photo.active && __park.game.cameraHeld === 'photo' && document.body.classList.contains('clean')"), `${tag}/${m}: entered, camera held, interface hidden`);
-    const camA = await cam(); check(same(cam0, camA, 0.5), `${tag}/${m}: starts from the current view (${cam0.map((v) => v.toFixed(1))} -> ${camA.map((v) => v.toFixed(1))})`);
+    const camA = await cam(); check(same(cam0.slice(0, 3), camA.slice(0, 3), 0.5), `${tag}/${m}: starts from the current view (${cam0.map((v) => v.toFixed(1))} -> ${camA.map((v) => v.toFixed(1))})`);
     await shot(m + '-1-enter');
     // move and roll
     if (mobile) {
@@ -77,6 +78,11 @@ async function run(mobile, quality) {
     const hasPass = await ev('!!__park.game.modules.photo.pass'); check(hasPass, `${tag}/${m}: blur pass present with aperture > 0`);
     await shot(m + '-2-blur');
     await ev("document.querySelector('[data-tab=look]').click()"); await ev("document.querySelector('[data-look=warm]').click()"); await ev("(()=>{const r=document.querySelector('#ph-vig'); r.value=60; r.dispatchEvent(new Event('input'))})()"); await wait(800);
+    if (m === 'wick') {
+      const vis = await ev("!document.querySelector('#ph-pose').hidden"); check(vis, `${tag}/${m}: Pose button offered for Wick`);
+      a0 = await ev('String(__park.platformer.animator.update).length'); await ev("document.querySelector('#ph-pose').click()"); await ev("document.querySelector('#ph-pose').click()"); await wait(1200);
+      const a1 = await ev('String(__park.platformer.animator.update).length'); check(a0 !== a1, `${tag}/${m}: Pose swaps the animation`); await shot(m + '-3b-pose');
+    } else { const hid = await ev("document.querySelector('#ph-pose').hidden"); check(hid, `${tag}/${m}: no Pose button without Wick`); }
     await shot(m + '-3-look');
     await ev("document.querySelector('[data-asp=\"4:5\"]').click()");
     // shoot
@@ -89,10 +95,12 @@ async function run(mobile, quality) {
     await shot(m + '-4-saved');
     // leave and compare
     await ev("(()=>{const r=document.querySelector('#ph-blur'); r.value=0; r.dispatchEvent(new Event('input'))})()"); await wait(500);
+    if (m === 'wick') await ev("document.querySelector('[data-look=natural]').click()");
     if (m === 'tour' && !mobile) await page.keyboard.press('Escape'); else if (m === 'orbit') await page.keyboard.press('KeyO'); else await ev("document.querySelector('#ph-done').click()");
     await wait(1200);
     check(await ev("!__park.game.modules.photo.active && !__park.game.cameraHeld && !document.body.classList.contains('photo-on') && document.body.classList.contains('clean') === " + clean0), `${tag}/${m}: left, interface restored`);
     check((await ev('__park.mode')) === mode0, `${tag}/${m}: same mode`);
+    check(m !== 'wick' || (await ev('String(__park.platformer.animator.update).length')) === a0, `${tag}/${m}: Wick's animation restored`);
     check(!(await ev('!!__park.Q.photo')) && !(await ev('!!__park.game.modules.photo.pass')), `${tag}/${m}: pass gone`);
     if (m === 'wick') { const w1 = await ev('(()=>{const v=__park.platformer.view.pos;return [v.x,v.y,v.z]})()'); check(same(wick0, w1, 0.3), `${tag}/${m}: Wick still where they were`);
       await ev('__park.platformer.test.input = () => ({ mx: 0, my: 1, a: false, b: false, z: false })'); await wait(1500); const w2 = await ev('(()=>{const v=__park.platformer.view.pos;return [v.x,v.y,v.z]})()'); await ev('__park.platformer.test.input = null');
