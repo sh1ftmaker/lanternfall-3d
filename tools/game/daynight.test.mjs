@@ -93,6 +93,7 @@ async function nightShots(hash) {
   check(q.length === 3, 'quality tiers clicked: ' + q.join(','));
   for (const tier of ['Fast', 'HD', 'Cinematic']) { await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='${tier}').click()`); await wait(2600); await shot(page, `${OUT}/tier_${tier}.jpg`); }
   // context loss at dusk: the time of day survives
+  await ev('__park.game.modules.clock && (__park.game.modules.clock.hold = true)');   // the clock runs on its own: hold it, or the time moves while the context is away
   const before = await ev('__park.game.modules.daynight.state.phase + "|" + __park.game.modules.daynight.time');
   const lost = await ev(`(async()=>{const gl=__park.renderer.getContext();const e=gl.getExtension('WEBGL_lose_context');e.loseContext();await new Promise(r=>setTimeout(r,600));e.restoreContext();await new Promise(r=>setTimeout(r,3500));return gl.isContextLost()?'lost':'restored'})()`);
   const after = await ev('__park.game.modules.daynight.state.phase + "|" + __park.game.modules.daynight.time');
