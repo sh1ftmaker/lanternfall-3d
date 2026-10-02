@@ -530,10 +530,15 @@ async function load() {
       // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
-        guests = createGuests({ THREE, scene, crowd: null, uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
+        guests = createGuests({ THREE, scene, crowd: null, standIn: HASH.has('guests-standin'), uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
         if (PREFS.guests === false) guests.setVisible(false);
-        // '#crowd': the real simulation (fx/guests/sim.js) instead of the renderer's stand-in walkers
-        if (HASH.has('crowd')) import('./fx/guests/sim.js').then(async (S) => { const r = await fetch(DATA + 'guests.json' + dataTag).catch(() => null); const pois = r && r.ok ? await r.json() : null; guests.setCrowd(S.createCrowd({ nav, manifest, pois, count: mobile ? 350 : 1300, seed: 1, reduceMotion }), { drive: true }); }).catch((e) => console.warn('guests: no simulation', e));
+        // the crowd simulation (fx/guests/sim.js, in a Worker) drives the guests; '#guests-standin' keeps the renderer's
+        // built-in random walkers instead, '#guests=N' sets the crowd size
+        if (!HASH.has('guests-standin')) import('./fx/guests/sim.js').then(async (S) => {
+          const r = await fetch(DATA + 'guests.json' + dataTag).catch(() => null); const pois = r && r.ok ? await r.json().catch(() => null) : null;
+          const want = [...HASH].map((h) => /^guests=(\d+)$/.exec(h)).find(Boolean);
+          guests.setCrowd(S.createCrowd({ nav, manifest, pois, count: want ? +want[1] : (mobile ? 450 : 1600), seed: 1, reduceMotion, fetchBin }), { drive: true });
+        }).catch((e) => { console.warn('guests: no simulation, using the stand-in crowd', e); guests.allowStandIn(); });
       }
       ready = true; tourClock = 0; perf.n = -600; moonShadow();
       if (mode === 'orbit') { controls.target.set(0, 8, 0); controls.enabled = true; setCaption(places[0]); }

@@ -493,7 +493,7 @@ export function createGuests(opts) {
   function ensureCrowd() {
     if (crowd) return true;
     const nav = opts.nav && (typeof opts.nav === 'function' ? opts.nav() : opts.nav);
-    if (!nav) return false;
+    if (!nav || opts.standIn === false) return false;       // standIn: false = wait for setCrowd() (the real simulation)
     crowd = createStandInCrowd({ nav, count: Math.min(cfg.count, MAXG), reduceMotion: st.reduceMotion, places: opts.places || STANDIN_PLACES, avenue: /guests-avenue/.test(hash) });
     ownCrowd = true; stats.standIn = true;
     return true;
@@ -610,6 +610,7 @@ export function createGuests(opts) {
     out.frames = fr.length; return out;
   }
   return { update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
+    allowStandIn() { opts.standIn = true; },
     get crowd() { return crowd; }, setCrowd(c, o = {}) { crowd = c; ownCrowd = !!o.drive; baseCount = -1; if (st.density < 1) setDensity(st.density); stats.standIn = false; seedOf.fill(-1); cur.fill(255); if (c && c.setReduceMotion) c.setReduceMotion(st.reduceMotion); },
     get visible() { return st.visible; } };
 }

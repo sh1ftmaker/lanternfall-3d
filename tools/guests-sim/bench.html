@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>Guests sim bench</title>
+<body style="background:#111;color:#ddd;font:14px monospace"><pre id="out">running…</pre>
+<script type="module">
+// Crowd simulation benchmark without the renderer: decodes the walk grid, prepares synchronously, times update().
+// Open /tools/guests-sim/bench.html?n=1300&x=104.5&y=0&mode=walk
+import { createCrowd } from '../../fx/guests/sim.js';
+const q = new URLSearchParams(location.search), n = +(q.get('n') || 1300), fx = +(q.get('x') ?? 104.5), fy = +(q.get('y') ?? 0), mode = q.get('mode') || 'walk';
+const out = document.getElementById('out');
+const manifest = await (await fetch('../../data/manifest.json')).json();
+let u8 = new Uint8Array(await (await fetch('../../data/nav.bin')).arrayBuffer());
+if (u8[0] === 0x1f) u8 = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+const N = manifest.nav, W = N.w, H = N.h, lv = [];
+for (let l = 0; l < 2; l++) { const a = new Uint16Array(W * H), lo = l * 2 * W * H, hi = lo + W * H; for (let j = 0; j < H; j++) { let acc = 0; for (let i = 0; i < W; i++) { const k = j * W + i; acc = (acc + (u8[lo + k] | (u8[hi + k] << 8))) & 0xFFFF; a[k] = acc; } } lv.push(a); }
+let pois = null; try { const r = await fetch('../../data/guests.json'); if (r.ok) pois = await r.json(); } catch (e) {}
+const t0 = performance.now();
+const useWorker = q.get('worker') === '1';
+const crowd = createCrowd({ nav: { ...N, A: lv[0], B: lv[1] }, manifest, pois, count: n, seed: 1, sync: !useWorker, manualLocal: !useWorker, max: Math.max(2200, n) });
+if (useWorker) await new Promise((r) => { const w = () => crowd.ready ? r() : setTimeout(w, 50); w(); });
+const prep = performance.now() - t0;
+const focus = { x: fx, y: fy, z: 1.7, mode };
+if (useWorker) { for (let f = 0; f < 3600; f++) { crowd.update(1 / 60, f / 60, focus); if (f % 60 === 0) await new Promise((r) => setTimeout(r, 5)); } }
+else for (let f = 0; f < 3600; f++) { crowd.update(1 / 60, f / 60, focus); crowd.debug.pumpLocal(4); }
+const ms = [];
+const T0 = performance.now();
+for (let f = 0; f < 3600; f++) { const t = performance.now(); crowd.update(1 / 60, f / 60, focus); ms.push(performance.now() - t); crowd.debug.pumpLocal(4); }
+let tot = 0; for (const m of ms) tot += m; ms.sort((a, b) => a - b);
+const res = { n, prep: Math.round(prep), mean: (tot / ms.length).toFixed(3), p50: ms[1800].toFixed(3), p99: ms[3564].toFixed(3), max: ms[3599].toFixed(3) };
+out.textContent = JSON.stringify(res); window.__bench = res;
+</script>
