@@ -55,7 +55,7 @@ export function fxUpdate(Q, camera, ctx) {
 export function fxDegrade(Q, step) {
   if (fx.motes) fx.motes.userData.setScale(step >= 5 ? 0 : step >= 4 ? 0.35 : step >= 2 ? 0.6 : 1);
   if (fx.mist) fx.mist.visible = step < 3 && Q.fx.mist;
-  if (fx.beams && step >= 5) fx.beams.visible = false;
+  if (fx.beams) fx.beams.visible = step < 5 && Q.fx.beams;
 }
 
 // called once all park parts are loaded
