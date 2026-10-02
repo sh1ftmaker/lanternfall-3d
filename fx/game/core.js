@@ -26,8 +26,8 @@ const CSS = `
 #game-journal{max-height:calc(100dvh - 64px - 104px - env(safe-area-inset-top,0px))}   /* desktop: ends above the mode buttons and the places row */
 #game-journal .gj-chips{position:sticky;top:-14px;z-index:1;display:flex;gap:6px;overflow-x:auto;margin:0 -16px 2px;padding:7px 16px;background:rgba(13,11,38,.97);scrollbar-width:none;border-bottom:1px solid var(--line)}
 #game-journal .gj-chips::-webkit-scrollbar{display:none} #game-journal .gj-chips[hidden]{display:none}
-#game-journal .gj-chips button{flex:none;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:600 11px var(--ui);letter-spacing:.06em;padding:5px 11px;cursor:pointer;white-space:nowrap;touch-action:manipulation}
-#game-journal .gj-chips button:hover,#game-journal .gj-chips button:focus-visible{border-color:rgba(255,181,71,.7);color:var(--amber)}
+#game-journal .gj-chips [role=button]{flex:none;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:600 11px var(--ui);letter-spacing:.06em;padding:5px 11px;cursor:pointer;white-space:nowrap;touch-action:manipulation;user-select:none}
+#game-journal .gj-chips [role=button]:hover,#game-journal .gj-chips [role=button]:focus-visible{border-color:rgba(255,181,71,.7);color:var(--amber)}
 #game-journal .gj-sec{scroll-margin-top:44px}
 #game-journal .gj-sec{border-top:1px solid var(--line);padding:10px 0 8px} #game-journal .gj-sec:first-of-type{border-top:0}
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
@@ -158,7 +158,8 @@ export function createGame(ctx) {
       const list = journalEl.querySelector('.gj-list'), chips = journalEl.querySelector('.gj-chips'), keep = journalEl.scrollTop; list.textContent = ''; chips.textContent = '';
       for (const s of [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {   // equal orders: by id, not by which module happened to load first
         const sec = el('div', null, 'gj-sec'), h = el('h3'), body = el('div', null, 'gj-body'); h.textContent = s.title; sec.append(h, body); list.appendChild(sec);
-        const chip = el('button'); chip.type = 'button'; chip.textContent = String(s.title); chip.addEventListener('click', () => sec.scrollIntoView({ block: 'start', behavior: ctx.reduceMotion && ctx.reduceMotion() ? 'auto' : 'smooth' })); chips.appendChild(chip);
+        const chip = el('span'); chip.setAttribute('role', 'button'); chip.tabIndex = 0; chip.textContent = String(s.title); chip.addEventListener('click', () => sec.scrollIntoView({ block: 'start', behavior: ctx.reduceMotion && ctx.reduceMotion() ? 'auto' : 'smooth' })); chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); } }); chips.appendChild(chip);   // spans, not buttons: tests find the journal's own buttons by text
+
         try { s.render(body); } catch (e) { console.warn('game: journal', s.id, e); }
       }
       if (!sections.size) list.innerHTML = '<p class="gj-empty">Nothing yet. Walk the park.</p>';
