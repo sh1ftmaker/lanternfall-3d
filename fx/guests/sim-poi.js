@@ -74,6 +74,14 @@ export function buildSites(N, manifest, poiData, rnd) {
     return null;
   };
   const stats = { data: 0, skipped: 0, byType: {} };
+  const stageOf = new Map();
+  // room to lean on a rail facing (fx, fy): elbows 0.3 m to either side and the shoulders 0.25 m ahead are clear
+  // (a balustrade post or a lamp pillar beside the spot would cut through the figure)
+  const leanRoom = (x, y, fx, fy) => {
+    const rx = fy, ry = -fx;
+    for (const [o, f] of [[0.32, 0], [-0.32, 0], [0.3, 0.22], [-0.3, 0.22], [0, 0.25]]) if (clearance(N, x + rx * o + fx * f, y + ry * o + fy * f) < 0.04) return false;
+    return true;
+  };
 
   // ── points of interest from data/guests.json ──
   const list = poiData ? (Array.isArray(poiData) ? poiData : poiData.pois || []) : [];
@@ -83,7 +91,15 @@ export function buildSites(N, manifest, poiData, rnd) {
     const fx = Math.cos(yaw), fy = Math.sin(yaw), rx = Math.sin(yaw), ry = -Math.cos(yaw);   // facing and right
     const land = p.land || landOf(p.x, p.y);
     let site = null;
-    if (type === 'bench' || type === 'table') {
+    if (type === 'table') {
+      // a ring of standing places round the table (radius r), facing its centre
+      site = newSite({ type, kind: 'look', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.min(4, cap), name: p.name || 'table' });
+      const r = +p.r > 0.4 ? Math.min(1.8, +p.r) : 0.9;
+      for (let k = 0; k < 8 && site.slots.length < site.cap; k++) {
+        const a = yaw + k * TAU / 8, sp = findStand(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0.25, 0.3); if (!sp) continue;
+        addSlot(site, sp[0], sp[1], ground(N, sp[0], sp[1]), Math.atan2(p.y - sp[1], p.x - sp[0]), sp[0], sp[1], k & 1 ? ANIM.look : ANIM.stand);
+      }
+    } else if (type === 'bench') {
       // seats along the bench (perpendicular to the facing) or round the table; approach = 0.5 m in front of the seat
       site = newSite({ type, kind: 'sit', x: p.x, y: p.y, z: p.z, yaw, land, cap, name: p.name });
       const pitch = type === 'bench' ? (+p.len > 0 ? +p.len / cap : 0.58) : 0;     // seat k at ((k + 0.5) / cap - 0.5) * len (guests-data FORMAT.md)
@@ -96,13 +112,16 @@ export function buildSites(N, manifest, poiData, rnd) {
         const cx = Math.cos(syaw), cy = Math.sin(syaw); let ap = null;
         for (let t = 0.35; t <= 1.3; t += 0.05) { const qx = sx + cx * t, qy = sy + cy * t; if (okStand(qx, qy, 0.27)) { ap = [qx + cx * 0.05, qy + cy * 0.05]; break; } }
         if (!ap) continue;
-        // seat height: the bench's own, else a chair's (0.45 m above the floor at the approach point)
-        const z = type === 'bench' && isFinite(p.z) ? p.z : (ground(N, ap[0], ap[1]) || 0) + 0.45;
+        // seat height: the bench's own, else a chair's (0.45 m above the floor at the approach point). Seats higher than
+        // 0.8 m above the approach (upper bleacher tiers) or lower than 0.3 m (Meridian's plaza slabs) are skipped.
+        const gA = ground(N, ap[0], ap[1]);
+        if (type === 'bench' && isFinite(p.z) && isFinite(gA) && (p.z - gA > 0.8 || p.z - gA < 0.3)) continue;
+        const z = type === 'bench' && isFinite(p.z) ? p.z : (isFinite(gA) ? gA : 0) + 0.45;
         addSlot(site, sx, sy, z, syaw, ap[0], ap[1], ANIM.sit);
       }
     } else if (type === 'stall' || type === 'queue') {
       // a spaced line behind the first customer (along `qyaw` for `qlen` m when given); it bends round obstacles
-      const qn = isFinite(p.qlen) ? 1 + Math.floor(+p.qlen / 0.85) : (cap > 1 ? cap : 5);
+      const qn = isFinite(p.qlen) ? 1 + Math.floor(+p.qlen / 0.75 + 0.01) : (cap > 1 ? cap : 5);
       site = newSite({ type, kind: 'queue', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(2, Math.min(7, Math.min(qn, cap > 1 ? cap : 7))), name: p.name });
       let x = p.x, y = p.y, a = isFinite(p.qyaw) ? +p.qyaw + Math.PI : yaw;
       const first = findStand(x, y, 0.8, 0.3); if (first) { x = first[0]; y = first[1]; }
@@ -110,7 +129,7 @@ export function buildSites(N, manifest, poiData, rnd) {
         if (i > 0) {
           let ok = false;
           for (const da of [0, 0.35, -0.35, 0.7, -0.7, 0.9, -0.9]) {
-            const b = a + da, nx = x - Math.cos(b) * 0.85, ny = y - Math.sin(b) * 0.85;
+            const b = a + da, nx = x - Math.cos(b) * 0.75, ny = y - Math.sin(b) * 0.75;
             // keep the line out of narrow lanes: each place needs 0.55 m all round (a lane of about 1.6 m stays passable)
             if (okStand(nx, ny, 0.55) && lineClear(N, x, y, nx, ny, 0.25)) { x = nx; y = ny; a = b; ok = true; break; }
           }
@@ -120,24 +139,26 @@ export function buildSites(N, manifest, poiData, rnd) {
         if (addSlot(site, x, y, isFinite(g) ? g : p.z || 0, i === 0 ? yaw : a, x, y, ANIM.stand) < 0) break;
       }
     } else if (type === 'stage') {
-      // audience: the spot and its neighbours, facing what is on stage (the data gives several spots per stage)
-      site = newSite({ type, kind: 'stage', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 3), name: p.name, dance: /dance/i.test(p.name || '') });
-      for (const [o, b] of [[0, 0], [0.85, -0.15], [-0.85, -0.15], [0.4, -1.0], [-0.45, -1.0]]) {
-        if (site.slots.length >= site.cap) break;
-        const sp = findStand(p.x + rx * o + fx * b + (rnd() - 0.5) * 0.2, p.y + ry * o + fy * b + (rnd() - 0.5) * 0.2, 0.3, 0.3); if (!sp) continue;
-        const syaw = Math.atan2(p.y + fy * 5 - sp[1], p.x + fx * 5 - sp[0]);
-        addSlot(site, sp[0], sp[1], ground(N, sp[0], sp[1]), syaw, sp[0], sp[1], ANIM.stand);
+      // audience: one POI per position (cap 1, or 2 side by side); all positions of a stage (same `tag`) form one
+      // site, so a party stands together
+      const key = p.tag || p.name || null;
+      site = key && stageOf.get(key);
+      if (!site) { site = newSite({ type, kind: 'stage', x: p.x, y: p.y, z: p.z, yaw, land, cap: 0, name: p.name, dance: /dance/i.test(p.name || '') }); if (key) stageOf.set(key, site); }
+      for (const o of cap > 1 ? [0.4, -0.4] : [0]) {
+        const sp = findStand(p.x + rx * o, p.y + ry * o, 0.3, 0.3); if (!sp) continue;
+        if (addSlot(site, sp[0], sp[1], ground(N, sp[0], sp[1]), yaw, sp[0], sp[1], ANIM.stand) >= 0) site.cap++;
       }
     } else {
       // view / photo / anything else: the spot plus neighbours to either side and a second row
       // a rail in front (blocked 0.7 m ahead): guests lean on it; on the lake shore that makes it part of the lake rail
-      const lean = clearance(N, p.x + fx * 0.7, p.y + fy * 0.7) < 0.1;
+      const lean = p.rail !== undefined ? !!p.rail : clearance(N, p.x + fx * 0.7, p.y + fy * 0.7) < 0.1;
       const kind = lean && distPoly(lake, p.x, p.y) < 8 ? 'rail' : 'look';
       site = newSite({ type, kind, x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 2) + (kind === 'rail' ? 1 : 0), name: p.name });
       const offs = [[0, 0], [0.8, 0], [-0.8, 0], [1.6, -0.3], [-1.6, -0.3], [0.4, -1.0], [-0.4, -1.0], [1.2, -1.1]];
       for (let i = 0, n = 0; i < offs.length && n < site.cap; i++) {
         const [o, b] = offs[i], sx = p.x + rx * o + fx * b, sy = p.y + ry * o + fy * b;
         const sp = findStand(sx, sy, 0.4, 0.28); if (!sp) continue;
+        if (lean && b === 0 && !leanRoom(sp[0], sp[1], fx, fy)) continue;
         const ap = lean ? (findStand(sp[0] - fx * 0.7, sp[1] - fy * 0.7, 0.5, 0.35) || sp) : sp;
         const g = ground(N, sp[0], sp[1]);
         if (addSlot(site, sp[0], sp[1], g, yaw, ap[0], ap[1], lean && b === 0 ? ANIM.lean : type === 'photo' ? ANIM.look : ANIM.stand) >= 0) n++;
@@ -178,6 +199,7 @@ export function buildSites(N, manifest, poiData, rnd) {
       if (clearance(N, ax, ay) < 0.35) { prev = -10; continue; }
       // in front: there must be a balustrade/edge within 0.6 m toward the water (otherwise it is a pier or an open edge)
       if (clearance(N, found[0] - nx * 0.6, found[1] - ny * 0.6) > 0.05) { prev = -10; continue; }
+      if (!leanRoom(found[0], found[1], -nx, -ny)) { prev = -10; continue; }
       if (!run || i - prev > 1 || run.slots.length >= 10) {
         run = newSite({ type: 'rail', kind: 'rail', x: found[0], y: found[1], z: found[2], yaw: Math.atan2(-ny, -nx), land: 'lake', cap: 10 });
         railSites.push(run);
@@ -243,7 +265,7 @@ export function buildSites(N, manifest, poiData, rnd) {
     gate.x = p[0]; gate.y = p[1]; gate.z = ground(N, p[0], p[1]) || 0.12;
     for (let k = -4; k <= 4; k++) { const q = findStand(p[0], p[1] + k * 2.0, 1.5, 0.6); if (q) addSlot(gate, q[0], q[1], ground(N, q[0], q[1]) || 0.12, Math.PI, q[0], q[1], ANIM.walk); }
   }
-  for (const s of sites) if (s.slots.length === 0) s.open = false;
+  for (const s of sites) { if (s.slots.length === 0) s.open = false; if (s.kind === 'stage') s.weight = 1.5 + Math.min(3, s.slots.length / 8); }
 
   // ── hubs: greedy clusters of open sites (radius HUB_R), each gets a global flow field ──
   const HUB_R = 40;

@@ -247,7 +247,10 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   let arriveT = 2;
   function gateTick(dt) {
     arriveT -= dt; if (arriveT > 0) return;
-    arriveT = params.arrivalEvery * (0.6 + 0.8 * rnd());
+    // the tour's overview flies high over the park just before the gate walk: more arrivals then, so the avenue has a
+    // stream of people walking in when the camera comes down to it (pops at the gate are invisible from up there)
+    const pre = focus.tour >= 0 && (focus.tour < 12 || focus.tour > 148);
+    arriveT = params.arrivalEvery * (pre ? 0.3 : 1) * (0.6 + 0.8 * rnd());
     const g = D.P.gate; if (focus.mode === 'walk' && Math.hypot(focus.x - g.x, focus.y - g.y) < 25) return;
     const size = partySize();
     if (crowd.active + size > crowd.want) {
@@ -368,7 +371,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const S = D.P.slots, site = D.P.sites[S.site[s]], a = S.anim[s];
     if (site.kind === 'rail') { const r = rnd(); return r < 0.62 ? ANIM.lean : r < 0.85 ? ANIM.look : r < 0.93 ? ANIM.stand : ANIM.wave; }
     if (site.kind === 'look') { if (LEAD[i] >= 0) return rnd() < 0.7 ? ANIM.stand : ANIM.look; return a === ANIM.lean ? ANIM.lean : rnd() < 0.65 ? ANIM.look : rnd() < 0.5 ? ANIM.stand : ANIM.wave; }
-    if (site.kind === 'stage') return rnd() < 0.12 ? ANIM.wave : ANIM.stand;
+    if (site.kind === 'stage') return rnd() < (site.dance ? 0.35 : 0.1) ? ANIM.wave : ANIM.stand;    // the dance floor sways (wave = sway there)
     if (site.kind === 'queue') return rnd() < 0.25 ? ANIM.look : ANIM.stand;
     return a;
   }
@@ -924,7 +927,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   // debug access for the overlay and the tests
   Object.defineProperty(debug, 'D', { get: () => D });
   Object.assign(debug, {
-    local, ST, arrays: { X, Y, Z, YAW, SPD, ANI, STT, SITE, SLOT, LEAD, GS, MODE, DSPD, DYAW },
+    local, ST, arrays: { X, Y, Z, YAW, SPD, ANI, STT, SITE, SLOT, LEAD, GS, MODE, DSPD, DYAW, GHOST, DFOC },
     focus,
     measure() {          // pairs closer than 0.35 m (walkers involved) and walkers inside blocked cells
       let pairs = 0, inside = 0;
