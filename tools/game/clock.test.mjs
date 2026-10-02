@@ -41,8 +41,10 @@ async function run(mobile) {
   res.events = {};
   const programme = [['gates', 1050], ['frostfair', 1140], ['stories', 1275], ['fall', 1380], ['close', 1420]];
   await ev('__park.game.modules.clock.hold=true');
+  await ev('window.__ph=[];__park.game.on("frame",()=>{const c=__park.game.modules.clock.closing;if(c&&__ph[__ph.length-1]!==c)__ph.push(c)})');
   for (const [id, T] of programme) {
     await ev(`__ev.length=0;__park.game.clock.set(${T})`); await wait(id === 'close' ? 700 : 300);
+    if (id === 'fall') { await wait(400); const tr = await ev('document.querySelector("#game-track")?.innerText || ""'); check(tag + ' tracker says the lanterns are in the air during the fall', /Lanterns in the air/.test(tr) && !/Closing time/.test(tr), tr); }
     const got = await ev('__ev.slice()'); res.events[id] = got;
     check(tag + ' event ' + id, got.includes(id), JSON.stringify(got));
     if (id === 'fall') check(tag + ' hush event with the fall', got.includes('hush'));
@@ -51,7 +53,17 @@ async function run(mobile) {
   }
   res.toasts = await ev('[...document.querySelectorAll(".game-toast")].map(e=>e.textContent)');
   check(tag + ' toasts shown', res.toasts && res.toasts.length > 0);
+  // closing time is a fade through dark, not a jump cut: out, hold (with the line), in, then the evening starts again
+  const phases = []; let line = '', maxOp = 0;   // (phases are also recorded every frame in the page: __ph)
+  for (let i = 0; i < 80; i++) {
+    const s = await ev('(()=>{const v=document.getElementById("ck-close"),c=__park.game.modules.clock.closing;return {ph:c||null,op:v?+v.style.opacity:0,tx:v?v.textContent:"",t:__park.game.clock.t,p:v?[...v.querySelectorAll("p")].map(p=>+p.style.opacity):[]}})()');
+    if (s) { maxOp = Math.max(maxOp, s.op); if (s.ph === 'hold' && s.p[1] > 0.9 && !line) { line = s.tx; await shot(page, `${tag}_closing_hold`); } if (!s.ph && s.t < 1100) break; }
+    await wait(300);
+  }
+  const ph = await ev('__ph.join()'); check(tag + ' closing fades out, holds, fades in', ph === 'out,hold,in', ph);
+  check(tag + ' closing goes fully dark and says the line', maxOp > 0.98 && /The park closes\.\s*A new evening begins\./.test(line), `${maxOp} ${line}`);
   const tAfter = await ev('__park.game.clock.t'); check(tag + ' clock wrapped to 17:30 after close', tAfter >= 1050 && tAfter < 1060, String(tAfter));
+  check(tag + ' lanterns gone at 17:30', (await ev('__park.game.modules.clock.lanterns()')) === 'none', String(await ev('__park.game.modules.clock.lanterns()')));
   // once per evening: jumping to the same event again without going back must not repeat it; going back must allow it
   await ev('__ev.length=0;__park.game.clock.set(1140)'); await wait(200); check(tag + ' frost fair again after going back', (await ev('__ev.slice()')).includes('frostfair'));
   // programme taps in the journal and the hold switch
@@ -89,6 +101,43 @@ async function run(mobile) {
   // tour keeps the fall
   await ev('__park.game.clock.set(1140)'); await ev("document.querySelector('#m-tour').click()"); await wait(1500);
   const tt = await ev('({t:__park.game.clock.t,run:__park.game.clock.running})'); check(tag + ' tour holds the clock in the fall', tt.t >= 1380 && tt.t < 1420 && !tt.run, JSON.stringify(tt));
+  // the evening is saved: a reload comes back to it once the visitor leaves the opening tour, unless the address sets a time
+  await ev("document.querySelector('#m-orbit').click()"); await wait(500); await ev('__park.game.modules.clock.hold=false;__park.game.clock.set(1230)'); await wait(2500);
+  await ev('__park.game.save.flush()');
+  const sv = await ev('__park.game.save.get("clock",{}).t'); check(tag + ' time saved', typeof sv === 'number' && sv > 1229 && sv < 1245, String(sv));
+  await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction('window.__park && window.__park.loaded && window.__park.game && window.__park.game.started && window.__park.game.modules.clock', { timeout: 240000 }); await wait(1500);
+  const r0 = await ev('__park.game.clock.t'); check(tag + ' reload opens in the tour at 23:00', r0 >= 1380 && r0 < 1385, String(r0));
+  await ev("document.querySelector('#m-orbit').click()"); await wait(1500);
+  const r1 = await ev('__park.game.clock.t'); check(tag + ' reload restores the evening on leaving the tour', r1 >= 1229 && r1 < 1260, String(r1));
+  await page.goto(URL0 + '#weather=clear&time=19:30'); await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction('window.__park && window.__park.loaded && window.__park.game && window.__park.game.started && window.__park.game.modules.clock', { timeout: 240000 }); await wait(1500);
+  const r2 = await ev('__park.game.clock.t'); check(tag + ' #time=19:30 wins over the saved time', r2 >= 1170 && r2 < 1175, String(r2));
+  await ev('__park.game.modules.clock.hold=true');
+  // the Night Market keepsake stands on the ground, not on a stall roof
+  { const [kx, ky] = await ev('__park.game.modules.clock.story.STORIES.find(s=>s.id==="market").at'); const gz = await ev(`__park.game.ground(${kx},${ky})`); check(tag + ' market keepsake on low ground', gz !== null && gz < 1, `${kx},${ky} z=${gz}`); }
+  // Wick's swing starts the story
+  await ev("document.querySelector('#m-walk').click();__park.game.clock.set(1290);__park.setMode('walk',{at:[31.5,-178.5],yaw:-1.0})"); await wait(4000);
+  if (!mobile) {
+    await ev("document.querySelector('#ck-card')?.remove()");
+    const wick = await ev('!!__park.game.player.wick'); check(tag + ' Wick is walking', wick);
+    await ev('__park.platformer.test.input = () => ({ mx: 0, my: 0, a: false, b: true, z: false })'); await wait(900);
+    await ev('__park.platformer.test.input = null'); await wait(600);
+    check(tag + ' a swing starts the story', !!(await ev('document.querySelector("#ck-card")')));
+    await ev('window.__park.game.modules.clock.story.closeCard()');
+  }
+  // the silent four minutes survive the music toggle
+  if (!mobile) {
+    await ev("document.querySelector('#btn-snd').click()"); await wait(6000);
+    const have = await ev('!!(__park.audio && __park.audio.debug.nodes)');
+    if (have) {
+      await ev('__park.game.clock.set(1380.2)'); await wait(6000);
+      const g1 = await ev('__park.audio.debug.nodes.music.gain.value');
+      await ev('__park.audio.setMusic(false)'); await wait(900); await ev('__park.audio.setMusic(true)'); await wait(2500);
+      const g2 = await ev('__park.audio.debug.nodes.music.gain.value');
+      check(tag + ' hush ducks the music', g1 < 0.2, String(g1)); check(tag + ' the hush survives toggling the music', g2 < 0.2, String(g2));
+      await ev('__park.audio.setAmbience(false)'); await wait(500); await ev('__park.audio.setAmbience(true)'); await wait(2500);
+      check(tag + ' the hush survives toggling the ambience', (await ev('__park.audio.debug.nodes.amb.gain.value')) < 0.3, String(await ev('__park.audio.debug.nodes.amb.gain.value')));
+    } else console.log('(no audio engine in this browser: hush toggle not checked)');
+  }
   // crowd bias
   await ev("document.querySelector('#m-orbit').click()"); await ev('__park.game.clock.set(1200)'); await wait(500);
   res.bias = await ev('JSON.stringify(__park.guests.crowd.params.bias)'); check(tag + ' bias to Frostmere at 20:00', /frostmere/.test(res.bias || ''), String(res.bias));

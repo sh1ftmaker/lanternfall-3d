@@ -10,7 +10,7 @@ export const STORIES = [
   { id: 'torii', title: 'The one who stayed', spot: 'the great torii', at: [35.6, -127.8],
     keep: { name: 'an old brass coin', color: [1.5, 1.0, 0.3] },
     text: ['Count the steps from the great torii to the shrine, going in. Count them again going out.', 'The numbers never agree. The lamplighters say the difference is one, and that the one is still here.', 'Whoever it was left a coin at the western pillar, on the lake side, so the way back would be paid for.'] },
-  { id: 'market', title: 'The stall without a keeper', spot: 'the Night Market square', at: [3.4, -186.2],
+  { id: 'market', title: 'The stall without a keeper', spot: 'the Night Market square', at: [4.0, -188.8],
     keep: { name: 'a paper lantern, still warm', color: [1.5, 0.8, 0.35] },
     text: ['At the far end of the Night Market there is a stall nobody has ever seen open.', 'Each night a single paper lantern is set out in the square in front of it, lit, with no one near.', 'Take it, if you like. It has been waiting for somebody to carry it home.'] },
 ];
@@ -52,7 +52,7 @@ export function createStory(game, { st }) {
     gr.addColorStop(0, 'rgba(255,190,100,.55)'); gr.addColorStop(0.55, 'rgba(255,150,60,.22)'); gr.addColorStop(1, 'rgba(255,120,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     ring = new THREE.Mesh(new THREE.CircleGeometry(2.6, 28), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2 }));
     ring.rotation.x = -Math.PI / 2; ring.position.copy(v3(sx, sy, sz + 0.04)); ring.visible = false; ring.renderOrder = 7; game.scene.add(ring);
-    game.interact({ id: 'clock-story', x: sx, y: sy, z: sz, r: 5, label: () => (heard.size >= STORIES.length ? 'Hear a story again' : 'Hear a story'), swing: false, show: () => present && !card && !game.cameraHeld, use: tell });
+    game.interact({ id: 'clock-story', x: sx, y: sy, z: sz, r: 5, label: () => (heard.size >= STORIES.length ? 'Hear a story again' : 'Hear a story'), swing: true, show: () => present && !card && !game.cameraHeld, use: tell });
   }
   const show = (on) => { if (!built) build(); group.visible = on; ring.visible = on; lant.sprite.visible = on; };
 
