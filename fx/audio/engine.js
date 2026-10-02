@@ -27,6 +27,7 @@ import * as S from './synth.js';
 import { makeZoner, reverbFor, groundType, makeDensity, smoothstep } from './space.js';
 
 const C = 343;                                   // speed of sound, m/s
+const FLIGHT = 1.5;                              // fx/fireworks.js: seconds from launch to burst
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const db = (g) => (g > 1e-6 ? 20 * Math.log10(g) : -120);
 const blend3 = (v) => [v[0], v[2], -v[1]];      // Blender (x, y, z-up) -> three (x, y-up, z)
@@ -93,7 +94,7 @@ export function createAudio(opts) {
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
   let solo = null, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
-  const shellSeen = new Float32Array(16).fill(-1e9); const splashSeen = new WeakSet();
+  const shellSeen = new Float64Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
   function build() {
@@ -475,7 +476,8 @@ export function createAudio(opts) {
         if (!fresh || !fw.visible || tb < time) continue;
         const pad = pads[i], burst = sh[i];
         const dl = pad.distanceTo(L.p) / C, db_ = tmp.set(burst.x, burst.y, burst.z).distanceTo(L.p) / C;
-        play('firework_launch', pad, { delay: dl, gain: 0.55 });
+        const late = time - (tb - FLIGHT);                     // frames can come late: the launch was this long ago
+        if (late < dl + 0.5) play('firework_launch', pad, { delay: dl - late, gain: 0.55 });
         play('firework_burst', tmp.clone(), { delay: (tb - time) + db_, gain: 0.9 });
       }
     }
