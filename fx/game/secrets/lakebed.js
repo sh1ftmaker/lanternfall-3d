@@ -50,7 +50,7 @@ export function init(S) {
   game.on('frame', ({ dt }) => {
     t += dt;
     const p = game.player, near = Math.hypot(p.x - x, p.y - y);
-    glow.set({ color: [0.07 + 0.02 * Math.sin(t * 1.3), 0.3 + 0.05 * Math.sin(t * 1.3), 0.34 + 0.05 * Math.sin(t * 1.3)] });
+    const k = Math.sin(t * 1.3); glow.sprite.material.color.setRGB(0.07 + 0.02 * k, 0.3 + 0.05 * k, 0.34 + 0.05 * k);     // (no per-frame objects)
     sm.uniforms.uK.value = game.reduceMotion ? 0.7 : 1; if (!game.uTime) sm.uniforms.uT.value = t;
     if (!S.isFound('lakebed') && p.mode === 'walk' && p.wick && p.z < SURF - 1.2 && near < FOUND_R && Math.abs(p.z + 1 - BED) < 4) S.found('lakebed');
   });

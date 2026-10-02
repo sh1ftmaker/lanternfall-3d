@@ -22,9 +22,12 @@ def _pan(x, p):
 # ======================================================================== periodic textures (L samples)
 def wind(L, seed, lo=60, hi=900, gust=.6, whistle=0.0, ch=2):
     """Wind: band-limited pink noise with slow periodic gusts; optional faint whistle band (snow, heights)."""
-    base = pnoise(L, seed, pink(lo, hi, 2), ch)
-    g = 1 + gust * slow_lfo(L, seed + 1, (1, 2, 3, 5, 7))
-    g2 = 1 + gust * slow_lfo(L, seed + 2, (2, 3, 4, 6))
+    # No rumble and no hard gusts: below ~180 Hz small speakers distort and the engine's limiter pumps, and gusts that
+    # doubled the level were heard as clipping. The gusts are half as deep and come and go more slowly.
+    lo = max(lo, 180); gust = gust * 0.45
+    base = pnoise(L, seed, pink(lo, max(hi, lo * 3), 2), ch)
+    g = 1 + gust * slow_lfo(L, seed + 1, (1, 2, 3))
+    g2 = 1 + gust * slow_lfo(L, seed + 2, (2, 3, 4))
     hi_band = pnoise(L, seed + 3, band(hi * .8, hi * 2.5, 2), ch) * .25
     x = base * g[:, None] + hi_band * (np.maximum(g2, 0) ** 2)[:, None]
     if whistle:

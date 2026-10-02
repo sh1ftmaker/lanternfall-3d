@@ -16,7 +16,7 @@ export function init(S) {
   const fig = new THREE.Mesh(buildFigure(THREE, SHADOW), fmat); fig.scale.set(1, 1, 0.22); fig.position.z = 0.02; fig.renderOrder = 6; grp.add(fig);
   const gmat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.62, 0.3), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 2.7), gmat); pane.position.set(0, 1.3, 0.0); pane.renderOrder = 5; grp.add(pane);
-  const eye = new THREE.Vector3(), dir = new THREE.Vector3(), tgt = new THREE.Vector3(); tgt.set(wx, WIN.z + 1.3, -wy);
+  const eye = new THREE.Vector3(), dir = new THREE.Vector3(), tgt = new THREE.Vector3(), win = new THREE.Vector3(wx, WIN.z + 1.3, -wy), ndc = new THREE.Vector3(); tgt.copy(win);
   let own = { next: 4 + Math.random() * 6, t: -1 }, look = 0, vis = 0;
   game.on('frame', ({ dt }) => {
     const w = game.weather, now = w && w.now, storm = w && w.state === 'storm' ? Math.min(1, Math.max(0, ((now ? now.storm : 1) - 0.4) * 2)) : 0;
@@ -33,7 +33,11 @@ export function init(S) {
     if (S.isFound('keep')) return;
     const p = game.player; if (p.mode !== 'walk' || vis < 0.8) { look = 0; return; }
     game.camera.getWorldDirection(dir); eye.copy(game.camera.position); tgt.set(wx, WIN.z + 1.3, -wy).sub(eye); const d = tgt.length();
-    if (d < RANGE && d > MIN && tgt.normalize().dot(dir) > AIM) look += dt; else look = Math.max(0, look - dt * 2);
+    // Wick's camera cannot tilt up 17 degrees of the window from anywhere in range (it looks down at him and the ground stops it
+    // going lower), so for him "looking at it" is: the window held on screen, near the middle across and below the top edge
+    let at = false;
+    if (d < RANGE && d > MIN) { if (p.wick) { ndc.copy(win).project(game.camera); at = ndc.z < 1 && Math.abs(ndc.x) < 0.3 && ndc.y > -0.6 && ndc.y < 0.95; } else at = tgt.normalize().dot(dir) > AIM; }
+    if (at) look += dt; else look = Math.max(0, look - dt * 2);
     if (look >= NEED) S.found('keep');
   });
   return { pos: [wx, wy, WIN.z], get visible() { return grp.visible; }, get look() { return look; } };

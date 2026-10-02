@@ -17,7 +17,7 @@ export function init(S) {
   const fig = new THREE.Mesh(geo, mat); fig.visible = false; fig.frustumCulled = false; fig.renderOrder = 6; game.scene.add(fig);
   const spots = []; let rail = null, button = null, cur = null, op = 0, offT = 0, viewT = 0, vanishing = false, ready = false;
   const fwd = new THREE.Vector3(), tmp = new THREE.Vector3();
-  const coat = () => S.state().coat || { seen: [], button: null };
+  const coat = () => { const c = S.state().coat; return c && typeof c === 'object' && Array.isArray(c.seen) ? c : { seen: [], button: (c && c.button) || null }; };
   const saveCoat = (c) => S.put({ coat: c });
 
   // fix the vantage points on the walk grid once the park is in (nearest cell with ground)
@@ -58,7 +58,7 @@ export function init(S) {
     const g = new THREE.CylinderGeometry(0.07, 0.07, 0.025, 14);
     const m = game.props.mesh(g, { x, y, z, color: [0.6, 0.02, 0.03], emissive: [0.9, 0.05, 0.06], lit: false });
     const glow = game.props.glow({ x, y, z: z + 0.05, color: [0.6, 0.04, 0.04], size: 0.6 });
-    const it = game.interact({ id: 'secrets-button', x, y, z, r: 2.2, label: 'Pick up the red button', use() { take(); } });
+    const it = game.interact({ id: 'secrets-button', x, y, z, r: 2.2, label: 'Pick up the red button', show: () => !game.cameraHeld, use() { take(); } });
     button = { m, glow, it, x, y, z };
   }
   function take() {
@@ -71,9 +71,10 @@ export function init(S) {
   game.on('frame', ({ dt }) => {
     if (!ready) { if (!tried && game.nav) { tried = true; try { setup(); } catch (e) { console.warn('secrets: redcoat setup', e); } } return; }
     if (api.force) { if (cur !== api.force) show(api.force); op = 1; mat.opacity = 1; return; }          // tests and screenshots
-    const p = game.player, on = p.mode === 'walk' && !game.cameraHeld;
+    const p = game.player, on = p.mode === 'walk';
     if (button) { button.glow.sprite.material.opacity = 0.7 + 0.3 * Math.sin(performance.now() / 700); }
     if (!on) { if (cur) hide(); return; }
+    if (game.cameraHeld) return;              // photo mode or a ride has the camera: hold still (vanishing here would pop out of the picture)
     game.camera.getWorldDirection(fwd); const fl = Math.hypot(fwd.x, fwd.z) || 1;
     const fx = fwd.x / fl, fy = -fwd.z / fl;                      // heading in the Blender frame
     if (!cur) {
