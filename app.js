@@ -338,7 +338,7 @@ function meshFrom(geometry, m) {
 
 const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
-let manifest, nav = null, trains = [], lanterns = null, forest = [], fxWater = null;
+let manifest, nav = null, trains = [], lanterns = null, forest = [], fxWater = null, guestsHook = null;   // guestsHook: guests-sim test hook
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -525,6 +525,8 @@ async function load() {
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
       if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
       if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
+      // ── guests-sim test hook (local testing only; '#guests-sim') ──
+      if (nav && HASH.has('guests-sim')) import('./fx/guests/sim-hook.js').then((m) => m.hookGuests({ THREE, scene, nav, manifest, mobile, reduceMotion, hash: HASH })).then((g) => { guestsHook = g; window.__park.guests = g; }).catch((e) => console.warn('guests-sim:', e));
       ready = true; tourClock = 0; perf.n = -600; moonShadow();
       if (mode === 'orbit') { controls.target.set(0, 8, 0); controls.enabled = true; setCaption(places[0]); }
       $('#veil').classList.add('done'); pill.hidden = false; showHint();
@@ -923,6 +925,7 @@ function frame() {
   if ((lodTick & 15) === 0) view.want = coveredBand();
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
+  if (guestsHook) guestsHook.update(dt, time, camera, mode, tourClock % tourLen);   // guests-sim test hook
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
