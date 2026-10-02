@@ -532,7 +532,7 @@ async function load() {
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
         const gWant = [...HASH].map((h) => /^guests=(\d+)$/.exec(h)).find(Boolean);
-        const gCount = gWant ? Math.min(+gWant[1], 4000) : (mobile ? 600 : 2400), gPool = Math.ceil(Math.max(gCount, 400) * 1.7);   // the simulation keeps spare pool entries
+        const gCount = gWant ? Math.min(+gWant[1], 4000) : 2400, gPool = Math.ceil(Math.max(gCount, 400) * 1.7);   // the simulation keeps spare pool entries
         guests = createGuests({ THREE, scene, crowd: null, standIn: HASH.has('guests-standin'), max: gPool, uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
         if (PREFS.guests === false) guests.setVisible(false);
         // the crowd simulation (fx/guests/sim.js, in a Worker) drives the guests; '#guests-standin' keeps the renderer's

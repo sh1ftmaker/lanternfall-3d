@@ -39,7 +39,7 @@ Choices are remembered in the browser. The page also lowers quality by itself if
 
 ## Guests
 
-About 2,400 guests (600 on phones) walk the park in ones, pairs and small groups. They stroll the promenades, queue
+About 2,400 guests walk the park in ones, pairs and small groups. They stroll the promenades, queue
 at stalls, sit on benches, take photos and line the lake rail to watch the lanterns. The figures are generated in
 code (`fx/guests/assets.js`), animated in the vertex shader and lit by where they stand; the crowd simulation
 (`fx/guests/sim.js`) runs in a Worker on the walk grid, using benches, stall fronts and viewpoints extracted from
