@@ -53,8 +53,75 @@ export const PARAMS = {
 const ST = { OFF: 0, GO: 1, SETTLE: 2, ACT: 3, UNSETTLE: 4, QUEUE: 5, FOLLOW: 6, PAUSE: 7, WAIT: 8 };
 const LAND_POP = { 'lantern-row': 1.35, meridian: 1.25, wanderers: 1.2, brinewatch: 1.1, frostmere: 1.0, rosewick: 0.95, guildhollow: 0.85, gate: 1.3, ring: 1, lake: 1 };
 
-export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, ground: groundGrid = null, fetchBin = null, sync = false, manualLocal = false, onReady = null } = {}) {
-  const CAP = Math.max(16, max || Math.ceil(Math.max(count, 400) * 1.7));
+export function createCrowd(opts = {}) {
+  const { nav, manifest, sync = false, mainThread = false } = opts;
+  // the simulation runs in a module Worker when the browser has one: the main thread only posts the focus and copies
+  // the state array back (one frame of latency). Without a Worker (or when it fails) it runs here.
+  if (!sync && !mainThread && nav && nav.A && manifest && typeof Worker !== 'undefined' && typeof window !== 'undefined') {
+    try { return remoteCrowd(opts); } catch (err) { /* fall through to the main thread */ }
+  }
+  return localCrowd(opts);
+}
+
+function capOf(count, max) { return Math.max(16, max || Math.ceil(Math.max(count, 400) * 1.7)); }
+function groundFetch(pois, fetchBin) {
+  if (!(pois && pois.ground && pois.ground.file && typeof fetchBin === 'function')) return null;
+  return Promise.resolve().then(() => fetchBin(pois.ground.file)).then((u8) => ({ w: pois.ground.w, h: pois.ground.h, classes: pois.ground.classes, data: u8 })).catch(() => null);
+}
+
+// ── the Worker side's proxy ──
+function remoteCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, ground = null, fetchBin = null, onReady = null }) {
+  const CAP = capOf(count, max);
+  const state = new Float32Array(CAP * 8);
+  for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
+  const debug = { remote: true, ready: false, error: null, times: {}, mainMs: 0, mainMean: 0, frameMean: 0, frameMax: 0, lodK: 1, thinkers: 0, counts: {}, steps: 0, dropped: 0 };
+  const crowd = { count: CAP, state, active: 0, want: Math.min(count, CAP), params: { ...PARAMS }, debug, ready: false };
+  let worker = new Worker(new URL('./sim-worker.js', import.meta.url), { type: 'module' });
+  let inFlight = 0, acc = 0, disposed = false, local = null;
+  const msg = { type: 'step', dt: 0, time: 0, want: 0, focus: { x: 0, y: 0, z: 0, mode: 'tour', tour: -1 } };
+  const fail = (why) => {                       // the Worker failed: carry on with a main-thread simulation
+    if (local || disposed) return;
+    debug.error = why; try { worker.terminate(); } catch (e) { /* gone */ } worker = null;
+    local = localCrowd({ nav, manifest, pois, count: crowd.want, seed, reduceMotion, max: CAP, ground, fetchBin, onReady });
+    crowd.state = local.state; crowd.debug.local = local.debug;
+  };
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === 'state') {
+      const t0 = now(); inFlight--;
+      if (m.buf.length === state.length) state.set(m.buf);
+      worker.postMessage({ type: 'buf', buf: m.buf }, [m.buf.buffer]);           // the buffer goes back for the next step
+      crowd.active = m.active; if (m.stats) Object.assign(debug, m.stats);
+      debug.mainMs += now() - t0;
+    } else if (m.type === 'ready') { crowd.ready = debug.ready = !!m.ready; debug.times = m.times; if (m.error) debug.error = m.error; if (onReady) onReady(crowd); }
+    else if (m.type === 'error') fail(m.error);
+  };
+  worker.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); fail((e && e.message) || 'worker failed'); };
+  const init = (g) => { if (!worker) return; worker.postMessage({ type: 'init', opts: { nav: { w: nav.w, h: nav.h, x0: nav.x0, y0: nav.y0, cell: nav.cell, A: nav.A }, manifest: { lake: manifest.lake, shore: manifest.shore, lands: manifest.lands, rail: manifest.rail }, pois, count: crowd.want, seed, reduceMotion, max: CAP, ground: g || ground } }); };
+  const gp = ground ? null : groundFetch(pois, fetchBin);
+  if (gp) gp.then(init); else init(null);
+  crowd.update = (dt, time, focus) => {
+    if (local) { local.want = crowd.want; local.update(dt, time, focus); crowd.active = local.active; crowd.ready = local.ready; return; }
+    if (!crowd.ready || !worker) return;
+    const t0 = now();
+    acc += dt > 0 ? dt : 0;
+    if (inFlight >= 2) { debug.dropped++; return; }               // the worker is behind: send the time with the next step
+    msg.dt = Math.min(acc, 0.1); acc = 0; msg.time = time; msg.want = crowd.want;
+    const f = msg.focus; if (focus) { f.x = +focus.x || 0; f.y = +focus.y || 0; f.z = +focus.z || 0; f.mode = focus.mode || 'tour'; f.tour = focus.tour !== undefined ? +focus.tour : -1; }
+    worker.postMessage(msg); inFlight++; debug.steps++;
+    const ms = now() - t0 + debug.mainMs; debug.mainMs = 0;
+    debug.mainMean += (ms - debug.mainMean) * 0.02;
+  };
+  crowd.setCount = (n) => { crowd.want = Math.max(0, Math.min(CAP, n | 0)); if (local) local.setCount(crowd.want); };
+  crowd.setParams = (o) => { Object.assign(crowd.params, o); if (local) Object.assign(local.params, o); else if (worker) worker.postMessage({ type: 'params', params: o }); };
+  crowd.setReduceMotion = (b) => { reduceMotion = !!b; if (local) local.setReduceMotion(b); else if (worker) worker.postMessage({ type: 'motion', on: reduceMotion }); };
+  crowd.dispose = () => { disposed = true; if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; } if (local) local.dispose(); };
+  return crowd;
+}
+
+// ── the simulation itself (main thread, Node, or inside the Worker) ──
+function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, ground: groundGrid = null, fetchBin = null, sync = false, manualLocal = false, onReady = null } = {}) {
+  const CAP = capOf(count, max);
   const state = new Float32Array(CAP * 8);
   for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
   const params = { ...PARAMS };
@@ -66,42 +133,18 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   let D = null, disposed = false;     // prepared data: {N, P, hubF}
   const local = new Map();            // site id -> local field (null while pending); at most LOCAL_MAX, least recently used go
   let LUSE = new Int32Array(1);       // frame a site's local field was last used
-  let worker = null, pendingLocal = [];
+  const pendingLocal = [];
   // every site object gets the same shape (fast, monomorphic property access in the per-frame code)
   const normSite = (o) => ({ id: o.id | 0, type: String(o.type), kind: String(o.kind), x: +o.x, y: +o.y, z: +o.z || 0, yaw: +o.yaw || 0, land: String(o.land || ''), cap: o.cap | 0,
     name: String(o.name || ''), hub: o.hub | 0, slots: Int32Array.from(o.slots), weight: +o.weight || 1, open: !!o.open, dance: !!o.dance, pop: LAND_POP[o.land] || 1 });
   const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; prep.P.sites = prep.P.sites.map(normSite); prep.P.gate = prep.P.sites[prep.P.gate.id]; D = prep; LUSE = new Int32Array(prep.P.sites.length); debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
 
-  // ── preparation: Worker when possible ──
-  // the surface-class grid (data/guestground.bin) when guests.json names one: given, or fetched with the app's fetchBin
-  let groundP = null;
-  if (!groundGrid && !sync && pois && pois.ground && pois.ground.file && typeof fetchBin === 'function') {
-    groundP = Promise.resolve().then(() => fetchBin(pois.ground.file)).then((u8) => ({ w: pois.ground.w, h: pois.ground.h, classes: pois.ground.classes, data: u8 })).catch(() => null);
-  }
-  const canWorker = !sync && typeof Worker !== 'undefined' && typeof window !== 'undefined';
+  // ── preparation: at once (Node, inside the Worker) or after the current frame (main thread) ──
+  const groundP = !groundGrid && !sync ? groundFetch(pois, fetchBin) : null;
   const start = () => {
-  if (canWorker) {
-    try {
-      worker = new Worker(new URL('./sim-worker.js', import.meta.url), { type: 'module' });
-      worker.onmessage = (e) => {
-        const m = e.data;
-        if (m.type === 'ready') startSim(m.prep);
-        else if (m.type === 'local') { if (local.has(m.site)) { local.set(m.site, m.f); trimLocal(); } }
-        else if (m.type === 'error') { debug.error = m.error; fallback(); }
-      };
-      worker.onerror = (e) => { debug.error = (e && e.message) || 'worker failed'; e.preventDefault && e.preventDefault(); fallback(); };
-      worker.postMessage({ type: 'prepare', nav: { w: nav.w, h: nav.h, x0: nav.x0, y0: nav.y0, cell: nav.cell, A: nav.A }, manifest: { lake: manifest.lake, shore: manifest.shore, lands: manifest.lands, rail: manifest.rail }, pois, seed, ground: groundGrid });
-    } catch (err) { worker = null; }
-  }
-  if (!worker) fallback();
-  };
-  function fallback() {
-    if (D) return;
-    if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; }
-    // main thread, after the current frame
-    const run = () => { try { startSim(prepare(nav, manifest, pois, seed, groundGrid)); } catch (err) { debug.error = String(err && err.stack || err); } };
+    const run = () => { if (disposed) return; try { startSim(prepare(nav, manifest, pois, seed, groundGrid)); } catch (err) { debug.error = String(err && err.stack || err); } };
     if (sync) run(); else setTimeout(run, 0);
-  }
+  };
   function trimLocal() {                // forget the least recently used local fields beyond LOCAL_MAX
     while (local.size > LOCAL_MAX) {
       let old = -1, ou = 2147483647; for (const [k, v] of local) if (v && LUSE[k] < ou) { ou = LUSE[k]; old = k; }
@@ -111,8 +154,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   function requestLocal(site) {
     if (local.has(site)) { LUSE[site] = frameNo; return; }
     local.set(site, null); LUSE[site] = frameNo;
-    if (worker) worker.postMessage({ type: 'local', site });
-    else pendingLocal.push(site);
+    pendingLocal.push(site);
   }
 
   // ── agents (struct of arrays) ──
@@ -923,7 +965,8 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   crowd.update = update;
   crowd.setCount = (n) => { crowd.want = Math.max(0, Math.min(CAP, n | 0)); };
   crowd.setReduceMotion = (b) => { reduceMotion = !!b; };
-  crowd.dispose = () => { disposed = true; if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; } };
+  crowd.dispose = () => { disposed = true; };
+  crowd.setParams = (o) => Object.assign(params, o);
   // debug access for the overlay and the tests
   Object.defineProperty(debug, 'D', { get: () => D });
   Object.assign(debug, {
