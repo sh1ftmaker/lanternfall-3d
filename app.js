@@ -18,6 +18,7 @@ import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
+import { createWeather } from './fx/weather/index.js';  // weather hook: Clear / Mist / Rain / Storm / Snow (fx/weather/)
 
 const DATA = 'data/';
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
@@ -875,7 +876,7 @@ settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQ
     { id: 'reduceMotion', label: 'Reduce motion', on: reduceMotion },
   ],
   onToggle(id, on) {
-    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (guests) guests.setReduceMotion(on); if (on) controls.autoRotate = false; return; }
+    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (guests) guests.setReduceMotion(on); weather.setReduceMotion(on); if (on) controls.autoRotate = false; return; }   // weather hook
     if (id === 'guests') { if (guests) guests.setVisible(on); return; }      // guests hook
     FX.fxSet(Q, id, on);
   } });
@@ -885,6 +886,9 @@ const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mo
   fx: () => FX.fxState(), getTour: () => (ready && mode === 'tour' ? tourClock % tourLen : -1), getWater: () => fxWater,
   getCrowd: () => (guests && guests.crowd && guests.crowd.state ? guests.crowd : null) });     // murmur follows the guests' local density
 /* ── end sound ── */
+// ── weather hook ── (fx/weather/): Clear is the untouched park; '#weather=rain' etc.; window.__park.weather
+const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTime, mobile, reduceMotion, FOG, DATA, fetchBin,
+  getPark: () => park, getWater: () => fxWater, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -901,7 +905,7 @@ function adapt(ms) {
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
-  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step);
+  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step); weather.degrade(perf.step);   // weather hook
   // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
   // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
   if (perf.step === 1) {
@@ -963,6 +967,7 @@ function frame() {
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
+  weather.update(dt, time);                                 // weather hook: before the lake (rain splats) and the render
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
@@ -971,7 +976,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { sound, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;
