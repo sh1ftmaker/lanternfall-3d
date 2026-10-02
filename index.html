@@ -143,6 +143,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 #btn-snd.nudge,#btn-snd.armed{border-color:rgba(255,181,71,.7);box-shadow:0 0 0 3px rgba(255,181,71,.16)}
 @media (prefers-reduced-motion:no-preference){ #btn-snd.nudge{animation:sndpulse 1.4s ease-in-out 3} @keyframes sndpulse{50%{box-shadow:0 0 0 7px rgba(255,181,71,.0),0 0 18px rgba(255,181,71,.45)}} }
 .snd-set{margin-top:12px}
+.wx-set{margin-top:12px} .wx-set .seg button{padding-inline:2px;font-size:12.5px}   /* weather hook */
 .snd-set .vol{display:flex;align-items:center;gap:12px;padding:6px 2px 8px;font:500 14px var(--ui)}
 .snd-set .vol span{flex:none}
 .snd-set input[type=range]{flex:1;min-width:0;accent-color:var(--amber);height:28px;cursor:pointer}
@@ -181,6 +182,8 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   <div class="seg" role="radiogroup" aria-labelledby="q-label"></div>
   <p class="seg-note"></p>
   <div class="toggles"></div>
+  <!-- weather hook: the Weather row (fx/weather/index.js fills it) -->
+  <div class="wx-set" id="wx-set" hidden><div class="seg-label" id="wx-label">Weather</div><div class="seg" role="radiogroup" aria-labelledby="wx-label"></div><p class="seg-note"></p></div>
   <!-- sound entries (fx/audio/index.js) -->
   <div class="snd-set">
     <div class="seg-label" id="snd-label">Sound</div>
