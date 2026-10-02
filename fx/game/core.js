@@ -200,8 +200,8 @@ export function createGame(ctx) {
      (tour, orbit, the walker, Wick) does not run. One holder at a time; taking it again replaces the holder ── */
   let driver = null;
   function takeCamera(fn, { name = '' } = {}) {
-    if (driver && driver.release) driver.release('replaced');
-    const d = { fn, name, release: null }; driver = d; emit('camera', { held: true, by: name });
+    if (driver) { const old = driver; driver = null; emit('camera', { held: false, by: old.name, why: 'replaced' }); }      // the old holder hears it lost the camera
+    const d = { fn, name }; driver = d; emit('camera', { held: true, by: name });
     return (why) => { if (driver === d) { driver = null; emit('camera', { held: false, by: name, why }); } };
   }
   function drive(dt) { if (!driver) return false; try { driver.fn(dt); } catch (e) { console.warn('game: camera', driver.name, e); driver = null; return false; } return true; }
