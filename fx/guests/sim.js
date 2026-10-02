@@ -321,6 +321,11 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
 
   // ── goals ──
   const cand = new Int32Array(64), candW = new Float32Array(64);
+  let biasRef = null, biasL = { site: [], walk: [] };
+  function biasLists(sites, B, want) {   // game hook: clock: open sites of the favoured lands, by what the guest is looking for
+    if (biasRef !== B) { biasRef = B; const ids = Object.keys(B.lands || {}); biasL = { site: ids.map((id) => sites.filter((x) => x.land === id && x.open && x.kind !== 'walk' && x.kind !== 'rail' && x.kind !== 'gate')).filter((l) => l.length), walk: ids.map((id) => sites.filter((x) => x.land === id && x.open && x.kind === 'walk')).filter((l) => l.length) }; }
+    return biasL[want];
+  }
   // a slow drift toward the lake. In the tour (a 158 s loop) the rail should be lined for the Spire shot (32-49 s):
   // walking there takes a minute or two, so guests start heading for the lake from ~90 s and those who arrive from
   // ~130 s stay long. Elsewhere a gentle 150 s swell.
@@ -357,18 +362,22 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
         const ii = gi + di, jj = gj + dj; if (ii < 0 || jj < 0 || ii >= SG.w || jj >= SG.h) continue;
         const l = SG.cells[jj * SG.w + ii]; for (let q = 0; q < l.length && nn < near.length; q++) near[nn++] = l[q];
       }
-      for (let t = 0; t < nn + 12 && n < 56; t++) {
+      // game hook: clock: a few more candidates from the lands the evening favours, so the pull reaches guests far away
+      const B = params.bias, bl = B && B.lands && (want === 'site' || want === 'walk') ? biasLists(sites, B, want) : null, extra = bl && bl.length ? 10 : 0;
+      for (let t = 0; t < nn + 12 + extra && n < (extra ? 62 : 56); t++) {
         let s;
         if (t < nn) { const r = t + ((rnd() * (nn - t)) | 0), id = near[r]; near[r] = near[t]; near[t] = id; s = sites[id]; }
-        else s = sites[(rnd() * sites.length) | 0];
+        else if (t < nn + 12) s = sites[(rnd() * sites.length) | 0];
+        else { const lst = bl[(rnd() * bl.length) | 0]; s = lst[(rnd() * lst.length) | 0]; }
         if (!s.open || s.id === avoidSite || s.kind === 'gate') continue;
         if (want === 'rail' ? s.kind !== 'rail' : want === 'walk' ? s.kind !== 'walk' : (s.kind === 'rail' || s.kind === 'walk')) continue;
         if (freeSlots(s, size) < 0) continue;
         const d = Math.hypot(s.x - X[L], s.y - Y[L]);
         if (d < minDist) continue;
-        let w = s.weight * s.pop * (Math.exp(-d / params.reach) + 0.05);
+        const kl = B && B.lands && B.lands[s.land] || 1;                                  // game hook: clock: a favoured land is reached from further away
+        let w = s.weight * s.pop * (Math.exp(-d / (params.reach * kl)) + 0.05) * kl;
         if (want === 'walk' && d < 25) w *= 0.1;
-        const B = params.bias; if (B) { if (B.lands && B.lands[s.land]) w *= B.lands[s.land]; if (B.pts) for (const q of B.pts) { const dq = Math.hypot(s.x - q.x, s.y - q.y); if (dq < q.r * 3) w *= 1 + (q.k - 1) * Math.exp(-dq / q.r); } }   // game hook: clock
+        if (B) { if (B.pts) for (const q of B.pts) { const dq = Math.hypot(s.x - q.x, s.y - q.y); if (dq < q.r * 3) w *= 1 + (q.k - 1) * Math.exp(-dq / q.r); } }   // game hook: clock
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
         cand[n] = s.id; candW[n] = w; tot += w; n++;
       }

@@ -23,7 +23,7 @@ const FALL_RATE = 40 / 330;
 
 const CSS = `
 .ck-list{display:flex;flex-direction:column;gap:2px;margin:2px 0 8px}
-.ck-row{appearance:none;display:grid;grid-template-columns:48px 1fr;gap:2px 8px;text-align:left;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--paper);font:500 13.5px/1.35 var(--ui);padding:6px 8px;cursor:pointer;width:100%}
+.ck-row{appearance:none;box-sizing:border-box;display:grid;grid-template-columns:48px 1fr;gap:2px 8px;text-align:left;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--paper);font:500 13.5px/1.35 var(--ui);padding:6px 8px;cursor:pointer;width:100%}
 .ck-row:hover{background:rgba(255,255,255,.06)} .ck-row[disabled]{cursor:default;opacity:.7}
 .ck-row i{font:600 12.5px var(--ui);font-style:normal;color:var(--amber);opacity:.85;grid-row:span 2;padding-top:1px}
 .ck-row small{font:400 12px/1.35 var(--ui);opacity:.65;grid-column:2}
@@ -89,8 +89,7 @@ export function init(game) {
 
   /* ── running ── */
   let lastMin = -1, lastCur = '', tour = game.player.mode === 'tour';
-  function applyRun() { clock.running = !st.hold && !tour && !game.cameraHeld; }
-  game.on('camera', applyRun);
+  function applyRun() { clock.running = !st.hold && !tour; }
   game.on('mode', ({ mode }) => {
     const was = tour; tour = mode === 'tour';
     if (tour && !was) { hush.stop();  if (!(clock.t === FALL || (clock.t >= HUSH_END && clock.t < END))) { wrapping = false; clock.set(FALL + 10); } }

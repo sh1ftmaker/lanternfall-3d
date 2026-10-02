@@ -15,8 +15,9 @@ export const STORIES = [
     text: ['At the far end of the Night Market there is a stall nobody has ever seen open.', 'Each night a single paper lantern is set out in the square in front of it, lit, with no one near.', 'Take it, if you like. It has been waiting for somebody to carry it home.'] },
 ];
 const CSS = `
-#ck-card{position:fixed;z-index:8;left:50%;top:max(200px,36%);transform:translateX(-50%);width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:16px 18px 14px;border-radius:16px;
-  background:rgba(13,11,38,.9);border:1px solid rgba(255,181,71,.6);color:var(--paper);font:400 15px/1.5 var(--ui);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
+#ck-card{position:fixed;z-index:8;left:0;right:0;margin:0 auto;top:max(200px,36%);width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:16px 18px 14px;border-radius:16px;
+  background:rgba(13,11,38,.9);border:1px solid rgba(255,181,71,.6);color:var(--paper);font:400 15px/1.5 var(--ui);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:ck-in .35s ease both}
+@keyframes ck-in{from{opacity:0}to{opacity:1}}
 #ck-card[hidden]{display:none} #ck-card h4{margin:0 0 8px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #ck-card p{margin:0 0 12px;font-family:var(--serif,Georgia,serif);font-size:16px;line-height:1.5} #ck-card .ck-nav{display:flex;justify-content:space-between;align-items:center;font:500 12px var(--ui);opacity:.9}
 #ck-card button{appearance:none;border:1px solid rgba(255,181,71,.7);border-radius:999px;background:transparent;color:var(--paper);font:600 13px var(--ui);padding:7px 16px;cursor:pointer}
