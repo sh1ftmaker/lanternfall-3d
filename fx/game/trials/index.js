@@ -75,7 +75,7 @@ export function init(game) {
     });
     posts.set(c.id, g);
   }
-  let lblT = 0;
+  let lblT = 0; const lv = new THREE.Vector3();
 
   /* ── what is drawn only during a race: two rings (next bright, the one after dim), a light column on the next, the ghost ── */
   function build() {
@@ -175,6 +175,12 @@ export function init(game) {
   }
   function onFrame({ dt }) {
     if (lblT -= dt, lblT < 0) { lblT = 0.5; for (const g of posts.values()) { const d = Math.hypot(g.c.post[0] - player.x, g.c.post[1] - player.y); g.label.visible = d < 60 && d > 7 && player.mode === 'walk'; } }
+    // a post's name must not sit over the logo, the tracker or the buttons in the screen's top corners: it fades out while its screen spot is there
+    for (const g of posts.values()) {
+      if (!g.label.visible) continue;
+      lv.copy(g.label.position).project(game.camera); const W = innerWidth, H = innerHeight, px = (lv.x * 0.5 + 0.5) * W, py = (0.5 - lv.y * 0.5) * H;
+      g.label.material.opacity = lv.z < 1 && ((px < 360 && py < 150) || (px > W - 260 && py < 90)) ? 0 : 1;
+    }
     if (!race) return;
     const r = race, c = r.c; dt = Math.min(dt, 0.1);
     if (r.phase === 'count') {
