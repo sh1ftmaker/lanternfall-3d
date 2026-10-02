@@ -216,7 +216,9 @@ export function init(game) {
     if (active && ev.target.type === 'range' && /^Arrow|^Page|^Home$|^End$/.test(ev.code)) { ev.stopPropagation(); return; }     // the slider keeps its own arrows
     if (!lightbox.hidden && ev.code === 'Escape') { lightbox.hidden = true; ev.stopPropagation(); return; }
     if (!active) return;
-    ev.stopPropagation();
+    // immediate: Wick's own capture listener on window would otherwise still see the key (Esc after leave() took Walk
+    // to Explore; Space and E were latched as a jump and a swing for when the camera came back)
+    ev.stopImmediatePropagation();
     if (ev.code === 'Escape' || ev.code === 'KeyO') { if (!ev.repeat) leave(); ev.preventDefault(); return; }
     if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target.tagName !== 'BUTTON') { if (!ev.repeat) shoot(); ev.preventDefault(); return; }
     if (/^(Key[WASDQE]|Arrow(Left|Right|Up|Down)|Shift(Left|Right))$/.test(ev.code)) { keys.add(ev.code); if (ev.code.startsWith('Arrow')) ev.preventDefault(); }
