@@ -34,7 +34,7 @@ export function createStory(game, { st }) {
 
   function build() {
     built = true;
-    const P = game.props, G = new THREE.Group(); G.rotation.y = Math.atan2(-(-176 - sy), -(26 - sx)) ;   // faces the benches (south-west of the stage)
+    const P = game.props, G = new THREE.Group(); G.rotation.y = Math.atan2(26 - sx, sy + 176);   // faces the audience at (26, -176), north-west of the stage (local +z is the front)
     G.position.copy(v3(sx, sy, sz)); G.visible = false; game.scene.add(G); group = G;
     const part = (geo, x, y, z, o) => { const m = P.mesh(geo, { x: sx, y: sy, z: sz, ...o }); game.scene.remove(m); m.position.set(x, y, z); G.add(m); return m; };
     part(new THREE.CylinderGeometry(0.2, 0.44, 1.25, 9), 0, 0.62, 0, { color: [0.14, 0.08, 0.2] });                       // robe

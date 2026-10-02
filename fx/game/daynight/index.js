@@ -53,7 +53,7 @@ export function init(game) {
 
   // ── applying it ──
   const U = DN, tmp = new THREE.Vector3(), fogAdd = [0, 0, 0];
-  let state = at(game.clock.t), tc = clampT(game.clock.t), lastKey = '', phase = state.phase, applied = false;
+  let state = at(game.clock.t), tc = clampT(game.clock.t), lastTc = NaN, lastCloud = NaN, phase = state.phase, applied = false;
   function clampT(t) { return t >= T_NIGHT || t < 600 ? T_NIGHT : Math.min(Math.max(t, 900), T_NIGHT); }
   let shadowDir = null, envT = -1e9, envDusk = false;
   const setV = (u, a) => u.value.set(a[0], a[1], a[2]);
@@ -120,9 +120,9 @@ export function init(game) {
   function frame(dt) {
     const target = clampT(game.clock.t);
     if (tc !== target) { const d = target - tc; tc = Math.abs(d) < 0.02 ? target : tc + d * (1 - Math.exp(-Math.min(dt, 0.25) / 0.5)); }
-    const w = wx(), cloud = w ? w.cloud : 0, key = tc + '|' + cloud;
-    if (key !== lastKey) {
-      lastKey = key; state = at(tc); state.t = game.clock.t;
+    const w = wx(), cloud = tc >= T_NIGHT ? 0 : w ? w.cloud : 0;     // the cloud deck only matters at dusk: at night a weather change costs nothing here
+    if (tc !== lastTc || cloud !== lastCloud) {
+      lastTc = tc; lastCloud = cloud; state = at(tc); state.t = game.clock.t;
       apply(state, cloud);
       if (state.phase !== phase) { phase = state.phase; game.emit('daynight:phase', { phase }); }
       dimThings(state.lamps);

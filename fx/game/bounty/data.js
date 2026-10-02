@@ -29,7 +29,7 @@ export const SPOTS = {
   busker: { land: 'rosewick', x: -14, y: 10 },             // Moonlit Promenade
   desk: { land: 'wanderers', x: 33, y: -12 },              // the Lost & Found counter (front, lake side), local (33, -8) is the kiosk
   shelf: { land: 'wanderers', x: 33, y: -6.2, z: 3.1 },    // the plank we add on the back wall
-  boatsAt: { land: 'brinewatch', x: -2, y: -84 },          // centre of the boats we float off the wharf
+  boatsAt: { land: 'brinewatch', x: -36, y: -106 },        // centre of the boats we float off the wharf: open water north of the galleon pier, world (79.8, 9.8)
 };
 
 // Eight stamp posts. `wick`: needs the lamplighter's moves (roof, stall roof) or a swim.
@@ -49,7 +49,7 @@ export const JOBS = [
   { id: 'balloon', title: "Pip's red balloon", short: 'Fetch the red balloon', text: "A child by the Pavilion of Wings lost a red balloon. It is snagged high above the shrine lane in Lantern Row. Bring it back." },
   { id: 'letter', title: 'A letter for the Signing Tables', short: 'Carry the letter to the Signing Tables', text: "Take this sealed letter to the Signing Tables in the Wanderers' Hall. Leave it on the tray." },
   { id: 'bell', title: 'Test your mettle', short: 'Ring the strength bell', text: 'The Guildhollow barker wants to hear the strength bell, at least once, tonight. Ring it.' },
-  { id: 'boats', title: 'Count the boats', short: 'Count the boats off the wharf', text: 'How many boats are moored off Brinewatch Wharf tonight? Go and count, then give the number here.' },
+  { id: 'boats', title: 'Count the boats', short: 'Count the boats off the wharf', text: 'How many little boats with a lantern on the mast are moored off Brinewatch Wharf tonight? Go and count, then give the number here.' },
   { id: 'bow', title: "The busker's bow", short: "Find the busker's bow", text: "The busker on the Moonlit Promenade in Rosewick lost her bow somewhere along Blossom Lane. Bring it back to her." },
   { id: 'drink', title: 'Hot cider, quick', short: 'Cider to the Frostmere gatekeeper', text: 'Take a hot cider from the Brine & Barrel to the gatekeeper at Snowbound Gate in Frostmere before it goes cold. You have three minutes.' },
   { id: 'candle', title: 'A candle for a wish', short: 'Light a candle at the Shrine of Wishes', text: 'Someone left a wish with no light under it. Light a candle at the Shrine of Wishes in Lantern Row.' },

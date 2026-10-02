@@ -1,6 +1,6 @@
 // The lamplighter before Wick: five scratched posts (land, index into LAMPS[land]) read in order, then the note.
 export const TRAIL = [
-  { n: 1, land: 'frostmere', k: 2, who: 'E.M. · the first', line: 'Lit this one in the cold. West from here, to the old guild stones.' },
+  { n: 1, land: 'frostmere', k: 2, who: 'E.M. · the first', line: 'Lit this one in the cold. South-west from here, to the old guild stones.' },
   { n: 2, land: 'guildhollow', k: 2, who: 'E.M. · the second', line: 'Iron holds the heat. Next, where the roses grow in the dark.' },
   { n: 3, land: 'rosewick', k: 7, who: 'E.M. · the third', line: 'Petals on the path. Go on to the lanes that keep their wishes.' },
   { n: 4, land: 'lantern-row', k: 3, who: 'E.M. · the fourth', line: 'Smoke and paper, all night. Follow the smell of tar and salt.' },

@@ -56,7 +56,7 @@ export function init(game) {
   const saved = () => game.save.get('photo', { shots: [], prefs });
   const st = { aperture: 0, focus: [0.5, 0.5], look: 'natural', vig: 0, crop: [0, 0, 1, 1] };   // read live by the post pass
   const cam = { p: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, fov: 52, minFov: MIN_FOV, maxFov: MAX_FOV, home: new THREE.Vector3(), floor: 0 };
-  let active = false, release = null, prev = null, wasClean = false, aspect = prefs.aspect, thirds = prefs.thirds, tab = 'frame';
+  let active = false, release = null, prev = null, wasClean = false, aspect = ASPECTS.some((a) => a[0] === prefs.aspect) ? prefs.aspect : 'free', thirds = prefs.thirds !== false, tab = 'frame';
   let lensTouched = false, setFov = 0, builtSig = '', passRef = null, want = false, noteT = 0, ringT = 0;
   const keys = new Set(), ptrs = new Map(); let pinch = 0, mid = null;
   const e = new THREE.Euler(0, 0, 0, 'YXZ'), fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmp = new THREE.Vector3();
@@ -216,7 +216,9 @@ export function init(game) {
     if (active && ev.target.type === 'range' && /^Arrow|^Page|^Home$|^End$/.test(ev.code)) { ev.stopPropagation(); return; }     // the slider keeps its own arrows
     if (!lightbox.hidden && ev.code === 'Escape') { lightbox.hidden = true; ev.stopPropagation(); return; }
     if (!active) return;
-    ev.stopPropagation();
+    // immediate: Wick's own capture listener on window would otherwise still see the key (Esc after leave() took Walk
+    // to Explore; Space and E were latched as a jump and a swing for when the camera came back)
+    ev.stopImmediatePropagation();
     if (ev.code === 'Escape' || ev.code === 'KeyO') { if (!ev.repeat) leave(); ev.preventDefault(); return; }
     if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target.tagName !== 'BUTTON') { if (!ev.repeat) shoot(); ev.preventDefault(); return; }
     if (/^(Key[WASDQE]|Arrow(Left|Right|Up|Down)|Shift(Left|Right))$/.test(ev.code)) { keys.add(ev.code); if (ev.code.startsWith('Arrow')) ev.preventDefault(); }
@@ -267,20 +269,20 @@ export function init(game) {
     const out = document.createElement('canvas'); out.width = sw; out.height = sh; out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
     const th = document.createElement('canvas'); th.width = 192; th.height = Math.max(1, Math.round(192 * sh / sw)); th.getContext('2d').drawImage(out, 0, 0, th.width, th.height);
     const thumb = th.toDataURL('image/jpeg', 0.72), place = placeName(), t = game.clock.fmt(), d = new Date();
-    const name = `lanternfall-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}.jpg`;
+    const name = `lanternfall-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}.jpg`;   // seconds: two pictures in a minute must not share a name
     out.toBlob((blob) => { if (blob) deliver(blob, name, { thumb, place, t, w: sw, h: sh }); }, 'image/jpeg', 0.92);
   }
   async function deliver(blob, name, m) {
     const shot = { img: m.thumb, place: m.place, t: m.t, w: m.w, h: m.h, at: Date.now() };
     game.save.update('photo', (s) => ({ ...s, shots: [shot, ...(s.shots || [])].slice(0, KEEP) }), { shots: [] });
     api.last = { blob, name, ...m }; game.emit('photo:taken', { place: m.place, t: m.t });
-    let shared = false;
+    let shared = false, cancelled = false;
     try {
       const f = new File([blob], name, { type: 'image/jpeg' });
       if (game.coarse && navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Lanternfall' }); shared = true; }
-    } catch (err) { shared = err && err.name === 'AbortError'; }
-    if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
-    note.innerHTML = `<img alt="" src="${m.thumb}"><span>${shared ? 'Shared' : 'Saved'} · ${m.place} · ${m.t}</span>`; note.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 10) + 'px';
+    } catch (err) { cancelled = !!err && err.name === 'AbortError'; }      // the visitor closed the share sheet: no download behind their back
+    if (!shared && !cancelled) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+    note.innerHTML = `<img alt="" src="${m.thumb}"><span>${shared ? 'Shared' : cancelled ? 'Not shared' : 'Saved'} · ${m.place} · ${m.t}</span>`; note.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 10) + 'px';
     note.classList.add('on'); clearTimeout(noteT); noteT = setTimeout(() => note.classList.remove('on'), 3200);
     game.journal.refresh();
   }
