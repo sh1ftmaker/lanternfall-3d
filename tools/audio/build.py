@@ -225,7 +225,7 @@ def _():
 
 @item('train_loop', 'emit')
 def _():
-    return sfx.train_loop(secs(6), 61)
+    return sfx.train_loop(secs(24), 61)
 
 
 @item('creak_loop', 'emit')

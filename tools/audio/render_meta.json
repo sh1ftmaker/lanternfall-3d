@@ -2037,7 +2037,7 @@
   "true_peak": -4.18
  },
  "train_loop": {
-  "bytes": 51504,
+  "bytes": 180893,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -2045,13 +2045,13 @@
   "group": null,
   "loop": [
    0.5,
-   6.5
+   24.5
   ],
   "lufs": -24.0,
-  "seconds": 6.0,
+  "seconds": 24.0,
   "sources": [],
-  "src_wrap": 0.078,
-  "true_peak": -9.73
+  "src_wrap": 0.03,
+  "true_peak": -9.39
  },
  "ui_click_1": {
   "bytes": 1613,
