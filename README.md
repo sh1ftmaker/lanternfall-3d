@@ -43,6 +43,8 @@ Add these after `#` in the address, separated by commas, then reload.
 | `fx=hd` | The Cinematic post chain: ambient occlusion, mip bloom, SMAA (same as the setting) |
 | `fx=ultra` | The above plus temporal anti-aliasing, tilt-shift on aerial tour shots and light streaks |
 | `fx=legacy` | The HD chain (bloom), whatever the saved setting |
+| `nodetail` | Turn off the procedural paving, plank, masonry and roof detail |
+| `noshadow` | Turn off moon shadows |
 | `aurora` | Aurora in the night sky |
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
@@ -50,8 +52,11 @@ Add these after `#` in the address, separated by commas, then reload.
 ## How it is built
 
 - The park was modelled procedurally in Blender (Python scripts, headless) and lit in Cycles.
-- Lighting, colour and emission are baked into vertex colours, so the page needs no real-time lights.
-- Geometry is quantised, delta-filtered and gzip-compressed into `data/*.bin` (about 34 MB in total).
+- Lantern, lamp and window light is baked into vertex colours, so the page needs no real-time lights for them.
+  Moonlight is the one live light: it is added per pixel with a shadow map rendered once from the moon.
+- Surfaces get crisp detail from a small procedural shader (`fx/surface.js`): each vertex carries a surface class
+  (paving, wood, masonry, roof, organic) that selects setts, planks, block courses or tile rows.
+- Geometry is quantised, delta-filtered and gzip-compressed into `data/*.bin` (about 33 MB in total).
   The browser unpacks it with `DecompressionStream`; there is no WebAssembly and no build step.
 - Rendering uses [three.js](https://threejs.org/) from a CDN. The viewer is `app.js` plus small modules in `fx/`:
   the lake (planar mirror and ripple simulation), the lantern fall, particles, depth-precision handling, the post

@@ -13,7 +13,7 @@ import { buildFx, fxActive } from './fx/post.js';
 import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
-import { createLit, litFromHash } from './fx/lit.js';
+import { createSurface } from './fx/surface.js';
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 
@@ -158,33 +158,16 @@ const glCtx = watchContext(renderer, { onRestored() {
   prof.restore();
   if (fxWater) fxWater.contextRestored();
   if (fxOut && fxOut.passes.taa) fxOut.passes.taa.first = true;
+  if (ready) moonShadow();                                            // the moon's shadow map (fx/surface.js) is rendered once
 } });
 
 /* ───────────────────────── materials ───────────────────────── */
 const uTime = { value: 0 };
-const bakedMat = new THREE.ShaderMaterial({
-  uniforms: { uRange: { value: 32 }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uZBias: { value: new THREE.Vector3(0.0018, 0.0018, 0.0005) } },
-  vertexShader: /* glsl */`
-    attribute vec4 aCol; attribute float aLay; uniform float uRange; uniform vec3 uZBias; varying vec3 vCol; varying float vDist;
-    void main(){ vCol = aCol.rgb * (aCol.a * uRange);
-      vec4 mv = modelViewMatrix * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv;
-      // z-fight tie-break for exactly coplanar floors (the data has some, see fx/depth.js): depth is taken as if the vertex
-      // sat up to 1.8 mm higher (brighter faces) or 1.8 mm lower (pitch-black faces: under-layers that never saw light).
-      // Less than the 1.95 mm position quantum, so it never reorders layers that the data keeps apart.
-      float lum = dot(vCol, vec3(0.3, 0.5, 0.2)), dy = (vCol == vec3(0.0) ? -uZBias.x : uZBias.y * lum / (lum + 0.05)) + aLay * uZBias.z;
-      vec4 cz = projectionMatrix * (mv + viewMatrix[1] * dy);
-      if (cz.w * gl_Position.w > 1e-6) gl_Position.z = cz.z * (gl_Position.w / cz.w);
-    }`,
-  fragmentShader: /* glsl */`
-    uniform vec3 uFog; uniform float uFogD; varying vec3 vCol; varying float vDist;
-    void main(){ float f = 1.0 - exp(-vDist * vDist * uFogD);
-      gl_FragColor = vec4(mix(vCol, uFog, f), 1.0);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-  side: THREE.DoubleSide,
-});
-bakedMat.defaultAttributeValues.aLay = [0];     // optional per-vertex layer rank (manifest mesh 'lay', see fx/depth.js)
+// Surface material (fx/surface.js): baked light + per-pixel procedural detail + shadow-mapped moonlight.
+// '#nodetail' and '#noshadow' turn those parts off.
+const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile });
+const bakedMat = surface.material;
+if (/nodetail/.test(location.hash)) surface.uniforms.uDetail.value = 0;
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
   vertexShader: /* glsl */`
@@ -201,7 +184,6 @@ const glassMat = new THREE.ShaderMaterial({
   side: THREE.DoubleSide, transparent: true, depthWrite: false,
 });
 
-const lit = createLit({ renderer, scene, bakedMat, DATA, fetchBin, Q, moon: MOON }); Q.lit = lit.state;     // real-time lighting mode (#lit), off by default
 
 /* ───────────────────────── sky ───────────────────────── */
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.ShaderMaterial({
@@ -302,6 +284,12 @@ function decodeMesh(u8, off, m) {
     for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; col[i * 4 + c] = acc; }
   }
   off += nv * 4;
+  let aux = null;
+  if (m.aux) {                                         // albedo rgb (sqrt-encoded) + surface class, for fx/surface.js
+    aux = new Uint8Array(nv * 4);
+    for (let c = 0; c < 4; c++) { const o = off + c * nv; let acc = 0; for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; aux[i * 4 + c] = acc; } }
+    off += nv * 4;
+  }
   const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
   let mx = -1; const p1 = off + ni, p2 = p1 + ni, p3 = p2 + ni;
   for (let i = 0; i < ni; i++) {
@@ -317,6 +305,7 @@ function decodeMesh(u8, off, m) {
   }
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
   g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
+  if (aux) g.setAttribute('aAux', new THREE.BufferAttribute(aux, 4, true));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   const o = m.origin, s = m.step, bb = m.bbox;
   g.boundingBox = new THREE.Box3(new THREE.Vector3((bb[0] - o[0]) / s, (bb[1] - o[1]) / s, (bb[2] - o[2]) / s), new THREE.Vector3((bb[3] - o[0]) / s, (bb[4] - o[1]) / s, (bb[5] - o[2]) / s));
@@ -471,12 +460,23 @@ function decodeNav(u8, n) {
   nav = { ...n, A: out[0], B: out[1] };
 }
 
+// moon shadows: one depth map of everything opaque, rendered from the moon ('#noshadow' skips it)
+function moonShadow() {
+  if (!surface.uniforms.uMoonOn.value || /noshadow/.test(location.hash)) return;
+  const casters = park.children.filter((o) => o.isMesh && o.material !== glassMat && o.geometry.attributes.aCol);
+  for (const g of trains) for (const o of g.children) if (o.isMesh && o.material !== glassMat) casters.push(o);
+  surface.buildShadow(renderer, scene, casters);
+}
 async function load() {
   manifest = await (await fetch(DATA + 'manifest.json')).json();
   const ex = manifest.extras;
   totalBytes = manifest.parts.reduce((s, p) => s + p.bytes, 0) + ex.file.bytes + (ex.train_file ? ex.train_file.bytes : 0) + (manifest.nav ? manifest.nav.bytes : 0);
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
   bakedMat.uniforms.uRange.value = manifest.range;
+  if (manifest.moon && !manifest.moon.baked) {         // moonlight is added per pixel (it is not in the baked colours)
+    surface.uniforms.uMoon.value.fromArray(manifest.moon.dir).normalize(); surface.uniforms.uMoonCol.value.fromArray(manifest.moon.col);
+    surface.uniforms.uMoonOn.value = 1;
+  }
   initRail(manifest.rail.a, manifest.rail.b); depth.addRail(manifest.rail.a, manifest.rail.b, manifest.rail.top);
   fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
@@ -497,7 +497,7 @@ async function load() {
     const u8 = await fetchBin(part.file); let off = 0;
     for (const m of part.meshes) {
       const d = decodeMesh(u8, off, m); off = d.next;
-      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); lit.register(mesh, m, part.id);
+      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); 
       const cx = (m.bbox[0] + m.bbox[3]) / 2, cz = (m.bbox[2] + m.bbox[5]) / 2;
       if (Math.hypot(cx, cz) > 420) farMeshes.push(mesh);
       if (part.id !== 'core') landMeshes.push(mesh);
@@ -507,15 +507,13 @@ async function load() {
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
       if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
       if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
-      ready = true; tourClock = 0; perf.n = -600;
+      ready = true; tourClock = 0; perf.n = -600; moonShadow();
       if (mode === 'orbit') { controls.target.set(0, 8, 0); controls.enabled = true; setCaption(places[0]); }
       $('#veil').classList.add('done'); pill.hidden = false; showHint();
     }
   }
   FX.fxPark(Q, { park, uTime });
-  bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0;
-  const lh = litFromHash(location.hash); if (lh) await lit.set(lh).catch((e) => console.warn('lit:', e.message));
-  addEventListener('hashchange', () => { const o = litFromHash(location.hash); lit.set(o || { on: false }).catch(() => {}); });
+  bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0; moonShadow();
 }
 
 /* ───────────────────────── places + captions ───────────────────────── */
@@ -708,7 +706,6 @@ function walkCanStand(x, y, z) {
 const keys = new Set(); const stick = { id: -1, x: 0, y: 0, ox: 0, oy: 0 }; const look = { id: -1, x: 0, y: 0 };
 addEventListener('keydown', (e) => { if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return; keys.add(e.code); if (mode !== 'tour' && /Arrow|Space|Page/.test(e.code)) e.preventDefault(); });
 addEventListener('keyup', (e) => keys.delete(e.code));
-addEventListener('keydown', (e) => { if (e.code === 'KeyL' && loaded) lit.set({ on: !lit.state.on }).catch((x) => console.warn('lit:', x.message)); });   // toggle real-time lighting
 addEventListener('blur', () => keys.clear());
 // shortcuts: 1 / 2 / 3 modes, F full screen, Esc closes the settings sheet or leaves Walk for Explore
 addEventListener('keydown', (e) => {
@@ -916,7 +913,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, lit,
+window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;
