@@ -17,7 +17,7 @@ const CSS = `
   touch-action:manipulation;-webkit-user-select:none;user-select:none;max-width:calc(100vw - 32px)}
 #game-prompt[hidden]{display:none} #game-prompt kbd{font:600 11px var(--ui);border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:8px;opacity:.8}
 @media (pointer:coarse){ #game-prompt kbd{display:none} #game-prompt{bottom:calc(env(safe-area-inset-bottom,0px) + 330px)} }
-@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px)} }
+@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 #game-toasts{position:fixed;z-index:7;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(420px,calc(100vw - 32px))}
 .game-toast{padding:9px 16px;border-radius:14px;background:rgba(13,11,38,.8);border:1px solid var(--line);color:var(--paper);font:500 14px/1.35 var(--ui);text-align:center;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
