@@ -46,7 +46,7 @@ async function run(mobile, quality) {
     else { await page.keyboard.press('KeyO'); }
     await wait(900);
     check(await ev("__park.game.modules.photo.active && __park.game.cameraHeld === 'photo' && document.body.classList.contains('clean')"), `${tag}/${m}: entered, camera held, interface hidden`);
-    const camA = await cam(); check(same(cam0.slice(0, 3), camA.slice(0, 3), 0.5), `${tag}/${m}: starts from the current view (${cam0.map((v) => v.toFixed(1))} -> ${camA.map((v) => v.toFixed(1))})`);
+    const camA = await cam(); const home = await ev('__park.game.modules.photo.cam.home.toArray()'); check(same(camA.slice(0, 3), home, 0.05) && (m === 'tour' || same(cam0.slice(0, 3), camA.slice(0, 3), 0.5)), `${tag}/${m}: starts from the current view (${cam0.map((v) => v.toFixed(1))} -> ${camA.map((v) => v.toFixed(1))})`);
     await shot(m + '-1-enter');
     // move and roll
     if (mobile) {
