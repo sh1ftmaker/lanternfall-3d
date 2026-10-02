@@ -98,6 +98,8 @@ def write_json(meta, path):
 
     emitters = [
         em('monorail', 'train_loop', 'train', .9, 12, 220, doppler=True),
+        em('gate_lamplighter', 'lamplighter_1', [205.0, 0.0, 3.5], .5, 5, 45, loop=False, every=[6, 16],
+           files=files('lamplighter'), area={'r': 22}),
         em('carousel_organ', 'carousel_organ', 'carousel', .8, 12, 130),
         em('spire_bell', 'spire_bell_1', P['spire_bell'], 1.0, 60, 600, loop=False, schedule='quarter'),
         em('guild_anvil', 'anvil_1', P['guild_forge'], .7, 6, 70, loop=False, every=[2.5, 8], files=files('anvil')),
@@ -130,6 +132,7 @@ def write_json(meta, path):
            files=files('clappers')),
         em('lantern_taiko', 'taiko_loop', [55.0, -175.0, 3.0], .45, 20, 200),
         em('lantern_sizzle', 'sizzle_loop', P['lantern_stalls'], .5, 3, 25),
+        em('lantern_ghost_hush', 'ghost_hush', P['lantern_stage'], .5, 6, 30),
         em('lantern_chimes', 'chimes_loop', P['lantern_torii'], .45, 5, 40),
         em('rose_fountain', 'fountain_loop', P['rose_fountain'], .7, 5, 45),
         em('rose_nightingale', 'nightingale_1', P['rose_maze'], .55, 10, 90, loop=False, every=[3, 11],

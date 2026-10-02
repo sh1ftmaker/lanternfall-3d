@@ -303,6 +303,31 @@
    "doppler": true
   },
   {
+   "id": "gate_lamplighter",
+   "file": "oneshots/lamplighter_1.m4a",
+   "gain": 0.5,
+   "ref": 5,
+   "max": 45,
+   "pos": [
+    205.0,
+    0.0,
+    3.5
+   ],
+   "loop": false,
+   "every": [
+    6,
+    16
+   ],
+   "files": [
+    "oneshots/lamplighter_1.m4a",
+    "oneshots/lamplighter_2.m4a",
+    "oneshots/lamplighter_3.m4a"
+   ],
+   "area": {
+    "r": 22
+   }
+  },
+  {
    "id": "carousel_organ",
    "file": "music/carousel_organ.m4a",
    "gain": 0.8,
@@ -911,7 +936,23 @@
    ],
    "loop": [
     0.5,
-    7.5
+    9.5
+   ]
+  },
+  {
+   "id": "lantern_ghost_hush",
+   "file": "fx/ghost_hush.m4a",
+   "gain": 0.5,
+   "ref": 6,
+   "max": 30,
+   "pos": [
+    28.5,
+    -178.5,
+    2.5
+   ],
+   "loop": [
+    0.5,
+    14.5
    ]
   },
   {

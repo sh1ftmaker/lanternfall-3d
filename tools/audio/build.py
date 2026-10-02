@@ -79,9 +79,10 @@ def width(x, target=0.35):
 
 
 def bed_gate():
-    """Arrival: a light crowd walking the gravel/stone avenue (452458) over a festival murmur, soft air."""
+    """Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival
+    walla (848976), soft air."""
     L = secs(18)
-    return width(rec(452458, L, lpf=6500, hpf=90, search=(30, 85)) + rec(848976, L, lpf=4000, hpf=100, gain_db=-7) +
+    return width(rec(741283, L, lpf=6500, hpf=90, search=(0, 30)) + rec(848976, L, lpf=4000, hpf=100, gain_db=-6) +
                  lvl(sfx.wind(L, 11, lo=60, hi=500, gust=.4), -14))
 
 
@@ -94,7 +95,7 @@ def bed_lake():
 def bed_guild():
     """Courtyard evening crowd (741283) + torches crackling (483692)."""
     L = secs(16)
-    return width(rec(741283, L, lpf=5500, hpf=90) + rec(483692, L, lpf=7000, gain_db=-8))
+    return width(rec(741283, L, lpf=5500, hpf=90, search=(35, 70)) + rec(483692, L, lpf=7000, gain_db=-8))
 
 
 def bed_frost():
@@ -123,16 +124,16 @@ def bed_brine():
 
 
 def bed_lantern():
-    """Night-market chatter (834339, close and cheerful) with chimes tuned to the park's pentatonic."""
+    """A bustling night market walked through (752436) with chimes tuned to the park's pentatonic."""
     L = secs(16)
-    return width(rec(834339, L, lpf=5000, hpf=100, gain_db=-1) + lvl(sfx.chimes(L, 91, rate=.35), -15))
+    return width(rec(752436, L, lpf=5500, hpf=100) + lvl(sfx.chimes(L, 91, rate=.35), -15))
 
 
 def bed_rosewick():
-    """Gardens: a fountain (618285), crickets (522299) and guests strolling on gravel (352552), all soft."""
+    """Gardens: a fountain (618285), crickets (522299) and a soft distant murmur (546676, low-passed)."""
     L = secs(18)
     return width(rec(618285, L, lpf=6500, hpf=80, gain_db=-4) + rec(522299, L, lpf=7000, hpf=200, gain_db=-7) +
-                 rec(352552, L, lpf=5000, hpf=120, gain_db=-8))
+                 rec(546676, L, lpf=2500, hpf=120, gain_db=-11))
 
 
 def bed_gap():
@@ -172,7 +173,7 @@ for nm, fn in [('gate', bed_gate), ('lake', bed_lake), ('guildhollow', bed_guild
                ('meridian', bed_meridian), ('wanderers', bed_wanderers), ('brinewatch', bed_brine),
                ('lantern-row', bed_lantern), ('rosewick', bed_rosewick), ('gap', bed_gap), ('sky', bed_sky)]:
     ITEMS['bed_' + nm] = dict(fn=fn, cat='bed', loop=True)
-for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(741283, 17, lpf=6000, hpf=90, search=(30, 70))),
+for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(848976, 17, lpf=6000, hpf=90, search=(100, 200))),
                ('dense', crowd(546676, 13, lpf=6500, hpf=100))]:
     ITEMS['crowd_' + nm] = dict(fn=fn, cat='bed', loop=True)
 
@@ -203,12 +204,12 @@ def _():
 
 @item('creak_loop', 'emit')
 def _():
-    return mono(rec(31574, secs(13), lpf=4000, hpf=120))
+    return mono(rec(500143, secs(13), lpf=5000, hpf=120, search=(2, 33)))
 
 
 @item('sizzle_loop', 'emit')
 def _():
-    return mono(sfx.sizzle(secs(7), 71))
+    return mono(rec(783813, secs(9), lpf=7000, hpf=200))
 
 
 @item('taiko_loop', 'emit')
@@ -219,6 +220,11 @@ def _():
 @item('chimes_loop', 'emit')
 def _():
     return mono(sfx.chimes(secs(13), 74, rate=.8, width=0))
+
+
+@item('ghost_hush', 'emit')
+def _():
+    return sfx.ghost_hush(secs(14), 75)
 
 
 ONESHOT_LEVEL = {}   # peak dBFS baked into the file (relative levels); default -3
@@ -275,6 +281,7 @@ rec_oneshots('nightingale', 521035, -8, n=6, thresh=-24, max_len=4.0, fade_out=.
              max_dur=3.6)
 oneshot('strength_bell', lambda i: sfx.strength_bell(470 + i), 2, -3)
 oneshot('fanfare', lambda i: music.guild_fanfare()[0], 1, -2)
+oneshot('lamplighter', lambda i: sfx.lamplighter(590 + i), 3, -6)
 oneshot('ship_bell', lambda i: sfx.ship_bell(480 + i), 1, -3)
 oneshot('shrine_bell', lambda i: sfx.shrine_bell(490 + i), 1, -3)
 oneshot('clappers', lambda i: sfx.clappers(500 + i), 2, -3)

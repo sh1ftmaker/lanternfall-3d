@@ -536,3 +536,36 @@ def creak(seed):
     x = filt(pulses, chain(bp(rng.uniform(350, 700), 4), lp(3000))) + filt(pulses, bp(rng.uniform(1100, 1600), 6)) * .5
     x *= np.sin(np.pi * t / d) ** .7
     return fade(_norm(x, -3), .02, .1)
+
+
+def lamplighter(seed):
+    """A lamp being lit on the Lamplighters' Walk: match strike (scratch + flare), then a soft gas 'whoomp'
+    and a little glass ring as the lamp door closes."""
+    rng = np.random.default_rng(seed)
+    n = samples(2.4)
+    t = _t(n)
+    x = np.zeros(n)
+    m = samples(.12)
+    scratch = filt(rng.normal(size=m), chain(bp(3500, 1.2), lp(8000))) * np.sin(np.pi * _t(m) / .12) ** .5
+    add_at(x, scratch * .6, 0)
+    flare = filt(rng.normal(size=samples(.5)), chain(bp(1200, .7), lp(6000))) * np.exp(-_t(samples(.5)) / .12)
+    add_at(x, flare * .5, samples(.1))
+    whoomp_n = samples(.7)
+    tw = _t(whoomp_n)
+    whoomp = filt(rng.normal(size=whoomp_n), chain(lp(500), hp(60))) * np.sin(np.pi * np.minimum(1, tw / .5)) ** 2 * 1.4
+    add_at(x, whoomp, samples(.75))
+    ring = inst.bell(float(mtof(rng.choice([86, 88, 90]))), .1, .25, rng, decay=.8, kind='hand')[:samples(1.0)]
+    add_at(x, ring, samples(1.35))
+    return fade(_norm(x, -3), .002, .3)
+
+
+def ghost_hush(L, seed):
+    """Near the ghost-story stage: a hush. Breathy 'shhh' swells, a very soft low drone (D2 + A2 sine pair)
+    and the odd far creak of a paper lantern."""
+    t = np.arange(L) / SR
+    def ip(f):
+        return round(f * L / SR) * SR / L
+    drone = (np.sin(TAU * ip(73.42) * t) + .6 * np.sin(TAU * ip(110.0) * t + 1)) * (1 + .3 * slow_lfo(L, seed, (1, 2)))
+    shh = pnoise(L, seed + 1, band(2000, 6500, 2), 1) * np.maximum(0, slow_lfo(L, seed + 2, (3, 4, 5))) ** 2
+    air = pnoise(L, seed + 3, pink(80, 800, 2), 1) * .5
+    return drone * .25 + shh * .5 + air * .4
