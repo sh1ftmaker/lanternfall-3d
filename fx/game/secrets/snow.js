@@ -46,7 +46,7 @@ export function init(S) {
   const box = new THREE.Mesh(bb.finish(), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })); box.rotation.set(0.12, 0.5, -0.1); box.scale.setScalar(1.4); box.visible = false; game.v3(bw[0], bw[1], bz - 0.04, box.position); game.scene.add(box);
   const glow = game.props.glow({ x: bw[0], y: bw[1], z: bz + 0.55, color: [0.9, 0.55, 0.22], size: 1.1 }); glow.sprite.visible = false;
   const it = game.interact({
-    id: 'secrets-musicbox', x: bw[0], y: bw[1], z: bz + 0.15, r: 1.9, label: 'Open the music box', show: () => box.visible,
+    id: 'secrets-musicbox', x: bw[0], y: bw[1], z: bz + 0.15, r: 1.9, label: 'Open the music box', show: () => box.visible && !game.cameraHeld,
     use() { game.toast('A thin little tune, a long way off.', { ms: 3500 }); S.found('snow'); },
   });
   let vis = 0, t = 0;
