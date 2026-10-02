@@ -21,6 +21,8 @@ every land, and at eleven ten thousand paper lanterns come down onto the water.
 | **Explore** (`2`) | Free orbit; the place chips fly you to each land | Drag, scroll, right-drag; arrows or WASD, `+`/`-`, Shift+arrows to pan | Drag, pinch, two-finger pan |
 | **Walk** (`3`) | First person on the ground; the chips drop you at each land | WASD or arrows, drag to look, Shift to run, `Esc` to leave | Left thumb walks, right thumb looks |
 
+Press `H` or the eye button to hide the controls for an unobstructed view; `H`, `Esc` or the faint button in the corner brings them back.
+
 `F` toggles full screen. The settings button (top right) has the picture quality (**Fast**, **HD**, **Cinematic**),
 switches for fireworks, lake mist and searchlights, and **Reduce motion** (also taken from the system setting).
 Cinematic is the default on computers, HD on phones.
@@ -37,11 +39,20 @@ Choices are remembered in the browser. The page also lowers quality by itself if
 
 ## Guests
 
-About 2,400 guests (600 on phones) walk the park in ones, pairs and small groups. They stroll the promenades, queue
+About 2,400 guests walk the park in ones, pairs and small groups. They stroll the promenades, queue
 at stalls, sit on benches, take photos and line the lake rail to watch the lanterns. The figures are generated in
 code (`fx/guests/assets.js`), animated in the vertex shader and lit by where they stand; the crowd simulation
 (`fx/guests/sim.js`) runs in a Worker on the walk grid, using benches, stall fronts and viewpoints extracted from
 the Blender model (`data/guests.json`, generator in `tools/guests/`). A "Guests" switch is in the settings sheet.
+
+## Sound
+
+Press the speaker button (or `M`) for sound; headphones are best. Every land has its own ambience and music, placed
+in the world: music comes from the bandstand, the tavern or the dance floor and fades with distance, the monorail
+passes overhead, the carousel organ circles with the carousel, and fireworks arrive a moment after the flash.
+Nothing audio is downloaded until sound is switched on. All music is synthesised from code (`tools/audio/`);
+ambiences mix synthesis with CC0 field recordings credited in `fx/audio/CREDITS.md`. Volume and separate Music and
+Ambience switches are in the settings sheet.
 
 ## Optional switches
 
