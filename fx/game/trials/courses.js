@@ -9,7 +9,7 @@ export const COURSES = [
     post: [103.6, 9, 0.12, Math.PI],
     // 14 points about 38 m apart round the lake (kept inland of the Brinewatch bay), anticlockwise from the steps; the 14th is the finish at the start line
     cps: [[85, 35.9], [52.9, 53.5], [16.6, 62.4], [-20.4, 59.9], [-56.3, 51.9], [-87.1, 31.6], [-98.2, -3.9], [-86.9, -38.9], [-52.6, -53.5], [-16.2, -59.8], [20.9, -64.3], [56, -66], [88, -42], [100.7, 3.3]].map(([x, y]) => [x, y, 0.12]),
-    medals: { gold: 70, silver: 90 },
+    medals: { gold: 68, silver: 88 },
     stray: 110,
   },
   {
@@ -19,7 +19,7 @@ export const COURSES = [
     post: [100.4, -8, 0.12, Math.PI],
     cps: [[91, -3, -0.8], [55, 1, -0.8], [18, -4, 0.2, 4, 5], [55, 1, -0.8], [95.5, -2, -0.8]],
     pole: 2,                      // a post stands at this checkpoint during the race: the one to touch
-    medals: { gold: 50, silver: 70 },
+    medals: { gold: 45, silver: 65 },
     stray: 130,
   },
   {
@@ -29,7 +29,7 @@ export const COURSES = [
     post: [28.3, 98.8, 0.12, Math.PI / 2],
     // landings of a route proven in tools/game/trials.test.mjs (jump kinds and run-ups in tools/game/trials-roof.json); rings pass within 4.5 m and 2.4 m of height
     cps: [[48.2, 126.9, 5.2], [59.1, 123.3, 10.4], [54.5, 106.5, 10], [56.3, 111.1, 11]].map(([x, y, z]) => [x, y, z, 4.5, 2.4]),
-    medals: { gold: 40, silver: 65 },
+    medals: { gold: 24, silver: 45 },
     stray: 80,
   },
 ];
