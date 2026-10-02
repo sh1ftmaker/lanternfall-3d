@@ -30,6 +30,7 @@ is `(x, z, -y)`; `game.v3(x, y, z)` converts. The lake is centred on (0, 0); the
 | `game.clock` | `{ t (minutes since midnight), running, rate (park minutes per real second), set(t), fmt(), at('21:15', fn) }`. Stands at 23:00 unless the `clock` module runs it. |
 | `game.sound(name, pos?)` | a one-shot through the sound engine (ignored while sound is off) |
 | `game.teleport(x, y, yaw)`, `game.setMode(mode, opts)` | move the visitor |
+| `game.takeCamera(fn, { name })` → `release()` | borrow the camera: `fn(dt)` runs every frame and must place `game.camera` itself; the mode's own update (tour, orbit, the walker, Wick) is paused until you call `release()`. One holder at a time. `game.cameraHeld` says who has it. |
 
 ## Events (`game.on`)
 
@@ -46,6 +47,7 @@ is `(x, z, -y)`; `game.v3(x, y, z)` converts. The lake is centred on (0, 0); the
 | `weather` | `{ state, prev }` | `clear`, `mist`, `rain`, `storm`, `snow` |
 | `clock` | `{ t, prev, jump }` | the clock moved (every frame while it runs) |
 | `journal` | `{ open }` | the journal opened or closed |
+| `camera` | `{ held, by }` | a module took or released the camera (hide your prompts while it is held) |
 
 Modules may emit their own events, prefixed with the module name (`lamps:lit`, `clock:event`, ...); list them in your
 module's README section (below) so others can listen.

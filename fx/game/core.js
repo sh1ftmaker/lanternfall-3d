@@ -196,11 +196,22 @@ export function createGame(ctx) {
     emit('frame', { dt, time });
   }
 
+  /* ── the camera, on loan: while a module holds it, fn(dt) places the camera each frame and the mode's own update
+     (tour, orbit, the walker, Wick) does not run. One holder at a time; taking it again replaces the holder ── */
+  let driver = null;
+  function takeCamera(fn, { name = '' } = {}) {
+    if (driver && driver.release) driver.release('replaced');
+    const d = { fn, name, release: null }; driver = d; emit('camera', { held: true, by: name });
+    return (why) => { if (driver === d) { driver = null; emit('camera', { held: false, by: name, why }); } };
+  }
+  function drive(dt) { if (!driver) return false; try { driver.fn(dt); } catch (e) { console.warn('game: camera', driver.name, e); driver = null; return false; } return true; }
+
   const game = {
     THREE, scene, camera, renderer: ctx.renderer, Q: ctx.Q, uTime: ctx.uTime, mobile: ctx.mobile, coarse: ctx.coarse, hash, ctx,
     get manifest() { return ctx.getManifest(); }, places: ctx.places, get nav() { return nav(); }, get guests() { return ctx.getGuests(); }, get platformer() { return ctx.getPlatformer(); },
     get weather() { return ctx.weather; }, get reduceMotion() { return ctx.reduceMotion(); },
     save, on, emit, player, v3, ground, lightAt, interact, use, toast, track, journal, props, clock, frame,
+    takeCamera, drive, get cameraHeld() { return driver ? driver.name || true : false; },
     sound: (name, pos) => ctx.sound.play(name, pos),
     setMode: ctx.setMode, teleport: (x, y, yaw) => ctx.setMode('walk', { at: [x, y], yaw }),
     modules: {}, get started() { return started; },

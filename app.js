@@ -1007,7 +1007,8 @@ function frame() {
   if (document.hidden || glCtx.lost) return;
   if (ready) {
     updateTrains(time);
-    if (mode === 'tour') {
+    if (game.drive(dt)) { /* game hook: a module has the camera (a ride, photo mode); the mode's own update waits */ }
+    else if (mode === 'tour') {
       tourClock += dt;
       const i = tourPose(tourClock, poseA, time);
       if (i !== lastShot) { if (lastShot !== -1) startBlend(3.0); lastShot = i; setCaption(shots[i].place); }
