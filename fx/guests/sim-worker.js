@@ -11,6 +11,7 @@ self.onmessage = (e) => {
     if (m.type === 'init') {
       crowd = createCrowd({ ...m.opts, sync: true, manualLocal: true });
       crowd.params.budget = 2.0;            // off the main thread: a looser budget (the adaptive LOD still caps the cost)
+      if (m.opts.params) Object.assign(crowd.params, m.opts.params);     // set on the main thread before the crowd existed here
       self.postMessage({ type: 'ready', ready: crowd.ready, times: crowd.debug.times, error: crowd.debug.error });
     } else if (m.type === 'step' && crowd) {
       if (crowd.want !== m.want) crowd.setCount(m.want);
@@ -24,7 +25,7 @@ self.onmessage = (e) => {
       crowd.debug.pumpLocal(1);
     } else if (m.type === 'buf') { if (pool.length < 3) pool.push(m.buf); }
     else if (m.type === 'motion' && crowd) crowd.setReduceMotion(m.on);
-    else if (m.type === 'params' && crowd) Object.assign(crowd.params, m.params);
+    else if (m.type === 'params' && crowd) Object.assign(crowd.params, m.params);   // (before 'init' they are in its opts.params)
   } catch (err) {
     self.postMessage({ type: 'error', error: String(err && err.stack || err) });
   }

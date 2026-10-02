@@ -102,7 +102,9 @@ export function buildNav(nav, opt = {}) {
     csurf[c] = surf;
     const e = clr[fk] / 6 - 0.25;                                // m from the best spot to the nearest obstacle edge
     const base = surf === 0 ? 1 : surf === 1 ? 6 : 4.5;
-    const pen = Math.max(0, 1.4 - e) * 1.3;
+    // a passage under ~1.4 m wide costs much more: routes take it only when the way round is long (a doorway, the
+    // maze), not as a short cut that a stream of guests then has to squeeze through
+    const pen = Math.max(0, 1.4 - e) * 1.3 + (e < 0.45 ? 5 : 0);
     ccost[c] = Math.min(255, Math.round(10 * (base + pen)));
   }
   // neighbour mask per compact cell (bit d set = may step in direction d), with a height-step limit and no corner cutting
