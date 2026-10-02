@@ -215,7 +215,7 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
   const mesh = new THREE.Mesh(quad, mat);
   // game hook: clock: 'classic' = all of them, always (the page as it opens); 'none' = only strays; 'fall' = released from the
   // gallery over uRel seconds from `now`; 'thin' = dying away over uThin seconds from `now`. Water reflections share the uniforms.
-  const U = mat.uniforms;
+  const U = mat.uniforms; mesh.userData.fallState = 'classic';
   mesh.userData.setFall = (state, now) => {
     U.uGate.value = state === 'classic' ? 0 : 1;
     if (state === 'none') { U.uTAct.value = 1e9; U.uTOff.value = 1e9; }

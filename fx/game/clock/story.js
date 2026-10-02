@@ -15,7 +15,7 @@ export const STORIES = [
     text: ['At the far end of the Night Market there is a stall nobody has ever seen open.', 'Each night a single paper lantern is set out in the square in front of it, lit, with no one near.', 'Take it, if you like. It has been waiting for somebody to carry it home.'] },
 ];
 const CSS = `
-#ck-card{position:fixed;z-index:8;left:50%;top:max(160px,24%);transform:translateX(-50%);width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:16px 18px 14px;border-radius:16px;
+#ck-card{position:fixed;z-index:8;left:50%;top:max(200px,36%);transform:translateX(-50%);width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:16px 18px 14px;border-radius:16px;
   background:rgba(13,11,38,.9);border:1px solid rgba(255,181,71,.6);color:var(--paper);font:400 15px/1.5 var(--ui);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
 #ck-card[hidden]{display:none} #ck-card h4{margin:0 0 8px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #ck-card p{margin:0 0 12px;font-family:var(--serif,Georgia,serif);font-size:16px;line-height:1.5} #ck-card .ck-nav{display:flex;justify-content:space-between;align-items:center;font:500 12px var(--ui);opacity:.9}
@@ -51,7 +51,7 @@ export function createStory(game, { st }) {
     gr.addColorStop(0, 'rgba(255,190,100,.55)'); gr.addColorStop(0.55, 'rgba(255,150,60,.22)'); gr.addColorStop(1, 'rgba(255,120,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     ring = new THREE.Mesh(new THREE.CircleGeometry(2.6, 28), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2 }));
     ring.rotation.x = -Math.PI / 2; ring.position.copy(v3(sx, sy, sz + 0.04)); ring.visible = false; ring.renderOrder = 7; game.scene.add(ring);
-    game.interact({ id: 'clock-story', x: sx, y: sy, z: sz, r: 4, label: () => (heard.size >= STORIES.length ? 'Hear a story again' : 'Hear a story'), swing: false, show: () => present && !card && !game.cameraHeld, use: tell });
+    game.interact({ id: 'clock-story', x: sx, y: sy, z: sz, r: 5, label: () => (heard.size >= STORIES.length ? 'Hear a story again' : 'Hear a story'), swing: false, show: () => present && !card && !game.cameraHeld, use: tell });
   }
   const show = (on) => { if (!built) build(); group.visible = on; ring.visible = on; lant.sprite.visible = on; };
 
