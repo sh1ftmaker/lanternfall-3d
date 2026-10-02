@@ -106,7 +106,7 @@ export function createWeather(opts) {
 
   return {
     set: (n, o) => set(n, o || {}), update,
-    get state() { return state; }, now, STATES,
+    get state() { return state; }, now, get blend() { return { ...now }; }, STATES,
     setReduceMotion(on) { reduceMotion = !!on; },
     degrade(step) { degrade = step; },
     get cover() { return cover; }, get precip() { return precip; }, get shade() { return shade; }, get audio() { return audio; },

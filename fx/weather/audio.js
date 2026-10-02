@@ -13,7 +13,7 @@ const C = 343;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
-export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark, manifest }) {
+export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark, getMode, getWalk, manifest }) {
   const st = { ready: false, err: null, voices: 0, cover: 0, lake: 0, duck: 1, bytes: 0, thunders: 0 };
   const buf = {}; let ctx = null, N = null, bus = null, lp = null; const ch = {};
   let lastSeq = 0, grid = null, tick = 0, quietFor = 0;
@@ -82,7 +82,7 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
     return inside ? 0 : Math.sqrt(d2);
   }
 
-  const _r = new THREE.Vector3(), _d = new THREE.Vector3();
+  const _r = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3();
   function update(dt, time, now, shade) {
     const eng = getEngine();
     if (!st.ready || !eng || !ctx) return !Object.keys(ch).length;
@@ -92,7 +92,9 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
     if (active) for (const k in FILES) if (!ch[k]) { const c = start(k); if (c) ch[k] = c; }
     if ((tick -= dt) <= 0) {                                       // place: 4 times a second is plenty
       tick = 0.25;
-      const p = camera.position, roof = roofAt(p.x, p.z);
+      // where the ears are: the walker's head in Walk mode (Wick's camera rides ~6 m behind and above him), else the camera
+      const wk = getMode && getMode() === 'walk' && getWalk ? getWalk() : null;
+      const p = wk ? _p.set(wk.x, wk.z + 1.6, -wk.y) : camera.position, roof = roofAt(p.x, p.z);
       st.cover += ((roof > p.y + 0.4 ? 1 : 0) - st.cover) * 0.5;
       st.lake = sstep(45, 4, lakeDist(p.x, -p.z));
     }

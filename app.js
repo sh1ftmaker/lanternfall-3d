@@ -942,7 +942,7 @@ const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mo
 /* ── end sound ── */
 // ── weather hook ── (fx/weather/): Clear is the untouched park; '#weather=rain' etc.; window.__park.weather
 const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTime, mobile, reduceMotion, FOG, DATA, fetchBin,
-  getPark: () => park, getWater: () => fxWater, getFx: () => FX.fxState(), manifest: () => manifest, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
+  getPark: () => park, getWater: () => fxWater, getFx: () => FX.fxState(), manifest: () => manifest, getMode: () => mode, getWalk: () => walk, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;

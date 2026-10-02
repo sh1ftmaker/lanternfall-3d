@@ -25,7 +25,7 @@ const SURF_DECL = /* glsl */`
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = max(mix(vec3(l), col, 1.0 + 0.4 * w * porous), 0.0);
       float flatk = smoothstep(0.82, 0.97, up);
       float pud = 0.0;                                                               // puddles on flat ground, near enough to see
-      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6) { float pn = vn(vW.xz * 0.21) * 0.62 + vn(vW.xz * 0.83 + 3.1) * 0.38; pud = flatk * smoothstep(0.48, 0.60, pn) * w * smoothstep(0.6, 0.15, fw); }
+      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6) { float pn = vn(vW.xz * 0.21) * 0.62 + vn(vW.xz * 0.83 + 3.1) * 0.38; pud = flatk * smoothstep(0.45, 0.58, pn) * w * smoothstep(0.6, 0.15, fw); }
       vec3 V = normalize(cameraPosition - vW), N = n;
       if (pud > 0.01 && uWx.w > 0.0 && fw < 0.03) {                                  // raindrops ringing the puddles
         vec2 q = vW.xz * 2.2, c = floor(q), o = vec2(fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453), fract(sin(dot(c, vec2(269.5, 183.3))) * 43758.5453));
@@ -34,7 +34,7 @@ const SURF_DECL = /* glsl */`
       }
       float F = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
       float gloss = vCls < 3.5 ? (vCls > 1.5 && vCls < 2.5 ? 0.6 : 1.0) : vCls < 4.5 ? 0.2 : 0.8;     // grass barely, wood less
-      float pk = pud / max(w, 1e-3), k = F * w * mix((0.06 + 0.32 * flatk) * gloss, 1.0, pk);
+      float pk = pud / max(w, 1e-3), k = F * w * mix((0.08 + 0.5 * flatk) * gloss, 1.0, pk);
       vec3 R = reflect(-V, N), rl = vec3(0.0);
       if (uCovOn > 0.5 && R.y > 0.015 && k > 0.012) {                                // lamps and signs along the reflected ray
         vec2 rd = R.xz / R.y; float rl2 = dot(rd, rd); if (rl2 > 900.0) rd *= 30.0 * inversesqrt(rl2);
