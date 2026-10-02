@@ -97,7 +97,9 @@ export class FinalPass extends Pass {
         #else
           c += (hash12(gl_FragCoord.xy) - 0.5) / 255.0;                             // 8-bit dither: no banding in the night sky
         #endif
-        gl_FragColor = vec4(c, 1.0);
+        // never negative: the saturation boost and the dither push dark saturated pixels a little below zero, which the
+        // half-float target keeps, and SMAA's blend pass raises colour to the power 2.2 (pow of a negative is NaN)
+        gl_FragColor = vec4(max(c, 0.0), 1.0);
       }`;
   }
   render(renderer, writeBuffer, readBuffer) {
