@@ -23,6 +23,7 @@ every land, and at eleven ten thousand paper lanterns come down onto the water.
 
 `F` toggles full screen. The settings button (top right) has the picture quality (**Fast**, **HD**, **Cinematic**),
 switches for fireworks, lake mist and searchlights, and **Reduce motion** (also taken from the system setting).
+Cinematic is the default on computers, HD on phones.
 Choices are remembered in the browser. The page also lowers quality by itself if frames run slow.
 
 ## What moves

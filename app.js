@@ -77,11 +77,11 @@ Object.assign(Q, { waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 
   mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 FX.fxConfig(Q, { mobile, reduceMotion });     // atmosphere / particle systems (fx/index.js) -> Q.fx
 for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean' && !HASH.has(k) && !HASH.has('no-' + k)) Q.fx[k] = PREFS[k];
-// picture quality: 'fast' (no post, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
+// picture quality: 'fast' (no bloom, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
 // A '#fx=' token in the URL wins over the saved choice.
 const hasFxToken = /(^|[#,&])fx=/.test(location.hash);
 Q.hdr = CAN.hdr;            // without float colour targets: no post chain, 8-bit water targets, no ripple simulation
-let quality = !Q.hdr ? 'fast' : hasFxToken ? (Q.post.preset === 'legacy' || Q.post.preset === 'off' ? 'hd' : 'cinematic') : (PREFS.quality || 'hd');
+let quality = !Q.hdr ? 'fast' : hasFxToken ? (Q.post.preset === 'legacy' || Q.post.preset === 'off' ? 'hd' : 'cinematic') : (PREFS.quality || (mobile ? 'hd' : 'cinematic'));   // Cinematic by default on desktop: same frame time, richer neon/glow (see the finish report)
 if (!hasFxToken && quality === 'cinematic') Q.post = readFx('#fx=hd');
 // HD cost is pixel-bound (half-float MSAA target + bloom), so cap the drawn pixels instead of trusting devicePixelRatio.
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
