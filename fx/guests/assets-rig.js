@@ -132,7 +132,9 @@ export const RIG = /* glsl */`
   Pose poseFor(int anim, float ph, float spd, G g){
     float t = uTime * uMotion + g.seed * 100.0;
     Pose P;
-    if (anim == 0) P = poseWalk(ph / max(g.h, 0.3), spd * uMotion, g);
+    // stride grows with height: the sim's phase (1.4 m per cycle, wrapping at 256) times 256/h rounded to whole
+    // cycles per wrap, so the scaled phase stays continuous across the wrap
+    if (anim == 0) P = poseWalk(ph * (floor(256.0 / max(g.h, 0.3) + 0.5) / 256.0), spd * uMotion, g);
     else if (anim == 2) P = posePhoto(t, g);
     else if (anim == 3) P = poseWave(t, g);
     else if (anim == 4) P = poseSit(t, g);

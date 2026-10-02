@@ -130,7 +130,7 @@ const IMP_VS = /* glsl */`
     float H = 1.78 * g.h, W = 0.31 * g.h * sqrt(g.girth);
     vec3 base = vec3(s0.x, s0.z, -s0.y);
     bool sit = anim == 4;
-    if (sit) { base.y -= 0.42 * g.h; H *= 0.8; }
+    if (sit) { base.y -= 0.45; H *= 0.8; }
     vec3 tc = cameraPosition - base; tc.y = 0.0; tc = length(tc) > 1e-4 ? normalize(tc) : vec3(0.0, 0.0, 1.0);
     vec3 right = vec3(tc.z, 0.0, -tc.x);
     vec3 w = base + right * position.x * W + vec3(0.0, position.y * H, 0.0);
@@ -229,7 +229,7 @@ const SHADOW_VS = /* glsl */`
     G g = look(gi, s1.w);
     int anim = int(s1.y + 0.5);
     vec3 base = vec3(s0.x, s0.z, -s0.y);
-    if (anim == 4) base.y -= 0.44 * g.h;
+    if (anim == 4) base.y -= 0.45;                                     // seat top -> floor (benches are ~0.45 m)
     vec2 d = -normalize(uMoon.xz); vec2 pp = vec2(d.y, -d.x);       // (d, pp) keeps the quad facing up
     float h = g.h, L = 1.6 * h * length(uMoon.xz) / max(uMoon.y, 0.2);       // h: height scale (1 = 1.72 m)
     float u0 = -0.75 * h, u1 = L + 0.25 * h, wv = 0.7 * h;
@@ -255,7 +255,7 @@ const SHADOW_FS = /* glsl */`
   }`;
 
 // ── the stand-in crowd: random walkers on the walk grid + a few hand-placed figures (until fx/guests/sim.js) ──
-export function createStandInCrowd({ nav, count = 1200, seed = 7, reduceMotion = false, places = [] }) {
+export function createStandInCrowd({ nav, count = 1200, seed = 7, reduceMotion = false, places = [], avenue = false }) {
   const N = count, state = new Float32Array(N * 8);
   let rs = seed >>> 0; const rnd = () => { rs = (rs + 0x6d2b79f5) | 0; let t = Math.imul(rs ^ (rs >>> 15), 1 | rs); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const navH = (v) => (v - 1) / 100 - 2;
@@ -270,12 +270,13 @@ export function createStandInCrowd({ nav, count = 1200, seed = 7, reduceMotion =
   const hot = (x, y) => {                       // busier on the avenue and the lake promenade
     const r = Math.hypot(x, y);
     if (x > 140 && x < 335 && Math.abs(y) < 22) return 1;
+    if (avenue) return 0;                       // '#guests-avenue': everyone on the Lamplighters' Walk (crowd test)
     if (r > 98 && r < 130) return 0.8;
     return 0.12;
   };
   const spawn = (i) => {
     for (let t = 0; t < 400; t++) {
-      const x = nav.x0 + rnd() * nav.w * nav.cell, y = nav.y0 + rnd() * nav.h * nav.cell;
+      const x = avenue ? 140 + rnd() * 195 : nav.x0 + rnd() * nav.w * nav.cell, y = avenue ? -22 + rnd() * 44 : nav.y0 + rnd() * nav.h * nav.cell;
       const ii = Math.floor((x - nav.x0) / nav.cell), jj = Math.floor((y - nav.y0) / nav.cell), v = nav.A[jj * nav.w + ii];
       if (!v || rnd() > hot(x, y)) continue;
       const o = i * 8; state[o] = x; state[o + 1] = y; state[o + 2] = navH(v); state[o + 3] = rnd() * Math.PI * 2;
@@ -474,16 +475,17 @@ export function createGuests(opts) {
       t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
       U.tLight.value = t; tLight.dispose();
       U.uLightXf.value.set(L.x0, L.y0, 1 / (L.w * L.cell), 1 / (L.h * L.cell)); U.uLightOn.value = 1; stats.lightGrid = true;
+      if (L.range) U.uLightRange.value = L.range;
       if (js.pois) stats.pois = js.pois.length;
     } catch (e) { console.warn('guests: no ground-light grid', e.message); }
   })();
 
-  const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), sph = new THREE.Sphere(), cpos = new THREE.Vector3();
+  const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), cpos = new THREE.Vector3(), PL = new Float32Array(24);
   function ensureCrowd() {
     if (crowd) return true;
     const nav = opts.nav && (typeof opts.nav === 'function' ? opts.nav() : opts.nav);
     if (!nav) return false;
-    crowd = createStandInCrowd({ nav, count: Math.min(cfg.count, MAXG), reduceMotion: st.reduceMotion, places: opts.places || STANDIN_PLACES });
+    crowd = createStandInCrowd({ nav, count: Math.min(cfg.count, MAXG), reduceMotion: st.reduceMotion, places: opts.places || STANDIN_PLACES, avenue: /guests-avenue/.test(hash) });
     ownCrowd = true; stats.standIn = true;
     return true;
   }
@@ -495,11 +497,17 @@ export function createGuests(opts) {
     if (!st.visible || !ensureCrowd() || !camera) { for (const k in M) { M[k].visible = false; } return; }
     const time = uTime.value;
     profPoll();
-    if (ownCrowd) { const ts = performance.now(); crowd.update(dt, time, { x: camera.position.x, y: -camera.position.z, z: camera.position.y }); stats.simMs = stats.simMs * 0.95 + (performance.now() - ts) * 0.05; }
+    if (ownCrowd) {          // the stand-in, or a simulation handed over with setCrowd(c, {drive: true})
+      const ts = performance.now();
+      crowd.update(dt, time, opts.focus ? opts.focus() : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode: 'orbit' });
+      stats.simMs = stats.simMs * 0.95 + (performance.now() - ts) * 0.05;
+    }
     const tr0 = performance.now();
     const n = Math.min(crowd.count, MAXG), S = crowd.state;
     const lim = Math.floor(n * st.density);
     pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm, THREE.WebGLCoordinateSystem, camera.reversedDepth);
+    for (let k = 0; k < 6; k++) { const pl = frustum.planes[k]; PL[k * 4] = pl.normal.x; PL[k * 4 + 1] = pl.normal.y; PL[k * 4 + 2] = pl.normal.z; PL[k * 4 + 3] = pl.constant; }
+    const inFrustum = (x, y, z, r) => { for (let k = 0; k < 24; k += 4) if (PL[k] * x + PL[k + 1] * y + PL[k + 2] * z + PL[k + 3] < -r) return false; return true; };
     cpos.setFromMatrixPosition(camera.matrixWorld);
     const r = opts.renderer, pr = r ? r.getPixelRatio() : 1, H = r ? r.domElement.height / pr : 900;
     const fpx = 0.5 * H * camera.projectionMatrix.elements[5];          // CSS px per metre at 1 m
@@ -531,11 +539,10 @@ export function createGuests(opts) {
       sData[so + 12] = prevSp[i];
       if (st.reduceMotion && anim === 0 && sp > 0.05) continue;          // no gliding statues: walkers are hidden
       const h = hOf[i], cy = z + 0.9 * h, cz = -y;
-      sph.center.set(x, cy, cz); sph.radius = 1.25 * h + (glowOf[i] ? 0.6 : 0);
-      let vis = frustum.intersectsSphere(sph);
+      const rad = 1.25 * h + (glowOf[i] ? 0.6 : 0);
+      const vis = inFrustum(x, cy, cz, rad);
       const sh = nearShore(x, y);
-      let mirror = false;
-      if (sh) { sph.center.y = 2 * W0 - cy; mirror = frustum.intersectsSphere(sph); }
+      const mirror = sh && inFrustum(x, 2 * W0 - cy, cz, rad);
       if (!vis && !mirror) continue;
       const dx = x - cpos.x, dy = cy - cpos.y, dz = cz - cpos.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const px = 1.75 * h * fpx / Math.max(d, 0.1);
@@ -589,7 +596,7 @@ export function createGuests(opts) {
     out.frames = fr.length; return out;
   }
   return { update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
-    get crowd() { return crowd; }, setCrowd(c) { crowd = c; ownCrowd = false; stats.standIn = false; seedOf.fill(-1); cur.fill(255); },
+    get crowd() { return crowd; }, setCrowd(c, o = {}) { crowd = c; ownCrowd = !!o.drive; stats.standIn = false; seedOf.fill(-1); cur.fill(255); if (c && c.setReduceMotion) c.setReduceMotion(st.reduceMotion); },
     get visible() { return st.visible; } };
 }
 
