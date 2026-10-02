@@ -48,7 +48,7 @@ export function buildFx(ctx) {
   // edges), nothing on dense screens and phones (as the original chain)
   if (F.aa === 'auto') F.aa = (!mobile && dpr <= 1.3) ? 'smaa' : 'none';
   const msaa = F.aa === 'msaa' ? 4 : (F.aa ? 0 : ctx.samples);                 // a post AA replaces MSAA
-  const needDepth = !!(F.ao || F.tilt || F.aa === 'taa');
+  const needDepth = !!(F.ao || F.tilt || F.aa === 'taa' || (Q.photo && Q.photo.depth));   // game hook: photo
   const rg11 = F.fmt === 'rg11' && canRG11(renderer) && !F.ao;                  // no alpha in RG11: AO uses it for lantern glow
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: rg11 ? THREE.UnsignedInt101111Type : THREE.HalfFloatType, format: rg11 ? THREE.RGBFormat : THREE.RGBAFormat,
@@ -102,5 +102,6 @@ export function buildFx(ctx) {
 
   if (F.aa && F.aa !== 'taa' && F.aa !== 'msaa' && F.aa !== 'none') { const p = makeAA(F.aa, size); if (p) { composer.addPass(p); out.passes.aa = p; } }
   if (F.style) { const p = makeStyle(F.style, ctx); if (p) composer.addPass(p); }
+  if (Q.photo && Q.photo.build) Q.photo.build(ctx, composer);   // game hook: photo (last pass; present only while photo mode needs it)
   return out;
 }

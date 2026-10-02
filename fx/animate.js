@@ -5,7 +5,10 @@
 import * as THREE from 'three';
 
 // Rosewick land-local (0, 26) in three coordinates (Blender (-135.04, -125.18) -> three (x, -y)).
-const CAROUSEL = { x: -135.04, z: 125.18, r: 10.65, y0: 0.5 };
+export const CAROUSEL = { x: -135.04, z: 125.18, r: 10.65, y0: 0.5 };
+// game hook: rides — the carousel's motion, shared with the riders (fx/game/rides/carousel.js) so they stay locked to the horses
+export const CAROUSEL_MOTION = { spin: 0.24, bob: 0.22, rate: 1.7, phase: 2.4 };        // rad/s, m, rad/s, rad per horse index
+export const horseAngleDeg = (ring, k) => (ring === 'outer' ? k * 22.5 - 0.8 : (k - 0.5) * 30 - 7.9);   // Blender-frame angle of horse k (inner k = n + 0.5)
 
 const GLSL = /* glsl */`
   uniform float uFxTime; uniform float uFxMotion;
@@ -19,9 +22,9 @@ const GLSL = /* glsl */`
       if (w.y > 1.1 && w.y < 3.75 && r > 5.2 && r < 9.0) {
         float ab = degrees(-a0);
         float k = r > 7.2 ? floor((ab + 0.8) / 22.5 + 0.5) : floor((ab + 7.9) / 30.0 + 0.5) + 0.5;
-        w.y += 0.22 * sin(uFxTime * 1.7 + k * 2.4) * uFxMotion;
+        w.y += ${CAROUSEL_MOTION.bob} * sin(uFxTime * ${CAROUSEL_MOTION.rate.toFixed(2)} + k * ${CAROUSEL_MOTION.phase.toFixed(2)}) * uFxMotion;
       }
-      float a = a0 + uFxTime * 0.24 * uFxMotion;
+      float a = a0 + uFxTime * ${CAROUSEL_MOTION.spin} * uFxMotion;
       w.xz = vec2(${CAROUSEL.x.toFixed(2)}, ${CAROUSEL.z.toFixed(2)}) + r * vec2(cos(a), sin(a));
     }
     return w;

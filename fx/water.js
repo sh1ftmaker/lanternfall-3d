@@ -11,6 +11,7 @@
 //  - Schlick Fresnel (F0 = 0.02), moon glitter, a soft contact line and shallow tint from a shore distance field;
 //  - no-mirror tier: analytic sky + the lantern sprites reflected about the water plane (drawn on the plane).
 import * as THREE from 'three';
+import { DN_DECL, DN_SKY } from './game/daynight/uniforms.js';      // game hook: daynight
 
 const BASIN = [[126.01,-30.32],[125.78,-30.98],[123.01,-29.99],[122.99,-29.99],[120.01,-28.93],[117.01,-27.86],[114.57,-26.99],[114.01,-26.79],[112.59,-26.28],[113.41,-23.99],[114.01,-22.28],[114.47,-20.99],[115.54,-17.99],[116.61,-14.99],[117.01,-13.86],[117.68,-11.99],[118.63,-9.33],[120.01,-9.82],[123.01,-10.89],[126.01,-11.96],[126.1,-11.99],[129.01,-13.02],[131.82,-14.02],[131.47,-14.99],[130.4,-17.99],[129.34,-20.99],[129.01,-21.89],[128.27,-23.99],[127.2,-26.99],[126.13,-29.99]];
 function inPoly(pl, x, y) { let c = false; for (let i = 0, j = pl.length - 1; i < pl.length; j = i++) { const [xi, yi] = pl[i], [xj, yj] = pl[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
@@ -61,13 +62,16 @@ function noiseTexture(N = 128) {
 
 /* ───────── shared GLSL ───────── */
 const SKY = /* glsl */`
+  ${DN_DECL}
+  ${DN_SKY}
   vec3 skyCol(vec3 d, vec3 moon){
     float h = clamp(d.y, -0.2, 1.0);
-    vec3 zen = vec3(0.007, 0.010, 0.036), mid = vec3(0.030, 0.036, 0.105), hor = vec3(0.075, 0.062, 0.145);
+    vec3 zen = uSkyZen, mid = uSkyMid, hor = uSkyHor;                                   // game hook: daynight (the night values unless the clock says dusk)
     vec3 col = mix(hor, mid, smoothstep(0.0, 0.16, h)); col = mix(col, zen, smoothstep(0.10, 0.62, h));
-    col += vec3(0.060, 0.034, 0.016) * exp(-max(h, 0.0) * 13.0);
+    col += uSkyGlow * exp(-max(h, 0.0) * 13.0);
+    if (uDay > 0.0) col += dnSunSky(d, h);
     float ang = acos(clamp(dot(d, moon), -1.0, 1.0));
-    col += vec3(0.56, 0.66, 0.92) * (0.050 * exp(-ang * 9.0) + 0.22 * exp(-ang * 42.0));
+    col += vec3(0.56, 0.66, 0.92) * (0.050 * exp(-ang * 9.0) + 0.22 * exp(-ang * 42.0)) * uMoonAmt;
     return col;
   }`;
 const DRIFT = /* glsl */`
@@ -454,7 +458,7 @@ export function createWater(ctx) {
       tMirror: { value: null }, uTexMat: { value: new THREE.Matrix4() }, uRectMax: { value: new THREE.Vector2(1, 1) }, uMirror: { value: 0 },
       tSim: { value: null }, uSimOn: { value: 0 }, tMask: { value: maskTex }, tRipple: { value: ripple }, tNoise: { value: noise },
       uDom: { value: dom }, uSimTexel: { value: new THREE.Vector2(1 / SW, 1 / SH) }, uCell: { value: dx },
-      uTime: uTime, uMoon: { value: MOON }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uD: { value: 45 },
+      uTime: uTime, uMoon: { value: MOON }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, uD: { value: 45 }, ...(ctx.DN || {}),
       uWind: { value: 1 }, uRough: { value: 1 },
       tEnv: { value: null }, uEnvOn: { value: 0 }, uEnvC: { value: new THREE.Vector3(0, ENV_Y, 0) }, uEnvAB: { value: new THREE.Vector2(ENV_A, ENV_B) },
     },
@@ -541,7 +545,8 @@ export function createWater(ctx) {
         // body colour: black in open water, a faint peaty tint where it is shallow by the quay
         float shallow = 1.0 - smoothstep(0.4, 7.0, shore);
         vec3 body = mix(vec3(0.0010, 0.0014, 0.0030), vec3(0.0060, 0.0070, 0.0062), shallow);
-        vec3 col = body * (1.0 - F) + refl * F + vec3(0.62, 0.70, 0.95) * glit * F * 3.0;
+        vec3 col = body * (1.0 - F) + refl * F + vec3(0.62, 0.70, 0.95) * glit * F * 3.0 * uMoonAmt;
+        if (uSunOn > 0.5) { float sd = max(dot(R, uSunDir), 0.0); col += uSunDisc * (pow(sd, 1600.0) * (0.04 + rough) * 6.0 + pow(sd, 70.0) * (0.25 + rough) * 0.18) * F * 3.0; }   // game hook: daynight (the sun's glitter path)
         // contact line: damp darkening against walls, a thin lift where ripples break on them
         float contact = 1.0 - smoothstep(0.0, 0.55, shore);
         col *= 1.0 - 0.55 * contact;
@@ -775,6 +780,7 @@ export function createWater(ctx) {
     info: () => ({ SW, SH, dx, scanned: queue.length, mirror: [mirror.w, mirror.h], sim: sim.on }),
     // after a WebGL context restore (fx/context.js): render-target contents are gone, so restart the simulation from
     // rest, re-render the mirror and capture the environment cube again; timer queries of the dead context are dropped
+    recaptureEnv() { if (env.face < 0) env.parts = -1; },       // game hook: daynight (the no-mirror tier's environment cube holds the park's light as it was; capture it again)
     contextRestored() {
       if (sim.a) { sim.a.dispose(); sim.b.dispose(); sim.a = sim.b = null; }
       mirror.valid = false; prof.pending = []; prof.cur = null; tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');

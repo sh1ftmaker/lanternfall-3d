@@ -47,7 +47,7 @@ is `(x, z, -y)`; `game.v3(x, y, z)` converts. The lake is centred on (0, 0); the
 | `weather` | `{ state, prev }` | `clear`, `mist`, `rain`, `storm`, `snow` |
 | `clock` | `{ t, prev, jump }` | the clock moved (every frame while it runs) |
 | `journal` | `{ open }` | the journal opened or closed |
-| `camera` | `{ held, by }` | a module took or released the camera (hide your prompts while it is held) |
+| `camera` | `{ held, by, why }` | a module took or released the camera (hide your prompts while it is held). If another module takes it while you hold it, you get `{ held: false, by: <you>, why: 'replaced' }`: clean up. |
 
 Modules may emit their own events, prefixed with the module name (`lamps:lit`, `clock:event`, ...); list them in your
 module's README section (below) so others can listen.
