@@ -17,7 +17,6 @@ const CSS = `
   touch-action:manipulation;-webkit-user-select:none;user-select:none;max-width:calc(100vw - 32px)}
 #game-prompt[hidden]{display:none} #game-prompt kbd{font:600 11px var(--ui);border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:8px;opacity:.8}
 @media (pointer:coarse){ #game-prompt kbd{display:none} #game-prompt{bottom:calc(env(safe-area-inset-bottom,0px) + 330px)} }
-@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 #game-toasts{position:fixed;z-index:7;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(420px,calc(100vw - 32px))}
 .game-toast{padding:9px 16px;border-radius:14px;background:rgba(13,11,38,.8);border:1px solid var(--line);color:var(--paper);font:500 14px/1.35 var(--ui);text-align:center;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
@@ -28,6 +27,8 @@ const CSS = `
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
 #game-journal .gj-reset{margin-top:10px;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);opacity:.7;font:500 12px var(--ui);padding:6px 12px;cursor:pointer}
+/* phones: after the rules above, or they lose (the toasts sat over the tracker pill); toasts start below a three-line pill */
+@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 200px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 body.clean #game-track,body.clean #game-prompt,body.clean #game-toasts{opacity:0;pointer-events:none}
 @media (prefers-reduced-motion:reduce){ .game-toast{animation:none} }
 `;
@@ -96,10 +97,22 @@ export function createGame(ctx) {
   // anything typed by the visitor or read back from storage goes in with esc(), as text: { text } or a Node
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const fill = (e, v) => { if (v instanceof Node) e.replaceChildren(v); else if (v && typeof v === 'object' && 'text' in v) e.textContent = v.text; else e.innerHTML = v; };
+  // toasts: three at most on screen; more wait their turn (a burst from several modules used to push the first ones out
+  // unseen), and while some wait, each one up is cut to 2 s on screen
+  const shown = [], waiting = [];
   function toast(text, { ms = 4200, tone = '' } = {}) {
-    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); fill(t, text); toastsEl.appendChild(t);
-    while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
-    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 600); }, ms);
+    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); fill(t, text);
+    waiting.push({ t, ms }); pump(); return t;
+  }
+  function pump() {
+    while (shown.length < 3 && waiting.length) {
+      const w = waiting.shift(); toastsEl.appendChild(w.t); w.at = performance.now(); w.timer = setTimeout(() => hideToast(w), w.ms); shown.push(w);
+    }
+    if (waiting.length) for (const w of shown) { const left = 2000 - (performance.now() - w.at); if (left < w.ms) { clearTimeout(w.timer); w.ms = Math.max(0, left); w.timer = setTimeout(() => hideToast(w), w.ms); } }
+  }
+  function hideToast(w) {
+    if (w.gone) return; w.gone = true; w.t.classList.add('out');
+    setTimeout(() => { w.t.remove(); const i = shown.indexOf(w); if (i >= 0) shown.splice(i, 1); pump(); }, 600);
   }
   // tracker: up to three short lines, lowest `order` first; a line is { text, order }
   const lines = new Map();
@@ -122,11 +135,12 @@ export function createGame(ctx) {
       }
       if (!sections.size) list.innerHTML = '<p class="gj-empty">Nothing yet. Walk the park.</p>';
     },
-    open() { journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },
+    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
     close() { journalEl.hidden = true; emit('journal', { open: false }); },
     get isOpen() { return !journalEl.hidden; },
   };
   trackEl.addEventListener('click', () => (journal.isOpen ? journal.close() : journal.open()));
+  const setBtn = document.getElementById('btn-set'); if (setBtn) setBtn.addEventListener('click', () => { if (journal.isOpen) journal.close(); }, true);
   journalEl.querySelector('.sheet-close').addEventListener('click', journal.close);
   journalEl.querySelector('.gj-reset').addEventListener('click', () => { if (journalEl.querySelector('.gj-reset').dataset.sure) { save.reset(); location.reload(); } else { const b = journalEl.querySelector('.gj-reset'); b.dataset.sure = '1'; b.textContent = 'Erase all progress? Tap again'; } });
 
