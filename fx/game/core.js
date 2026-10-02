@@ -166,7 +166,7 @@ export function createGame(ctx) {
   /* ── interactables ── */
   const inter = []; let near = null;          // an array: walked every frame without an iterator
   function interact(o) {
-    const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o };
+    const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o }; if (!Number.isFinite(it.priority)) it.priority = 0;   // priority: the highest in reach wins, the nearest among equals
     it.remove = () => { const i = inter.indexOf(it); if (i >= 0) inter.splice(i, 1); if (near === it) { near = null; promptEl.hidden = true; promptKey.it = null; } };
     it.move = (x, y, z = it.z) => { it.x = x; it.y = y; it.z = z; };
     inter.push(it); return it;
@@ -174,12 +174,12 @@ export function createGame(ctx) {
   const usable = (it) => { if (!it.enabled) return false; if (!it.show) return true; try { return !!it.show(); } catch (e) { fail('interact show ' + it.id, it.show, e); return false; } };
   const labelOf = (it) => { try { return String((typeof it.label === 'function' ? it.label() : it.label) ?? ''); } catch (e) { it.enabled = false; console.warn('game: interact', it.id, 'label failed; switched off', e); return ''; } };
   function findNear(extra = 0, swing = false) {     // swing: only what the pole can use (a swing passes over a swing: false thing)
-    let best = null, bd = Infinity;
+    let best = null, bd = Infinity, bp = -Infinity;
     const px = player.x, py = player.y, pz = player.z;
     for (let i = 0; i < inter.length; i++) {      // squared distances, inline: this runs every frame over every interactable
       const it = inter[i]; if (swing && !it.swing) continue;
       const dx = it.x - px, dy = it.y - py, dz = (it.z - pz) * 0.6, d = dx * dx + dy * dy + dz * dz, r = it.r + extra;
-      if (d < r * r && d < bd && usable(it)) { bd = d; best = it; }     // show() only for those in reach
+      if (d < r * r && (it.priority > bp || (it.priority === bp && d < bd)) && usable(it)) { bd = d; bp = it.priority; best = it; }     // show() only for those in reach
     }
     return best;
   }
@@ -194,22 +194,25 @@ export function createGame(ctx) {
 
   /* ── props: small things added to the scene at run time (the park itself is baked) ── */
   let glowTex = null;
+  const materials = new Set();   // every material props.glow / props.mesh made and not yet removed (daynight lights them); 'prop' fires as each is made
+  const made = (material, kind) => { materials.add(material); emit('prop', { material, kind }); return material; };
   const props = {
+    materials,
     // a soft additive light: { x, y, z, color: [r,g,b] linear (may exceed 1 to bloom), size (m) } -> { sprite, set({..}), remove() }
     glow(o) {
       if (!glowTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); glowTex = new THREE.CanvasTexture(c); }
-      const m = new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false });
+      const m = made(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }), 'glow');
       const s = new THREE.Sprite(m); s.renderOrder = 8;
-      const h = { sprite: s, set(p) { if (p.color) m.color.setRGB(p.color[0], p.color[1], p.color[2]); if (p.size) s.scale.setScalar(p.size); if (p.x !== undefined) v3(p.x, p.y, p.z ?? 0, s.position); if (p.visible !== undefined) s.visible = p.visible; return h; }, remove() { scene.remove(s); m.dispose(); } };
+      const h = { sprite: s, set(p) { if (p.color) m.color.setRGB(p.color[0], p.color[1], p.color[2]); if (p.size) s.scale.setScalar(p.size); if (p.x !== undefined) v3(p.x, p.y, p.z ?? 0, s.position); if (p.visible !== undefined) s.visible = p.visible; return h; }, remove() { scene.remove(s); materials.delete(m); m.dispose(); } };
       h.set({ color: [1, 0.7, 0.35], size: 1, ...o }); scene.add(s); return h;
     },
     // a mesh in the park: geometry in three.js axes (y up), placed at Blender (x, y, z), turned by yaw about the vertical.
     // color: linear albedo; it is lit once by the baked light at its spot (lit: false or emissive: [r,g,b] for things that glow)
     mesh(geometry, { x = 0, y = 0, z = 0, yaw = 0, color = [0.5, 0.5, 0.5], emissive = null, lit = true, scale = 1 } = {}) {
       const L = lit && !emissive ? lightAt(x, y) : null, k = L ? [L[0] + 0.02, L[1] + 0.022, L[2] + 0.035] : lit && !emissive ? [0.3, 0.24, 0.18] : [1, 1, 1], c = emissive || [color[0] * k[0], color[1] * k[1], color[2] * k[2]];
-      const m = new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(c[0], c[1], c[2]), fog: false });
+      const m = made(new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(c[0], c[1], c[2]), fog: false }), 'mesh');
       const o = new THREE.Mesh(geometry, m); v3(x, y, z, o.position); o.rotation.y = yaw; o.scale.setScalar(scale); scene.add(o);
-      o.userData.remove = () => { scene.remove(o); m.dispose(); };
+      o.userData.remove = () => { scene.remove(o); materials.delete(m); m.dispose(); };
       return o;
     },
   };
