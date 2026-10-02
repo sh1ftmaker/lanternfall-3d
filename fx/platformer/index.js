@@ -188,7 +188,7 @@ export async function createPlatformer(ctx) {
       S.active = true; ch.setVisible(true); input.setActive(true); document.body.classList.add('pf-on'); pressed(true);
       if (ctx.setFov) ctx.setFov(58);
       if (dbgOn) ensureDebug();
-      ctx.hint && ctx.hint(ctx.coarse ? 'Left thumb moves · drag to look' : 'WASD move · Space jump · Shift crouch · E swing · drag to look · P back to Walk');
+      if (!S.hinted) { S.hinted = true; ctx.hint && ctx.hint(ctx.coarse ? 'Left thumb moves · drag to look' : 'WASD move · Space jump · Shift crouch · E swing · drag to look · P first person'); }   // once per visit
     },
     exit(toMode) {
       if (!S.active) return;

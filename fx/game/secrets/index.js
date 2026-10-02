@@ -3,23 +3,22 @@
 import { makeLib } from './lib.js';
 
 const KEY = 'secrets';
-// the order is the journal's order. line: what is written once found; hint: a faint nudge (shown after three finds)
+// the order is the journal's order. tease: what an unfound entry says; line: what is written once found; hint: a faint nudge (shown after three finds)
 export const LIST = [
-  { id: 'doors', line: 'A paper door that answers to the sky.', hint: 'Some doors listen to the weather.' },
-  { id: 'redcoat', line: 'A red button, left by someone always a little ahead.', hint: 'Somebody keeps walking ahead of you.' },
-  { id: 'lakebed', line: 'A carousel horse that slipped into the lake long ago.', hint: 'The water shimmers over something.' },
-  { id: 'bell', line: 'Twenty-three rings, and the Spire answers.', hint: 'The crooked bell has a number.' },
-  { id: 'nap', line: 'You fell asleep somewhere ordinary and woke somewhere better.', hint: 'A good bench is worth a long sleep.' },
-  { id: 'keep', line: 'Someone watches the storm from the keep.', hint: 'Look up when the sky breaks.' },
-  { id: 'snow', line: 'Small footprints in the snow, and a box that still plays.', hint: 'Snow keeps a trail for the curious.' },
-  { id: 'garden', line: 'A garden nobody planted, up where only the quick can climb.', hint: 'Neon towers hide a roof for the nimble.' },
+  { id: 'doors', tease: 'One door in the Wanderers\' Hall keeps odd company.', line: 'A paper door that answers to the sky.', hint: 'Some doors listen to the weather.' },
+  { id: 'redcoat', tease: 'A coat the colour of a lantern, at the edge of your eye.', line: 'A red button, left by someone always a little ahead.', hint: 'Somebody keeps walking ahead of you.' },
+  { id: 'lakebed', tease: 'The lake keeps a few things for itself.', line: 'A carousel horse that slipped into the lake long ago.', hint: 'The water shimmers over something.' },
+  { id: 'bell', tease: 'Some bells want more than one ring.', line: 'Twenty-three rings, and the Spire answers.', hint: 'The crooked bell has a number.' },
+  { id: 'nap', tease: 'Rest is a kind of travel.', line: 'You fell asleep somewhere ordinary and woke somewhere better.', hint: 'A good bench is worth a long sleep.' },
+  { id: 'keep', tease: 'A window that is not always empty.', line: 'Someone watches the storm from the keep.', hint: 'Look up when the sky breaks.' },
+  { id: 'snow', tease: 'Someone walked here before the snow.', line: 'Small footprints in the snow, and a box that still plays.', hint: 'Snow keeps a trail for the curious.' },
+  { id: 'garden', tease: 'Only the quick see the roofs. The arcade\'s east wall is kind to a backward leap.', line: 'A garden nobody planted, up where only the quick can climb.', hint: 'Neon towers hide a roof for the nimble. The east wall of the arcade helps.' },
 ];
 const FILES = ['doors', 'redcoat', 'lakebed', 'bell', 'nap', 'keep', 'snow', 'garden'];
 const CSS = `#sx-fade{position:fixed;inset:0;z-index:30;pointer-events:none;opacity:0;background:var(--sx-fade,#f5ecdc);transition:opacity .45s ease}
 #sx-fade.on{opacity:1} #sx-fade.slow{transition-duration:.9s} @media (prefers-reduced-motion:reduce){#sx-fade{transition:none}}
 .sx-jrow{display:flex;gap:8px;margin:0 0 7px} .sx-jrow i{font-style:normal;opacity:.55;min-width:14px;text-align:center}
-.sx-jrow.hint{opacity:.45;font-style:italic} .sx-jrow.none{opacity:.4}
-#game-journal{box-sizing:border-box}   /* workaround: the core sheet is content-box, so on a 390 px screen it runs 34 px off the right edge */`;
+.sx-jrow.hint{opacity:.45;font-style:italic} .sx-jrow.none{opacity:.4}`;
 
 export function init(game) {
   const lib = makeLib(game);
@@ -64,7 +63,7 @@ export function init(game) {
       for (const e of LIST) {
         const row = document.createElement('div'); row.className = 'sx-jrow' + (f[e.id] ? '' : ' none');
         const i = document.createElement('i'); i.textContent = f[e.id] ? '◆' : '—';
-        const t = document.createElement('span'); t.textContent = f[e.id] ? e.line : '';
+        const t = document.createElement('span'); t.textContent = f[e.id] ? e.line : e.tease;
         row.append(i, t); el.appendChild(row);
       }
       const hints = n >= 3 ? LIST.filter((e) => !f[e.id]) : [];

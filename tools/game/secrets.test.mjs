@@ -1,8 +1,10 @@
 // secrets module end to end: finds every secret by script, as Wick on desktop, as Wick on a 390x844 touch screen (the short set) and in first person
 // (#fp: what only Wick can reach must stay unfound). Usage: node secrets.test.mjs [url] (needs puppeteer-core next to it); SHOTS=dir for screenshots,
-// ONLY=desktop|mobile|fp to run one pass. Ends with a JSON line; "errs" must be empty. The nap test waits for Wick to fall asleep (about 80 s).
+// ONLY=desktop|mobile|fp to run one pass, --only doors,bell,redcoat,keep,snow,wick,journal for some sections, --quick for the short run on the desktop layout
+// (about 2 minutes: doors in two weathers, bell, keep, snow, journal; for every merge; the full run is about 10 minutes). Ends with a JSON line; "errs" must be empty. The nap test waits for Wick to fall asleep (about 80 s).
 import puppeteer from 'puppeteer-core'; import fs from 'fs';
-const URL = process.argv[2] || 'http://127.0.0.1:8905/index.html', SHOTS = process.env.SHOTS || '/tmp/secrets-shots'; fs.mkdirSync(SHOTS, { recursive: true });
+const ARGS = process.argv.slice(2), QUICK = ARGS.includes('--quick'), oi = ARGS.indexOf('--only'), SECT = oi >= 0 ? ARGS[oi + 1].split(',') : QUICK ? ['doors', 'bell', 'keep', 'snow', 'journal'] : null, sec = (k) => !SECT || SECT.includes(k);
+const URL = ARGS.find((a, i) => !a.startsWith('--') && ARGS[i - 1] !== '--only') || 'http://127.0.0.1:8905/index.html', SHOTS = process.env.SHOTS || '/tmp/secrets-shots'; fs.mkdirSync(SHOTS, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const LANDS = ['wanderers', 'meridian', 'frostmere', 'guildhollow', 'rosewick', 'lantern-row', 'brinewatch'];
 const run = async (kind) => {
@@ -33,9 +35,10 @@ const run = async (kind) => {
   await hook();
 
   /* 1. the Paper Doors: each weather opens somewhere else; a return door stands there */
+  if (sec('doors')) {
   const door = await ev(`${API}.doors.doorWorld()`);
   const dest = { clear: [0, 5], mist: await wx('lantern-row', 0, 28), rain: await wx('meridian', 14, 4.5), storm: await wx('guildhollow', 0, 22.6), snow: await wx('frostmere', 36, 5) };
-  for (const w of mobile ? ['mist', 'rain'] : ['clear', 'mist', 'rain', 'storm', 'snow']) {
+  for (const w of mobile ? ['mist', 'rain'] : QUICK ? ['clear', 'storm'] : ['clear', 'mist', 'rain', 'storm', 'snow']) {
     await weather(w); const f = await wx('wanderers', -1.33, 21.5); await place(f[0], f[1], await ev(`${M}.lib.outward('wanderers')`)); await wait(2500);
     ok(`door prompt (${w})`, /Open door/.test(await prompt()), await prompt());
     if (w === 'mist') { await shot('door_prompt'); }
@@ -55,22 +58,25 @@ const run = async (kind) => {
   ok('doors found once', await found('doors') && (await ev(`__found.filter(f=>f.id==='doors').length`)) === 1);
   ok('secrets:found carries count and total', await ev(`(()=>{const f=__found[0];return f&&f.count===1&&f.total===8})()`));
   await weather('clear');
+  }
 
   /* 7. the bell, 23 times (our own bell appears ten seconds in if nobody has put one there) */
+  if (sec('bell')) {
   await wait(8000);
   const bell = await ev(`(()=>{const b=${G}.modules.bounty;if(b&&b.positions){const p=b.positions().bell;return [p.x,p.y]}return ${API}.bell.own?[${API}.bell.own.x,${API}.bell.own.y]:null})()`);
   ok('a bell to ring (the bounty module\'s, else our fallback)', !!bell);
   if (bell) {
     await place(bell[0] - 1.2, bell[1] - 1.4, 0.7); await wait(2500); ok('bell prompt', /bell/i.test(await prompt()), await prompt());
     if (mobile) { await shot('bell'); await tapPrompt(); } else await ev(`${G}.use()`);
-    for (let i = 0; i < 21; i++) { await ev(`${G}.use()`); await wait(60); }
+    for (let i = 0; i < 21; i++) { await ev(`${G}.use()`); await wait(60); if (i === 1) ok('after the third ring a count shows', await ev(`/rung 3 times/.test(document.getElementById('game-toasts').textContent)`)); }
     ok('22 rings: not yet', !(await found('bell')) && (await ev(`${API}.bell.count`)) === 22);
     await ev(`${G}.use()`); await wait(1500);
     ok('the 23rd ring finds it', await found('bell')); await wait(1200); if (!mobile) await shot('bell_column');
   }
+  }
 
   /* 4. the guest in the red coat: seen in each land, gone within 12 m, then the rail and the button */
-  if (!mobile) {
+  if (!mobile && sec('redcoat')) {
     const spots = await ev(`${API}.redcoat.spots.map(s=>[s.id,s.x,s.y])`);
     ok('seven vantage spots', spots.length === 7);
     for (const [id, sx, sy] of spots) {
@@ -97,7 +103,7 @@ const run = async (kind) => {
   }
 
   /* 2. the keep: only in a storm, only when looked at for two seconds */
-  if (!mobile) {
+  if (!mobile && sec('keep')) {
     const kp = await ev(`${API}.keep.pos`), cw = await wx('guildhollow', 0, 22);
     await place(cw[0], cw[1], await ev(`${M}.lib.outward('guildhollow')`)); await wait(2000);
     const aim = () => ev(fp ? `(()=>{const w=__park.walk;const dx=${kp[0]}-w.x,dy=${kp[1]}-w.y,dz=${kp[2] + 1.3}-(w.z+1.68);w.yaw=Math.atan2(dy,dx);w.pitch=Math.atan2(dz,Math.hypot(dx,dy))})()`
@@ -111,9 +117,10 @@ const run = async (kind) => {
   }
 
   /* 3. the snow: footprints and a music box, only while it snows */
-  if (!mobile) {
+  if (!mobile && sec('snow')) {
     await weather('clear'); await wait(3000); ok('no trail in clear weather', await ev(`!${API}.snow.visible`));
     await weather('snow'); await wait(6000); ok('the trail appears in snow', await ev(`${API}.snow.visible`));
+    ok('no footprint sits on a bench top', await ev(`${API}.snow.pts.every((p) => ${G}.ground(p.x, p.y) === null || ${G}.ground(p.x, p.y) < 0.4)`), JSON.stringify(await ev(`${API}.snow.pts.map((p) => +(${G}.ground(p.x, p.y) ?? -9).toFixed(2))`)));
     const bx = await ev(`${API}.snow.boxPos`), first = await ev(`(({x,y})=>[x,y])(${API}.snow.pts[0])`);
     await place(first[0] + 2.5, first[1] + 2, 3); await wait(2500); await shot('snow_trail');
     await place(bx[0] + 0.9, bx[1] + 0.9, Math.atan2(-0.9, -0.9)); await wait(2500); ok('music box prompt', /music box/i.test(await prompt()), await prompt());
@@ -122,7 +129,7 @@ const run = async (kind) => {
   }
 
   /* 6 and 5 and 8 need Wick: unfound in first person, found by diving, a triple jump and a long nap */
-  if (!fp && !mobile) {
+  if (!fp && !mobile && sec('wick')) {
     // 6. the lake bed
     const hz = await ev(`${API}.lakebed.pos`);
     await ev(`__park.platformer.enter({x:${hz[0] + 2.2},y:${hz[1]},z:-2.2,yaw:0})`); await wait(2500);
@@ -142,14 +149,16 @@ const run = async (kind) => {
     const t0 = Date.now(); const slept = await until(`${G}.player.action==='sleeping'`, 110000); ok('Wick falls asleep when left alone', slept, `${((Date.now() - t0) / 1000).toFixed(0)} s`);
     ok('five seconds asleep on the bench: he wakes on the Spire gallery', await until(`${M}.isFound('nap')&&${G}.player.z>20`, 20000)); await wait(2500); await shot('nap');
   }
-  if (fp) {
+  if (fp && sec('wick')) {
     ok('Wick-only secrets stay unfound in first person', !(await found('lakebed')) && !(await found('garden')) && !(await found('nap')));
   }
 
   /* journal, then persistence */
+  if (sec('journal')) {
   await ev(`${G}.journal.open()`); await wait(700); await ev(`document.querySelector('#game-journal').scrollTop=1e5`); await wait(300); await shot('journal');
   const jtxt = await ev(`document.querySelector('#game-journal').textContent`), nf = await ev(`Object.keys(${M}.state().found).length`);
   ok('journal lists Curiosities and the found ones', /Curiosities/.test(jtxt) && (nf === 0 || /Twenty-three rings|paper door/.test(jtxt)), `found ${nf}`);
+  ok('unfound entries tease with a line, not a bare dash', await ev(`[...document.querySelectorAll('.sx-jrow.none span')].every((e) => e.textContent.length > 8)`));
   ok('journal fits the screen width', await ev(`(()=>{const r=document.querySelector('#game-journal').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()`));
   if (nf >= 3) ok('a faint hint for what is not found', await ev(`!!document.querySelector('.sx-jrow.hint')`) || nf === 8);
   await ev(`${G}.journal.close()`);
@@ -157,9 +166,10 @@ const run = async (kind) => {
   const nf2 = await ev(`Object.keys(${M}.state().found).length`); ok('finds survive a reload', nf2 === nf, `${nf2}/${nf}`);
   await ev(`${G}.journal.open()`); await wait(500); ok('journal after reload', (await ev(`document.querySelectorAll('.sx-jrow:not(.none):not(.hint)').length`)) === nf);
   await shot('journal_reload'); await ev(`${G}.journal.close()`);
+  }
   console.log(JSON.stringify({ kind, results: res, errs: [...errs].map(([k, v]) => v + 'x ' + k) }, null, 1)); await browser.close();
   return !errs.size;
 };
 const only = process.env.ONLY; let all = true;
-for (const k of ['desktop', 'mobile', 'fp']) if (!only || only === k) all = (await run(k)) && all;
+for (const k of ['desktop', 'mobile', 'fp']) if (QUICK ? k === 'desktop' : (!only || only === k)) all = (await run(k)) && all;
 console.log(all ? 'ALL OK' : 'FAILURES'); process.exit(all ? 0 : 1);

@@ -117,6 +117,49 @@ export function init(game) {
   }
   game.renderer.domElement.addEventListener('webglcontextrestored', () => { shadowDir = null; surface.uniforms.uShadowOnS.value = 0; envT = -1e9; });
 
+  // the map is the biggest thing here (4096 x 4096 depth on desktop): free it when night comes (the sun builds it again, first thing, at dusk)
+  function freeSunShadow() {
+    const S = surface.sunShadow; shadowDir = null;
+    surface.uniforms.uShadowOnS.value = 0; surface.uniforms.tShadowS.value = null;
+    if (S && S.rt) { S.rt.dispose(); S.rt = null; }
+  }
+
+  // ── run-time props (game.props.materials, fx/game/core.js): lit once from the baked NIGHT light when made, so at dusk they are
+  // dark beside a park that the sun lights. One shared uniform each: a lit prop's colour is multiplied by (lamps + sun and sky light
+  // as the park's surfaces get them, relative to a typical night prop), a glowing one is dimmed with the lamps, a glow sprite by its opacity.
+  const propGain = { value: new THREE.Vector3(1, 1, 1) }, propEmit = { value: 1 };
+  const seenProps = new WeakSet();
+  function adopt(m) {
+    if (!m || seenProps.has(m)) return; seenProps.add(m);
+    if (m.isSpriteMaterial) { m.userData.dnSprite = true; m.opacity = propEmit.value; return; }
+    if (!m.isMeshBasicMaterial) return;
+    const c = m.color, glowing = Math.max(c.r, c.g, c.b) >= 0.9;                 // props.mesh: emissive colours are >= 1, lit ones are albedo x a baked light well below it
+    const u = glowing ? propEmit : propGain, line = glowing ? 'diffuseColor.rgb *= vec3(dnPropGain);' : 'diffuseColor.rgb *= dnPropGain;';
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      if (prev) prev.call(m, sh, r);
+      sh.uniforms.dnPropGain = u; sh.fragmentShader = sh.fragmentShader.replace('void main() {', (glowing ? 'uniform float dnPropGain;' : 'uniform vec3 dnPropGain;') + '\nvoid main() {').replace('#include <color_fragment>', '#include <color_fragment>\n' + line);
+    };
+    const key = m.customProgramCacheKey; m.customProgramCacheKey = () => (key ? key.call(m) : '') + (glowing ? 'dnPE' : 'dnPL');
+    m.needsUpdate = true;
+  }
+  const propSet = () => { const P = game.props; return P && P.materials && typeof P.materials.forEach === 'function' ? P.materials : null; };
+  let lastGain = '';
+  function lightProps(s) {
+    const g = propGain.value;
+    if (s.night) { g.set(1, 1, 1); propEmit.value = 1; }
+    else {
+      const sk = s.sunCol, am = [s.ambSky[0] * 0.5 + s.ambGnd[0] * 0.5, s.ambSky[1] * 0.5 + s.ambGnd[1] * 0.5, s.ambSky[2] * 0.5 + s.ambGnd[2] * 0.5];
+      const f = (i) => Math.min(9, s.lamps + (sk[i] * 0.45 + am[i] * 1.3) / 0.7);
+      g.set(f(0), f(1), f(2)); propEmit.value = 0.3 + 0.7 * s.lamps;
+    }
+    const key = g.x.toFixed(3) + g.y.toFixed(3) + g.z.toFixed(3) + propEmit.value.toFixed(3); if (key === lastGain) return; lastGain = key;
+    const set = propSet(); if (!set) return;
+    set.forEach((m) => { adopt(m); if (m.userData && m.userData.dnSprite) m.opacity = propEmit.value; });
+  }
+  game.on('prop', ({ material }) => { adopt(material); if (material && material.isSpriteMaterial) material.opacity = propEmit.value; });
+  { const set = propSet(); if (set) set.forEach(adopt); }
+
   function frame(dt) {
     const target = clampT(game.clock.t);
     if (tc !== target) { const d = target - tc; tc = Math.abs(d) < 0.02 ? target : tc + d * (1 - Math.exp(-Math.min(dt, 0.25) / 0.5)); }
@@ -125,14 +168,14 @@ export function init(game) {
       lastTc = tc; lastCloud = cloud; state = at(tc); state.t = game.clock.t;
       apply(state, cloud);
       if (state.phase !== phase) { phase = state.phase; game.emit('daynight:phase', { phase }); }
-      dimThings(state.lamps);
+      dimThings(state.lamps); lightProps(state);
     }
     if (!state.night) {
       shadowStep();
       // the lake's no-mirror environment cube holds the park's light as it was when captured
       if (Math.abs(tc - envT) > 4 && ctx.getWater && ctx.getWater()) { envT = tc; ctx.getWater().recaptureEnv(); }
       envDusk = true;
-    } else if (envDusk) { envDusk = false; envT = -1e9; if (ctx.getWater && ctx.getWater()) ctx.getWater().recaptureEnv(); }       // back to night: capture the night again
+    } else if (envDusk) { envDusk = false; envT = -1e9; freeSunShadow(); if (ctx.getWater && ctx.getWater()) ctx.getWater().recaptureEnv(); }       // back to night: capture the night again
   }
   game.on('frame', ({ dt }) => frame(dt));
   // snap (no easing) on the first frame so a clock set before the module started shows at once
@@ -140,6 +183,7 @@ export function init(game) {
 
   return {
     get state() { return state; }, get time() { return tc; }, at,
+    get props() { return { gain: propGain.value.toArray(), emit: propEmit.value, count: propSet() ? propSet().size : -1 }; },     // tests
     // test helper: show time t at once (no easing)
     snap(t) { game.clock.set(t); tc = clampT(t); frame(0); },
   };

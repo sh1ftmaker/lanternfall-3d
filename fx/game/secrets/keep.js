@@ -36,7 +36,12 @@ export function init(S) {
     // Wick's camera cannot tilt up 17 degrees of the window from anywhere in range (it looks down at him and the ground stops it
     // going lower), so for him "looking at it" is: the window held on screen, near the middle across and below the top edge
     let at = false;
-    if (d < RANGE && d > MIN) { if (p.wick) { ndc.copy(win).project(game.camera); at = ndc.z < 1 && Math.abs(ndc.x) < 0.3 && ndc.y > -0.6 && ndc.y < 0.95; } else at = tgt.normalize().dot(dir) > AIM; }
+    if (d < RANGE && d > MIN) { if (p.wick) {
+        ndc.copy(win).project(game.camera); at = ndc.z < 1 && Math.abs(ndc.x) < 0.3 && ndc.y > -0.6 && ndc.y < 0.95;
+        // Wick's camera sits above him: standing in the courtyard facing the keep in a storm, ease it down so the window comes into view
+        const C = game.platformer && game.platformer.S && game.platformer.S.cam;
+        if (!at && C && ndc.z < 1 && Math.abs(ndc.x) < 0.5 && ndc.y >= 0.95 && C.pitch > -0.35 && game.player.speed < 1 && (game.platformer.S.t - (C.lastUser || -10)) > 1.5) C.pitch = Math.max(-0.35, C.pitch - dt * 0.35);
+      } else at = tgt.normalize().dot(dir) > AIM; }
     if (at) look += dt; else look = Math.max(0, look - dt * 2);
     if (look >= NEED) S.found('keep');
   });

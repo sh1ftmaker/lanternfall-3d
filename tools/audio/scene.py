@@ -120,7 +120,7 @@ def write_json(meta, path):
     ]
     for i, (x, y) in enumerate(DOORS):
         emitters.append(em(f'paper_door_{i + 1:02d}', f'door_{i + 1:02d}', [x, y, 3.0], .6, 8, 70, loop=False,
-                           every=[45, 140]))
+                           every=[170, 480]))
     emitters += [
         em('brine_ship_bell', 'ship_bell_1', P['brine_galleon'], .7, 15, 180, loop=False, every=[40, 100]),
         em('brine_creak', 'creak_loop', P['brine_galleon'], .6, 6, 50),

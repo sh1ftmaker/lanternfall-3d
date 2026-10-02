@@ -3,13 +3,15 @@
 // cp: [x, y, z, radius?, half-height?]  default radius 5 m, 7 m up or down.
 export const COURSES = [
   {
-    id: 'lake', name: 'The Lake Lap', short: 'Lake Lap', wick: false, pace: 6, fp: 2,
+    id: 'lake', name: 'The Lake Lap', short: 'Lake Lap', wick: false, pace: 6, fp: 1.5,
     blurb: 'Once round Stillwater on the ring promenade, about 535 m.',
     where: 'East Gate end of the avenue, at the lake steps',
     post: [103.6, 9, 0.12, Math.PI],
-    // 14 points about 38 m apart round the lake (kept inland of the Brinewatch bay), anticlockwise from the steps; the 14th is the finish at the start line
-    cps: [[85, 35.9], [52.9, 53.5], [16.6, 62.4], [-20.4, 59.9], [-56.3, 51.9], [-87.1, 31.6], [-98.2, -3.9], [-86.9, -38.9], [-52.6, -53.5], [-16.2, -59.8], [20.9, -64.3], [56, -66], [88, -42], [100.7, 3.3]].map(([x, y]) => [x, y, 0.12]),
-    medals: { gold: 68, silver: 88 },
+    // 17 points about 20-40 m apart, each 4 m inland of the water's edge on the promenade (the lake is not a circle: the south shore is 60 m out, the
+    // east 98 m, so a ring of equal radius ran through the water); the 17th is the finish at the start line. Checked against the walk grid: no
+    // leg crosses water, and the only bumps are single bench tops
+    cps: [[82.9, 40.4], [45.6, 58.4], [13.4, 63.1], [-15.2, 61.1], [-46.6, 55.5], [-84, 37.4], [-100.8, 7], [-95.6, -31], [-67, -52.3], [-35.2, -56.4], [-8.8, -62.9], [18.6, -64.9], [50.1, -55.7], [74.9, -33.4], [92, -28], [107, -17], [100.7, 3.3]].map(([x, y]) => [x, y, 0.12]),
+    medals: { gold: 66, silver: 84 },
     stray: 110,
   },
   {

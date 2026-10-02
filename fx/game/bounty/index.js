@@ -37,6 +37,7 @@ const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) 
 const rng = (seed) => () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 export function drawJobs(key) { const r = rng(hashStr('bounty|' + key)), ids = JOBS.map((j) => j.id); for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } return ids.slice(0, 3); }
 export const boatCount = (key) => 3 + (hashStr('boats|' + key) % 4);
+const lc = (n) => n.charAt(0).toLowerCase() + n.slice(1);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export function init(game) {
@@ -56,17 +57,32 @@ export function init(game) {
   const commit = () => game.save.set(KEY, S);
   function rollDay(force) {
     const k = force || dayKey(); if (S.day === k) return false;
-    stopAllJobs(); S.day = k; S.ids = drawJobs(k); S.jobs = {}; S.drinkT0 = 0; S.candle = '';
-    S.carry = S.carry.filter((c) => c.startsWith('lost:')); commit(); return true;
+    if (!force && S.day && k < S.day) return false;   // the system date went back: stay on the last day seen, so nothing can be done twice
+    // a job half done is carried over to the new night (with what you hold for it) instead of being dropped
+    const carried = S.ids.filter((id) => jobById[id] && active(id)), held = carried.map((id) => [id, S.jobs[id]]), drinking = carried.includes('drink') && S.drinkT0;
+    stopAllJobs(); S.day = k; S.ids = drawJobs(k); S.jobs = {}; S.candle = '';
+    for (const [id, j] of held) { if (!S.ids.includes(id)) S.ids.push(id); S.jobs[id] = j; }
+    S.drinkT0 = drinking ? S.drinkT0 : 0;
+    S.carry = S.carry.filter((c) => c.startsWith('lost:') || carried.some((id) => jobItems[id] === c)); commit();
+    if (carried.length) game.toast(`A new night on the board. Still open from before: <b>${carried.map((id) => esc(jobById[id].title)).join(', ')}</b>.`, { ms: 6000 });
+    return true;
   }
 
   /* ── placing things ── */
   const P = (s, zr) => { const [x, y] = world(lands, s); return { x, y, z: s.z ?? game.ground(x, y, zr) ?? 0.1 }; };
+  // distance and mode cull: everything the module puts in the world shows only in Walk and within `r` metres of the visitor
+  const cull = [];
+  const near = (x, y, r) => game.player.mode === 'walk' && (x - game.player.x) ** 2 + (y - game.player.y) ** 2 < r * r;
+  function addCull(x, y, r, set) { const e = { x, y, r, set, on: near(x, y, r) }; set(e.on); cull.push(e); return e; }
+  const dropCull = (e) => { const i = cull.indexOf(e); if (i >= 0) cull.splice(i, 1); };
+  function runCull() { for (const e of cull) { const n = near(e.x, e.y, e.r); if (n !== e.on) { e.on = n; e.set(n); } } }
+  const gate = (o) => { let u = true, n = true; return { set user(v) { u = !!v; o.visible = u && n; }, set near(v) { n = !!v; o.visible = u && n; } }; };
+  const CULL_R = 70;
   const glints = [];    // { sprite, base, ph } pulsed every frame
   const warm = [0.8, 0.62, 0.34];
   function glint(p, { size = 0.4, color = warm, lift = 0.3 } = {}) {
-    const g = game.props.glow({ x: p.x, y: p.y, z: p.z + lift, color, size }); const e = { g, base: size, ph: Math.random() * 6, c: color }; glints.push(e);
-    return { remove() { g.remove(); const i = glints.indexOf(e); if (i >= 0) glints.splice(i, 1); }, set visible(v) { g.sprite.visible = v; } };
+    const g = game.props.glow({ x: p.x, y: p.y, z: p.z + lift, color, size }), gt = gate(g.sprite); const e = { g, base: size, ph: Math.random() * 6, c: color }; glints.push(e);
+    return { remove() { g.remove(); const i = glints.indexOf(e); if (i >= 0) glints.splice(i, 1); }, set visible(v) { gt.user = v; }, set near(v) { gt.near = v; } };
   }
   // a thing in the world: a model, a glint, a prompt. Returns { remove(), prop, hide(), show() }
   function thing({ id, kind, spot, label, use, show, r = 2.2, model = {}, glow = true, size = 0.4, color, scale, lift, yaw }) {
@@ -74,13 +90,14 @@ export function init(game) {
     const prop = kind ? art.build(kind, { x: p.x, y: p.y, z: p.z, yaw: yaw ?? (hashStr(id || kind || 'x') % 628) / 100, scale, ...model }) : null;
     const gl = glow ? glint(p, { size, color, lift: (lift ?? 0) + 0.45 }) : null;
     const it = id ? game.interact({ id, x: p.x, y: p.y, z: p.z + (lift ?? 0), r, label, use, show }) : null;
-    const t = { prop, it, p, remove() { prop && prop.remove(); gl && gl.remove(); it && it.remove(); }, hide() { if (prop) prop.visible = false; if (gl) gl.visible = false; }, reveal() { if (prop) prop.visible = true; if (gl) gl.visible = true; } };
+    const ce = addCull(p.x, p.y, CULL_R, (n) => { if (prop) prop.near = n; if (gl) gl.near = n; });
+    const t = { prop, it, p, remove() { dropCull(ce); prop && prop.remove(); gl && gl.remove(); it && it.remove(); }, hide() { if (prop) prop.visible = false; if (gl) gl.visible = false; }, reveal() { if (prop) prop.visible = true; if (gl) gl.visible = true; } };
     return t;
   }
 
   /* ── what you carry ── */
   const ITEM = { letter: 'sealed letter', balloon: 'red balloon', bow: "busker's bow", drink: 'hot cider', log: "ferry master's log" };
-  for (const l of LOST) ITEM['lost:' + l.id] = l.name;
+  for (const l of LOST) ITEM['lost:' + l.id] = l.name;   // capitalised, for lists; lc() in a sentence
   const has = (k) => S.carry.includes(k);
   const give = (k) => { if (!has(k)) S.carry.push(k); commit(); refreshTrack(); };
   const take = (k) => { S.carry = S.carry.filter((c) => c !== k); commit(); refreshTrack(); };
@@ -90,24 +107,37 @@ export function init(game) {
   const lostCount = () => Object.keys(S.lost).length;
 
   /* ── the tracker line ── */
+  // where a job's next step is, for ordering (the most advanced job first: one you hold the item for, then the nearest)
+  const NEXT = { letter: () => 'signing', balloon: () => (has('balloon') ? 'child' : 'balloon'), bow: () => (has('bow') ? 'busker' : 'bow'), drink: () => (has('drink') ? 'gatekeeper' : 'tavern'), log: () => (has('log') ? 'dock' : 'logTable'), candle: () => 'shrine', boats: () => 'boatsAt', bell: () => 'bell' };
+  const spotP = {};
+  const where = (id) => { const k = NEXT[id] && NEXT[id](); if (!k || !SPOTS[k]) return null; return spotP[k] ||= P(SPOTS[k]); };
+  const advanced = (id) => id === 'letter' || (jobItems[id] ? has(jobItems[id]) : false);
+  function pickJobs(act) {
+    const pl = game.player, walk = pl.mode === 'walk';
+    const score = (id) => { const w = walk && where(id); return (advanced(id) ? 0 : 1e6) + (w ? Math.hypot(w.x - pl.x, w.y - pl.y) : S.ids.indexOf(id)); };
+    return act.slice().sort((a, b) => score(a) - score(b));
+  }
+  let lastTrack;
   function refreshTrack() {
     const parts = [];
     if (has('drink')) { const left = Math.max(0, DRINK_SECONDS - (Date.now() - S.drinkT0) / 1000); parts.push(`Hot cider: ${Math.floor(left / 60)}:${pad(Math.floor(left % 60))} to the Frostmere gate`); }
     else {
-      const act = S.ids.filter(active);
-      if (act.length) { const j = jobById[act[0]]; parts.push(j.short + (act.length > 1 ? ` (+${act.length - 1})` : '')); }
+      const act = pickJobs(S.ids.filter(active));
+      if (act.length) parts.push(jobById[act[0]].short + (act.length > 1 ? ` (+${act.length - 1} more)` : ''));
     }
     const lost = S.carry.filter((c) => c.startsWith('lost:')).map((c) => ITEM[c]);
     if (lost.length) parts.push(`${lost.join(', ')} for the Lost & Found`);
     else if (!parts.length) { const other = S.carry.filter((c) => !c.startsWith('lost:')).map((c) => ITEM[c]); if (other.length) parts.push('Carrying: ' + other.join(', ')); }
-    game.track(KEY, parts.length ? parts.join(' · ') : null, { order: 12 });
+    const text = parts.length ? parts.join(' · ') : null; if (text === lastTrack) return; lastTrack = text;
+    game.track(KEY, text, { order: 12 });
   }
 
   /* ───────────────────────── jobs ───────────────────────── */
+  let candleThing = null;
   const live = {};       // job id -> [things] while active
   const keep = (id, t) => { (live[id] ||= []).push(t); return t; };
   const stopJob = (id) => { for (const t of live[id] || []) t.remove(); delete live[id]; };
-  function stopAllJobs() { for (const id of Object.keys(live)) stopJob(id); stopBoats(); }
+  function stopAllJobs() { for (const id of Object.keys(live)) stopJob(id); stopBoats(); if (candleThing) { candleThing.remove(); candleThing = null; } }   // the candle burns for its night only
 
   // a pick-up for a job (shown while the job is active and the thing is not in your pocket)
   const pick = (id, item, spot, kind, label, extra = {}) => {
@@ -151,8 +181,7 @@ export function init(game) {
       keep('log', thing({ id: 'job-log-give', kind: null, spot: SPOTS.dock, label: () => (has('log') ? 'Leave the log at the cruise dock' : 'The cruise dock'), r: 3, size: 0.8, use() { if (has('log')) { take('log'); complete('log'); } else game.toast('The cruise dock. The ferry master wants his log.'); } }));
     },
   };
-  let candleThing = null;
-  function lightCandle() { if (candleThing) return; const t = thing({ kind: 'candle', spot: SPOTS.shrine, glow: true, size: 1.1, color: [1.3, 0.8, 0.35], scale: 1.6 }); candleThing = t; S.candle = S.day; commit(); }
+    function lightCandle() { if (candleThing) return; const t = thing({ kind: 'candle', spot: SPOTS.shrine, glow: true, size: 1.1, color: [1.3, 0.8, 0.35], scale: 1.6 }); candleThing = t; S.candle = S.day; commit(); }
 
   /* boats off the wharf: N of them, floating at the water surface; the answer is given on the board card */
   let boats = [];
@@ -161,10 +190,10 @@ export function init(game) {
     for (let i = 0; i < n; i++) {
       const x = c.x - 11 + (22 * (i + 0.5 + (r() - 0.5) * 0.4)) / n, y = c.y - r() * 6 - Math.abs(i - n / 2) * 0.4;
       const [wx, wy] = world(lands, { land: c.land, x, y }); const b = art.build('boat', { x: wx, y: wy, z: -0.8, yaw: lands.brinewatch.phi + (r() - 0.5) * 0.4, scale: 1.2 });
-      boats.push({ b, y0: -0.8, ph: r() * 6 });
+      boats.push({ b, y0: -0.8, ph: r() * 6, ce: addCull(wx, wy, 130, (n) => { b.near = n; }) });
     }
   }
-  function stopBoats() { for (const o of boats) o.b.remove(); boats = []; }
+  function stopBoats() { for (const o of boats) { dropCull(o.ce); o.b.remove(); } boats = []; }
   function answerBoats(n) {
     if (!active('boats')) return;
     if (n === boatCount(S.day)) { game.toast('Right. Every boat accounted for.', { tone: 'good' }); complete('boats'); }
@@ -207,7 +236,7 @@ export function init(game) {
     const h = card.querySelector('h2'), body = card.querySelector('.bty-body'); body.textContent = '';
     if (cardMode === 'board') {
       h.textContent = 'Bounty Board';
-      const date = document.createElement('p'); date.className = 'bty-date'; date.textContent = `${nice(new Date())}. Three jobs, the same for everyone tonight.`; body.appendChild(date);
+      const date = document.createElement('p'); date.className = 'bty-date'; date.textContent = `${nice(new Date())}. Three jobs, the same for everyone tonight.${S.ids.length > 3 ? ' One is still open from before.' : ''}`; body.appendChild(date);
       for (const id of S.ids) {
         const j = jobById[id], s = state(id), box = document.createElement('div'); box.className = 'bty-job ' + s;
         box.innerHTML = `<h3>${esc(j.title)}</h3><p>${esc(j.text)}</p>`;
@@ -228,14 +257,14 @@ export function init(game) {
       const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = `Jobs done in all: ${S.jobsDone}. The reward counter is across the square.`; body.appendChild(f);
     } else {
       h.textContent = 'Rewards';
-      const p = document.createElement('p'); p.className = 'bty-date'; p.textContent = "The clerk slides a tray of tinted glass across the counter: a new colour for the lamplighter's lantern."; body.appendChild(p);
+      const p = document.createElement('p'); p.className = 'bty-date'; p.textContent = "The clerk slides a tray of tinted glass across the counter: a new colour for Wick's lantern."; body.appendChild(p);
       for (const c of COLORS.filter((c) => !c.free)) {
         const ready = rewardReady(c.id), got = S.claimed[c.id], row = document.createElement('div'); row.className = 'bty-reward' + (got || ready ? '' : ' lock'); row.style.color = c.css;
         row.innerHTML = `<i></i><div style="color:var(--paper)">${esc(c.name)}<small>${got ? 'In your journal, to choose from.' : ready ? 'Earned.' : esc(c.need)}</small></div>`;
         if (ready && !got) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bty-btn'; b.textContent = 'Take it'; b.onclick = () => claim(c.id); row.appendChild(b); }
         body.appendChild(row);
       }
-      const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = 'Choose the colour in the journal (B). The lantern shows on the lamplighter, not in first person.'; body.appendChild(f);
+      const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = 'Choose the colour in the journal (B). The lantern shows on Wick, not in first person.'; body.appendChild(f);
     }
   }
 
@@ -256,7 +285,7 @@ export function init(game) {
     const c = COLORS.find((x) => x.id === id); if (!c || !rewardReady(id) || S.claimed[id]) return;
     S.claimed[id] = 1; if (!S.colors.includes(id)) S.colors.push(id); S.color = id; commit(); applyColor(true);
     game.toast(`A new lantern colour: <b>${esc(c.name)}</b>.`, { tone: 'good', ms: 5200 });
-    if (!game.player.wick) setTimeout(() => game.toast('There is no lantern in first person. The colour is kept: switch to the lamplighter (P) to see it.', { ms: 6500 }), 900);
+    if (!game.player.wick) setTimeout(() => game.toast('There is no lantern in first person. The colour is kept: switch to Wick (P) to see it.', { ms: 6500 }), 900);
     game.emit('bounty:reward', { id }); renderCard(); game.journal.refresh();
   }
   const colorOf = (id) => COLORS.find((c) => c.id === id) || COLORS[0];
@@ -269,7 +298,7 @@ export function init(game) {
   }
   function chooseColor(id) {
     if (!S.colors.includes(id)) return; S.color = id; commit(); applyColor(true); game.journal.refresh();
-    if (!game.player.wick) game.toast('Chosen. There is no lantern in first person: it shows on the lamplighter (P).', { ms: 5000 });
+    if (!game.player.wick) game.toast('Chosen. There is no lantern in first person: it shows on Wick (P).', { ms: 5000 });
   }
 
   /* ───────────────────────── the strength bell ───────────────────────── */
@@ -327,23 +356,23 @@ export function init(game) {
   function putOnShelf(i) {
     const l = LOST[i]; if (shelfProps[l.id]) return; const p = shelfSlot(i), phi = lands.wanderers.phi;
     const o = art.build(l.id, { x: p.x, y: p.y, z: p.z + 0.03, yaw: phi + Math.PI / 2, scale: SHELF_SCALE[l.id] || 1.5, tint: [0.62, 0.56, 0.5] }); o.g.rotation.order = 'YXZ'; o.g.rotation.x = SHELF_TILT;
-    const gl = game.props.glow({ x: p.x, y: p.y, z: p.z + 0.35, color: [0.55, 0.42, 0.24], size: 0.9 }); const rm = o.remove; o.remove = () => { rm(); gl.remove(); };
+    const gl = game.props.glow({ x: p.x, y: p.y, z: p.z + 0.35, color: [0.55, 0.42, 0.24], size: 0.9 }); const rm = o.remove, gt = gate(gl.sprite), ce = addCull(p.x, p.y, CULL_R, (n) => { o.near = n; gt.near = n; }); o.remove = () => { dropCull(ce); rm(); gl.remove(); };
     shelfProps[l.id] = o;
   }
   function buildLost() {
     LOST.forEach((l, i) => {
       if (S.lost[l.id]) { putOnShelf(i); return; }
       const t = thing({
-        id: 'lost-' + l.id, kind: l.id, spot: l.spot, label: `Pick up the ${l.name}`, r: 2.2, scale: LOST_SCALE[l.id] || 2, size: 0.55, lift: 0.1,
+        id: 'lost-' + l.id, kind: l.id, spot: l.spot, label: `Pick up the ${lc(l.name)}`, r: 2.2, scale: LOST_SCALE[l.id] || 2, size: 0.55, lift: 0.1,
         show: () => !has('lost:' + l.id) && !S.lost[l.id],
-        use() { give('lost:' + l.id); t.hide(); game.sound('ui_click'); game.toast(`You have the <b>${esc(l.name)}</b>. The Lost & Found is in the Wanderers' Hall grounds.`, { tone: 'good' }); },
+        use() { give('lost:' + l.id); t.hide(); game.sound('ui_click'); game.toast(`You have the <b>${esc(lc(l.name))}</b>. The Lost & Found is in the Wanderers' Hall grounds.`, { tone: 'good' }); },
       });
       if (has('lost:' + l.id)) t.hide();
       lostThings[l.id] = t;
     });
     const dp = P(SPOTS.desk);
     deskIt = game.interact({ id: 'lostfound-desk', x: dp.x, y: dp.y, z: dp.z, r: 3.4, label: () => (S.carry.some((c) => c.startsWith('lost:')) ? 'Hand in lost things' : 'Lost & Found desk'), use: deskUse });
-    const sp = P({ ...SPOTS.shelf, x: SPOTS.shelf.x }); shelfBase = art.build('plank', { x: sp.x, y: sp.y, z: SPOTS.shelf.z - 0.03, yaw: lands.wanderers.phi - Math.PI / 2, tint: [0.62, 0.56, 0.5] });
+    const sp = P({ ...SPOTS.shelf, x: SPOTS.shelf.x }); shelfBase = art.build('plank', { x: sp.x, y: sp.y, z: SPOTS.shelf.z - 0.03, yaw: lands.wanderers.phi - Math.PI / 2, tint: [0.62, 0.56, 0.5] }); addCull(sp.x, sp.y, CULL_R, (n) => { shelfBase.near = n; });
   }
   function deskUse() {
     const mine = S.carry.filter((c) => c.startsWith('lost:'));
@@ -368,7 +397,7 @@ export function init(game) {
     for (const land of LAND_ORDER) {
       const s = STAMPS[land], [x, y] = world(lands, s), p = { x, y, z: s.z ?? game.ground(x, y) ?? 0.1 };
       const prop = art.build('post', { x, y, z: p.z, yaw: (hashStr(land) % 628) / 100, color: landHex(land) }), glow = game.props.glow({ x, y, z: p.z + 2.0, color: [0.9, 0.7, 0.4], size: 1.4 });
-      glints.push({ g: glow, base: 0.9, ph: Math.random() * 6, c: null });
+      glints.push({ g: glow, base: 0.9, ph: Math.random() * 6, c: null }); const gt = gate(glow.sprite); addCull(x, y, 90, (n) => { prop.near = n; gt.near = n; });
       posts[land] = { prop, glow, p, it: game.interact({ id: 'stamp-' + land, x, y, z: p.z, r: 2.4, label: () => (S.stamps[land] ? 'Look at the stamp' : 'Stamp the passport'), use: () => stamp(land), show: s.wick && land !== 'spire' ? () => Math.abs(game.player.z - p.z) < 1.5 : undefined }) };
       paintPost(land);
     }
@@ -393,7 +422,7 @@ export function init(game) {
     el.appendChild(sw);
     const more = COLORS.filter((c) => !c.free && !S.colors.includes(c.id));
     const note = document.createElement('p'); note.className = 'bty-foot'; note.style.marginTop = '0';
-    note.textContent = `${colorOf(S.color).name}.` + (more.length ? ` ${more.length} more to earn at the reward counter.` : '') + (game.player.wick ? '' : ' It shows on the lamplighter, not in first person.'); el.appendChild(note);
+    note.textContent = `${colorOf(S.color).name}.` + (more.length ? ` ${more.length} more to earn at the reward counter.` : '') + (game.player.wick ? '' : ' It shows on Wick, not in first person.'); el.appendChild(note);
   } });
   game.journal.section({ id: 'passport', title: `Passport`, order: 41, render(el) {
     const n = passportCount(); const sum = document.createElement('p'); sum.className = 'bty-foot'; sum.style.marginTop = '0'; sum.textContent = `${n} of 8 stamps. One post in each land, and one on the Spire's island.`; el.appendChild(sum);
@@ -401,12 +430,12 @@ export function init(game) {
     LAND_ORDER.forEach((land, i) => { const on = !!S.stamps[land], d = document.createElement('div'); d.className = 'bty-slot' + (on ? ' on' : ''); d.innerHTML = stampSvg(land, on, i) + esc(LAND_NAME[land].replace(/^The /, '')); grid.appendChild(d); });
     el.appendChild(grid);
     const miss = LAND_ORDER.filter((l) => !S.stamps[l]);
-    if (miss.length) { const ul = document.createElement('ul'); ul.className = 'bty-clues'; for (const l of miss) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(LAND_NAME[l])}.</b> ${esc(STAMPS[l].clue)}`; ul.appendChild(li); } el.appendChild(ul); }
+    if (miss.length) { const ul = document.createElement('ul'); ul.className = 'bty-clues'; for (const l of miss) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(LAND_NAME[l])}</b> · ${esc(STAMPS[l].clue)}`; ul.appendChild(li); } el.appendChild(ul); }
   } });
   game.journal.section({ id: 'lostfound', title: 'Lost & Found', order: 42, render(el) {
     const sum = document.createElement('p'); sum.className = 'bty-foot'; sum.style.marginTop = '0'; sum.textContent = `${lostCount()} of 8 things back on the shelf. The desk is in the Wanderers' Hall grounds, by the lake axis.`; el.appendChild(sum);
     const ul = document.createElement('ul'); ul.className = 'bty-lf';
-    for (const l of LOST) { const li = document.createElement('li'); const back = S.lost[l.id], mine = has('lost:' + l.id); li.className = back ? 'got' : ''; li.innerHTML = back ? `<b>${esc(l.name)}.</b> ${esc(l.back)}` : mine ? `<b>${esc(l.name)}.</b> In your pocket. Take it to the desk.` : `<b>${esc(l.name)}.</b> ${esc(l.clue)}`; ul.appendChild(li); }
+    for (const l of LOST) { const li = document.createElement('li'); const back = S.lost[l.id], mine = has('lost:' + l.id); li.className = back ? 'got' : ''; li.innerHTML = back ? `<b>${esc(l.name)}</b> · ${esc(l.back)}` : mine ? `<b>${esc(l.name)}</b> · In your pocket. Take it to the desk.` : `<b>${esc(l.name)}</b> · ${esc(l.clue)}`; ul.appendChild(li); }
     el.appendChild(ul);
   } });
 
@@ -416,7 +445,7 @@ export function init(game) {
     { id: 'bell', get: () => bellP, r: 14, text: 'A <b>strength bell</b>. Ring it as often as you like.' },
     { id: 'desk', get: () => P(SPOTS.desk), r: 12, text: 'The <b>Lost & Found</b>. Eight things are missing around the park.' },
   ];
-  let slow = 0, sec = 0, dayT = 0;
+  let slow = 0, sec = 0, dayT = 0, tr = 0;
   game.on('frame', ({ dt, time }) => {
     for (const e of glints) { const s = 1 + 0.22 * Math.sin(time * 2.6 + e.ph); e.g.sprite.scale.setScalar(e.base * s); e.g.sprite.material.opacity = 0.65 + 0.35 * Math.sin(time * 2.1 + e.ph * 1.7); }
     for (const o of boats) o.b.g.position.y = o.y0 + 0.05 * Math.sin(time * 1.3 + o.ph);
@@ -426,7 +455,7 @@ export function init(game) {
     }
     for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t += dt; const u = f.t / 0.9; f.ring.scale.setScalar(1 + u * 9); f.m.opacity = Math.max(0, 1 - u); if (u >= 1) { game.scene.remove(f.ring); f.m.dispose(); fx.splice(i, 1); } }
     if ((slow += dt) > 0.5) {
-      slow = 0; if (S.color !== applied || (colTick++ % 4 === 0)) { if (applyColor()) applied = S.color; }
+      slow = 0; runCull(); if (S.color !== applied || (colTick++ % 4 === 0)) { if (applyColor()) applied = S.color; }
       if (game.player.mode === 'walk') {
         for (const h of HINTS) if (!S.hinted[h.id]) { const p = h.get(); if (Math.hypot(p.x - game.player.x, p.y - game.player.y) < h.r) { S.hinted[h.id] = 1; commit(); game.toast(h.text, { ms: 5200 }); } }
         for (const land of LAND_ORDER) { const o = posts[land]; if (o && !S.hinted['p' + land] && Math.hypot(o.p.x - game.player.x, o.p.y - game.player.y) < 12 && Math.abs(o.p.z - game.player.z) < 6) { S.hinted['p' + land] = 1; commit(); game.toast(`A <b>stamp post</b> for ${esc(LAND_NAME[land])}. Use it to stamp your passport.`, { ms: 5200 }); break; } }
@@ -436,10 +465,11 @@ export function init(game) {
     if ((sec += dt) > 1) {
       sec = 0;
       if (has('drink')) { if ((Date.now() - S.drinkT0) / 1000 > DRINK_SECONDS) { take('drink'); S.drinkT0 = 0; commit(); const t = live.drink && live.drink.find((x) => x.p && x.it && x.it.id === 'job-drink-drink'); if (t) t.reveal(); game.toast('The cider has gone cold. Fetch a fresh cup from the Brine & Barrel bar.', { ms: 5600 }); game.emit('bounty:job', { id: 'drink', state: 'failed' }); } else refreshTrack(); }
+      if ((tr += 1) >= 2) { tr = 0; refreshTrack(); }
       if ((dayT += 1) > 20) { dayT = 0; if (S.day !== dayKey()) { rollDay(); resume(); renderCard(); game.journal.refresh(); } }
     }
   });
-  game.on('mode', ({ wick }) => { applied = ''; if (wick) slow = 1; });
+  game.on('mode', ({ wick }) => { applied = ''; if (wick) slow = 1; runCull(); refreshTrack(); });
 
   function resume() {   // start whatever is active (after a reload or a new day)
     for (const id of S.ids) if (active(id)) START[id]();
@@ -456,7 +486,7 @@ export function init(game) {
     boatCount: () => boatCount(S.day), shelfProps: () => Object.keys(shelfProps), stampPosts: () => Object.fromEntries(Object.entries(posts).map(([k, o]) => [k, o.p])), lostPos: () => Object.fromEntries(Object.entries(lostThings).map(([k, t]) => [k, t.p])),
     positions: () => ({ board: P(SPOTS.board), hut: P(SPOTS.hut), bell: bellP, tower: towerP, desk: P(SPOTS.desk), shelf: shelfSlot(0), signing: P(SPOTS.signing), tavern: P(SPOTS.tavern), logTable: P(SPOTS.logTable), dock: P(SPOTS.dock), gatekeeper: P(SPOTS.gatekeeper), shrine: P(SPOTS.shrine), balloon: P(SPOTS.balloon), child: P(SPOTS.child), bow: P(SPOTS.bow), busker: P(SPOTS.busker) }),
     lanternColour: () => colorOf(S.color), applyColor,
-    test: { setJobs(ids) { stopAllJobs(); S.ids = ids; S.jobs = {}; S.carry = S.carry.filter((c) => c.startsWith('lost:')); commit(); refreshTrack(); renderCard(); }, newDay(key) { rollDay(key); resume(); renderCard(); }, reset() { stopAllJobs(); Object.assign(S, fresh()); commit(); location.reload(); } },
+    test: { rollDay: () => rollDay(), candle: () => !!candleThing, setJobs(ids) { stopAllJobs(); S.ids = ids; S.jobs = {}; S.carry = S.carry.filter((c) => c.startsWith('lost:')); commit(); refreshTrack(); renderCard(); }, newDay(key) { rollDay(key); resume(); renderCard(); }, reset() { stopAllJobs(); Object.assign(S, fresh()); commit(); location.reload(); } },
   };
   return api;
 }
