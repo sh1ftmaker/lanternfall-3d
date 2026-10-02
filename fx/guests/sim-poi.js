@@ -157,9 +157,10 @@ export function buildSites(N, manifest, poiData, rnd) {
       const offs = [[0, 0], [0.8, 0], [-0.8, 0], [1.6, -0.3], [-1.6, -0.3], [0.4, -1.0], [-0.4, -1.0], [1.2, -1.1]];
       for (let i = 0, n = 0; i < offs.length && n < site.cap; i++) {
         const [o, b] = offs[i], sx = p.x + rx * o + fx * b, sy = p.y + ry * o + fy * b;
+        if (kind === 'rail' && b < -0.5) continue;          // no second row at the lake rail: the walk behind the leaners stays free
         const sp = findStand(sx, sy, 0.4, 0.28); if (!sp) continue;
         if (lean && b === 0 && !leanRoom(sp[0], sp[1], fx, fy)) continue;
-        const ap = lean ? (findStand(sp[0] - fx * 0.7, sp[1] - fy * 0.7, 0.5, 0.35) || sp) : sp;
+        const ap = lean ? (findStand(sp[0] - fx * 0.85, sp[1] - fy * 0.85, 0.5, 0.35) || sp) : sp;
         const g = ground(N, sp[0], sp[1]);
         if (addSlot(site, sp[0], sp[1], g, yaw, ap[0], ap[1], lean && b === 0 ? ANIM.lean : type === 'photo' ? ANIM.look : ANIM.stand) >= 0) n++;
       }
@@ -265,7 +266,27 @@ export function buildSites(N, manifest, poiData, rnd) {
     gate.x = p[0]; gate.y = p[1]; gate.z = ground(N, p[0], p[1]) || 0.12;
     for (let k = -4; k <= 4; k++) { const q = findStand(p[0], p[1] + k * 2.0, 1.5, 0.6); if (q) addSlot(gate, q[0], q[1], ground(N, q[0], q[1]) || 0.12, Math.PI, q[0], q[1], ANIM.walk); }
   }
-  for (const s of sites) { if (s.slots.length === 0) s.open = false; if (s.kind === 'stage') s.weight = 1.5 + Math.min(3, s.slots.length / 8); }
+  // every spot must be reachable while its neighbours are in use: a spot whose approach point (or the step from there
+  // into the spot) is where someone else stands at another spot is moved back a little, or dropped. Benches are left
+  // alone (their seats are ledges; the approach is in front of the bench). Before, rail and view spots on the shore
+  // overlapped this way and guests bound for them waited behind the people leaning there until they gave up.
+  {
+    const near = (x, y, r, self) => { const i0 = Math.floor(x), j0 = Math.floor(y); for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) { const l = hash.get(hkey(i, j)); if (l) for (const k of l) if (k !== self && !dropped[k] && Math.hypot(S.x[k] - x, S.y[k] - y) < r) return true; } return false; };
+    const dropped = new Uint8Array(S.n);
+    let moved = 0, gone = 0;
+    for (let k = 0; k < S.n; k++) {
+      if (S.anim[k] === ANIM.sit) continue;
+      const dx = S.ax[k] - S.x[k], dy = S.ay[k] - S.y[k], L = Math.hypot(dx, dy);
+      const blocked = (ax, ay) => near(ax, ay, 0.5, k) || (L > 0.05 && near((ax + S.x[k]) / 2, (ay + S.y[k]) / 2, 0.35, k));
+      if (!blocked(S.ax[k], S.ay[k])) continue;
+      let ok = false;
+      if (L > 0.05) for (const extra of [0.35, 0.7]) { const ax = S.ax[k] + dx / L * extra, ay = S.ay[k] + dy / L * extra; if (okStand(ax, ay, 0.3) && !near(ax, ay, 0.5, k) && lineClear(N, S.x[k], S.y[k], ax, ay, 0.15)) { S.ax[k] = ax; S.ay[k] = ay; ok = true; moved++; break; } }
+      if (!ok) { dropped[k] = 1; gone++; }
+    }
+    if (gone) for (const s of sites) s.slots = s.slots.filter((k) => !dropped[k]);
+    stats.slotsMoved = moved; stats.slotsDropped = gone;
+  }
+  for (const s of sites) { if (s.slots.length === 0) s.open = false; if (s.kind === 'stage') s.weight = 1.5 + Math.min(3, s.slots.length / 8); if (s.kind === 'rail' || s.kind === 'look') s.cap = Math.min(s.cap, s.slots.length); }
 
   // ── hubs: greedy clusters of open sites (radius HUB_R), each gets a global flow field ──
   const HUB_R = 40;
