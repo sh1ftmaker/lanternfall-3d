@@ -29,6 +29,7 @@ const TAU = { rain: 2.2, snow: 2.5, wet: 6, dust: 12, cloud: 4, fog: 4, mist: 4,
 const STORE = 'lanternfall.weather';
 
 export function createWeather(opts) {
+  if (/(^|[#,&+])no-weather($|[,&+])/.test(location.hash)) return { set: () => false, update() {}, state: 'clear', now: { ...STATES.clear }, blend: { ...STATES.clear }, STATES, setReduceMotion() {}, degrade() {}, off: true };   // '#no-weather': not even the shader patches
   const { THREE, scene, camera, renderer, Q, surface, uTime, mobile } = opts;
   const now = { ...STATES.clear };
   let state = 'clear', target = STATES.clear, reduceMotion = !!opts.reduceMotion, degrade = 0;
