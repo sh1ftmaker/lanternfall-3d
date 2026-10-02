@@ -9,7 +9,9 @@ export async function hookGuests({ THREE, scene, nav, manifest, mobile, reduceMo
   try { const r = await fetch('data/guests.json', { cache: 'no-cache' }); if (r.ok) pois = await r.json(); } catch (e) { /* no points of interest: the crowd uses its own */ }
   const m = /guests=(\d+)/.exec(location.hash);
   const count = m ? +m[1] : mobile ? 350 : 1300;
-  const crowd = createCrowd({ nav, manifest, pois, count, seed: 1, reduceMotion, max: Math.max(2200, count) });
+  // the app's fetchBin is not exposed to this hook: a small stand-in (gzip only)
+  const fetchBin = async (file) => { let u8 = new Uint8Array(await (await fetch('data/' + file)).arrayBuffer()); if (u8[0] === 0x1f && u8[1] === 0x8b) u8 = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); return u8; };
+  const crowd = createCrowd({ nav, manifest, pois, count, seed: 1, reduceMotion, max: Math.max(2200, count), fetchBin });
   const view = createSimDebug({ THREE, scene, crowd, overlay: hash.has('guests-map') });
   const focus = { x: 0, y: 0, z: 0, mode: 'tour', tour: -1 };
   const api = {

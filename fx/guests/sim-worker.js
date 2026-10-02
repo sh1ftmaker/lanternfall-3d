@@ -6,7 +6,7 @@ self.onmessage = (e) => {
   const m = e.data;
   try {
     if (m.type === 'prepare') {
-      D = prepare(m.nav, m.manifest, m.pois, m.seed);
+      D = prepare(m.nav, m.manifest, m.pois, m.seed, m.ground);
       const { N, P, hubF, times } = D;
       // the main thread gets copies (the worker keeps its own for local fields)
       const Nm = { W: N.W, H: N.H, x0: N.x0, y0: N.y0, cell: N.cell, A: null, clr: N.clr.slice(), cw: N.cw, ch: N.ch, cidx: N.cidx.slice(), m: N.m,

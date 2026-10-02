@@ -86,7 +86,7 @@ export function buildSites(N, manifest, poiData, rnd) {
     if (type === 'bench' || type === 'table') {
       // seats along the bench (perpendicular to the facing) or round the table; approach = 0.5 m in front of the seat
       site = newSite({ type, kind: 'sit', x: p.x, y: p.y, z: p.z, yaw, land, cap, name: p.name });
-      const pitch = type === 'bench' ? Math.min(0.62, Math.max(0.5, (+p.len || cap * 0.6) / cap)) : 0;
+      const pitch = type === 'bench' ? (+p.len > 0 ? +p.len / cap : 0.58) : 0;     // seat k at ((k + 0.5) / cap - 0.5) * len (guests-data FORMAT.md)
       for (let i = 0; i < cap; i++) {
         let sx, sy, syaw, ax, ay;
         if (type === 'bench') {

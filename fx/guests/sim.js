@@ -42,7 +42,8 @@ export const PARAMS = {
   lane: 1.6,                         // m, max lane offset to the right of a route (keep right)
   lookahead: 3,                      // coarse cells along the flow field
   groupMix: [0.36, 0.36, 0.17, 0.11],// share of parties of 1, 2, 3, 4
-  railShare: 0.3, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.02,
+  railShare: 0.3, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.03,
+  arrivalEvery: 3.5,                 // s between parties arriving at the gate (a party far from the camera leaves for each)
   reach: 45,                         // m: sites this far away are picked e^-1 as often as next-door ones
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
   integrateNear: 25, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
@@ -52,7 +53,7 @@ export const PARAMS = {
 const ST = { OFF: 0, GO: 1, SETTLE: 2, ACT: 3, UNSETTLE: 4, QUEUE: 5, FOLLOW: 6, PAUSE: 7, WAIT: 8 };
 const LAND_POP = { 'lantern-row': 1.35, meridian: 1.25, wanderers: 1.2, brinewatch: 1.1, frostmere: 1.0, rosewick: 0.95, guildhollow: 0.85, gate: 1.3, ring: 1, lake: 1 };
 
-export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, sync = false, manualLocal = false, onReady = null } = {}) {
+export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, ground: groundGrid = null, fetchBin = null, sync = false, manualLocal = false, onReady = null } = {}) {
   const CAP = Math.max(16, max || Math.ceil(Math.max(count, 400) * 1.7));
   const state = new Float32Array(CAP * 8);
   for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
@@ -62,7 +63,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     update() {}, setCount(n) { crowd.want = Math.max(0, Math.min(CAP, n | 0)); }, setReduceMotion(b) { reduceMotion = !!b; }, dispose() {} };
   if (!nav || !nav.A || !manifest) return crowd;
 
-  let D = null;                       // prepared data: {N, P, hubF}
+  let D = null, disposed = false;     // prepared data: {N, P, hubF}
   const local = new Map();            // site id -> local field (null while pending); at most LOCAL_MAX, least recently used go
   let LUSE = new Int32Array(1);       // frame a site's local field was last used
   let worker = null, pendingLocal = [];
@@ -72,7 +73,13 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; prep.P.sites = prep.P.sites.map(normSite); prep.P.gate = prep.P.sites[prep.P.gate.id]; D = prep; LUSE = new Int32Array(prep.P.sites.length); debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
 
   // ── preparation: Worker when possible ──
+  // the surface-class grid (data/guestground.bin) when guests.json names one: given, or fetched with the app's fetchBin
+  let groundP = null;
+  if (!groundGrid && !sync && pois && pois.ground && pois.ground.file && typeof fetchBin === 'function') {
+    groundP = Promise.resolve().then(() => fetchBin(pois.ground.file)).then((u8) => ({ w: pois.ground.w, h: pois.ground.h, classes: pois.ground.classes, data: u8 })).catch(() => null);
+  }
   const canWorker = !sync && typeof Worker !== 'undefined' && typeof window !== 'undefined';
+  const start = () => {
   if (canWorker) {
     try {
       worker = new Worker(new URL('./sim-worker.js', import.meta.url), { type: 'module' });
@@ -83,14 +90,16 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         else if (m.type === 'error') { debug.error = m.error; fallback(); }
       };
       worker.onerror = (e) => { debug.error = (e && e.message) || 'worker failed'; e.preventDefault && e.preventDefault(); fallback(); };
-      worker.postMessage({ type: 'prepare', nav: { w: nav.w, h: nav.h, x0: nav.x0, y0: nav.y0, cell: nav.cell, A: nav.A }, manifest: { lake: manifest.lake, shore: manifest.shore, lands: manifest.lands, rail: manifest.rail }, pois, seed });
+      worker.postMessage({ type: 'prepare', nav: { w: nav.w, h: nav.h, x0: nav.x0, y0: nav.y0, cell: nav.cell, A: nav.A }, manifest: { lake: manifest.lake, shore: manifest.shore, lands: manifest.lands, rail: manifest.rail }, pois, seed, ground: groundGrid });
     } catch (err) { worker = null; }
   }
+  if (!worker) fallback();
+  };
   function fallback() {
     if (D) return;
     if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; }
     // main thread, after the current frame
-    const run = () => { try { startSim(prepare(nav, manifest, pois, seed)); } catch (err) { debug.error = String(err && err.stack || err); } };
+    const run = () => { try { startSim(prepare(nav, manifest, pois, seed, groundGrid)); } catch (err) { debug.error = String(err && err.stack || err); } };
     if (sync) run(); else setTimeout(run, 0);
   }
   function trimLocal() {                // forget the least recently used local fields beyond LOCAL_MAX
@@ -120,7 +129,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const TX = new Float32Array(CAP), TY = new Float32Array(CAP), RT = new Float32Array(CAP), DFOC = new Float32Array(CAP), AVX = new Float32Array(CAP), AVY = new Float32Array(CAP);
   const LEAVING = new Uint8Array(CAP), TACC = new Float32Array(CAP), UX = new Float32Array(CAP), UY = new Float32Array(CAP);
   const rnd = mulberry(seed * 104729 + 7);
-  let frameNo = 0, simTime = 0, lodK = 1, lodInv = 1, costEma = 0;
+  let frameNo = 0, simTime = 0, lodK = 1, lodInv = 1, costEma = 0, calmed = false;
   const free = [];                    // pool of unused agent indices
   // hash grid (2 m cells) over the walk grid
   let HG = null, SG = null;
@@ -217,21 +226,40 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         if (clearance(D.N, x, y) < 0.5) { x = cellX(D.N, c); y = cellY(D.N, c); }
         const L = spawnParty(x, y, rnd() * TAU, size); if (L < 0) break;
         if (!pickGoal(L, 0)) { STT[L] = ST.WAIT; TIMER[L] = 1 + rnd() * 3; }
-        else if (rnd() < 0.5 && D.P.sites[SITE[L]].kind !== 'walk' && D.P.sites[SITE[L]].kind !== 'gate') placeAtSite(L);
+        else if (rnd() < (reduceMotion ? 0.85 : 0.5) && D.P.sites[SITE[L]].kind !== 'walk' && D.P.sites[SITE[L]].kind !== 'gate') placeAtSite(L);
       } else spawnArrival(size);
     }
   }
-  function spawnArrival(size) {
+  function spawnArrival(size, atGate = false) {
     debug.ev.spawn++;
     // arrivals: at the gate when the camera is not there (they walk in), else somewhere far from the camera
     const g = D.P.gate, fd = Math.hypot(focus.x - g.x, focus.y - g.y);
     let x, y;
-    if (fd > 60 || rnd() < 0.15) { const S = D.P.slots, k = g.slots[(rnd() * g.slots.length) | 0]; x = S.x[k] + (rnd() - 0.5); y = S.y[k] + (rnd() - 0.5); }
+    if (atGate || fd > 60 || rnd() < 0.15) { const S = D.P.slots, k = g.slots[(rnd() * g.slots.length) | 0]; x = S.x[k] + (rnd() - 0.5); y = S.y[k] + (rnd() - 0.5); }
     else { let c = randomSpawnCell(); for (let t = 0; t < 12; t++) { const cx = cellX(D.N, c), cy = cellY(D.N, c); if (Math.hypot(cx - focus.x, cy - focus.y) > 90) break; c = randomSpawnCell(); } x = cellX(D.N, c); y = cellY(D.N, c); }
     if (clearance(D.N, x, y) < 0.4) { const c = nearestCell(D.N, x, y, 4); if (c < 0) return -1; x = cellX(D.N, c); y = cellY(D.N, c); }
     const L = spawnParty(x, y, Math.PI, size); if (L < 0) return -1;
-    if (!pickGoal(L, 0)) { STT[L] = ST.WAIT; TIMER[L] = 2; }
+    const fromGate = Math.hypot(x - g.x, y - g.y) < 20;
+    if (!pickGoal(L, 0, fromGate ? 90 : 0)) { STT[L] = ST.WAIT; TIMER[L] = 2; }    // from the gate: somewhere well inside the park
     return L;
+  }
+  // the gate: a steady trickle of arrivals walking in; to keep the count, a party far from the camera goes home
+  let arriveT = 2;
+  function gateTick(dt) {
+    arriveT -= dt; if (arriveT > 0) return;
+    arriveT = params.arrivalEvery * (0.6 + 0.8 * rnd());
+    const g = D.P.gate; if (focus.mode === 'walk' && Math.hypot(focus.x - g.x, focus.y - g.y) < 25) return;
+    const size = partySize();
+    if (crowd.active + size > crowd.want) {
+      let best = -1, bd = 130;
+      for (let t = 0; t < 40; t++) {
+        const i = (rnd() * CAP) | 0; if (STT[i] !== ST.GO || LEAD[i] >= 0) continue;
+        const d = Math.hypot(X[i] - focus.x, Y[i] - focus.y); if (d > bd && Math.hypot(X[i] - g.x, Y[i] - g.y) > 100) { bd = d; best = i; }
+      }
+      if (best < 0) return;
+      removeParty(best);
+    }
+    spawnArrival(Math.min(size, Math.max(1, crowd.want - crowd.active)), true);
   }
   function placeAtSite(L) {        // teleport a party into its slots (start of the simulation, reduce motion)
     const S = D.P.slots, site = D.P.sites[SITE[L]];
@@ -251,14 +279,14 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (t >= 0 && t < 160) return t > 18 && t < 50 ? 1 : 0.25;
     return 0.5 + 0.5 * Math.sin(simTime * TAU / 150);
   }
-  function pickGoal(L, avoidSite) {
+  function pickGoal(L, avoidSite, minDist = 0) {
     debug.ev.goal++;
     const P = D.P, sites = P.sites, size = GS[L];
     // leaving: the population is too big, or a party simply goes home
     let want = 'site';
     if (LEAVING[L] || crowd.active > crowd.want + 2) { want = 'gate'; LEAVING[L] = 1; }
     else {
-      const lv = params.leaveShare * (0.4 + 3 * Math.exp(-Math.hypot(X[L] - P.gate.x, Y[L] - P.gate.y) / 90));   // mostly those near the gate go home
+      const lv = params.leaveShare * (0.3 + 8 * Math.exp(-Math.hypot(X[L] - P.gate.x, Y[L] - P.gate.y) / 80));   // mostly those near the gate go home
       const rr = params.railShare * (0.75 + 0.6 * rhythm()), r = rnd() * (rr + params.siteShare + params.walkShare + lv);
       want = r < rr ? 'rail' : r < rr + params.siteShare ? 'site' : r < rr + params.siteShare + params.walkShare ? 'walk' : 'gate';
       if (want === 'gate') LEAVING[L] = 1;
@@ -282,6 +310,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         if (want === 'rail' ? s.kind !== 'rail' : want === 'walk' ? s.kind !== 'walk' : (s.kind === 'rail' || s.kind === 'walk')) continue;
         if (freeSlots(s, size) < 0) continue;
         const d = Math.hypot(s.x - X[L], s.y - Y[L]);
+        if (d < minDist) continue;
         let w = s.weight * s.pop * (Math.exp(-d / params.reach) + 0.05);
         if (want === 'walk' && d < 25) w *= 0.1;
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
@@ -362,8 +391,10 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     // population changes
     if (crowd.active < crowd.want && !reduceMotion && (frameNo % 7 === 0)) populate(Math.min(crowd.want, crowd.active + 4), false);
     if (crowd.active > crowd.want + 2 && frameNo % 5 === 0) shrink();
+    if (!reduceMotion && crowd.want > 0) gateTick(dt);
     buildGrid();
-    if (reduceMotion) { calm(dt); writeState(); timing(t0); return; }
+    if (reduceMotion) { if (!calmed) { calm(); calmed = true; } writeState(); timing(t0); return; }
+    calmed = false;
     const p = params;
     let thinkers = 0;
     // agents are visited in spatial order (re-sorted now and then): neighbours touch the same grid memory, which
@@ -449,12 +480,22 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   }
 
   // reduce motion: every guest stands, sits or leans where it is (walkers stop and stand; nobody frozen mid-stride)
-  function calm(dt) {
+  function calm() {
+    // once, when motion is reduced: settling guests take their seats, walkers stop and stand; a party turns to face
+    // its middle as if chatting. Then nothing moves (not even the idle phase) until motion is allowed again.
+    const S = D.P.slots;
     for (let i = 0; i < CAP; i++) {
       const st = STT[i]; if (st === ST.OFF) continue;
-      if (st === ST.ACT || st === ST.QUEUE) { SPD[i] = 0; continue; }
-      if (st === ST.SETTLE || st === ST.UNSETTLE) { const s = SLOT[i]; if (s >= 0) { const S = D.P.slots; X[i] = S.x[s]; Y[i] = S.y[s]; Z[i] = S.z[s]; YAW[i] = S.yaw[s]; STT[i] = ST.ACT; ANI[i] = activityAnim(i); TIMER[i] = 30; } SPD[i] = 0; continue; }
-      SPD[i] = 0; DSPD[i] = 0; if (ANI[i] === ANIM.walk) ANI[i] = ANIM.stand;
+      SPD[i] = 0; DSPD[i] = 0; AVX[i] = AVY[i] = 0;
+      if (st === ST.ACT || st === ST.QUEUE) continue;
+      if (st === ST.SETTLE) { const s = SLOT[i]; if (s >= 0) { X[i] = S.x[s]; Y[i] = S.y[s]; Z[i] = ZT[i] = S.z[s]; YAW[i] = S.yaw[s]; STT[i] = ST.ACT; ANI[i] = activityAnim(i); TIMER[i] = dwell(D.P.sites[S.site[s]].kind); continue; } }
+      if (st === ST.UNSETTLE) { X[i] = UX[i]; Y[i] = UY[i]; const g = ground(D.N, X[i], Y[i]); if (g === g) Z[i] = ZT[i] = g; STT[i] = LEAD[i] < 0 ? ST.WAIT : ST.FOLLOW; TIMER[i] = 1; }
+      ANI[i] = ANIM.stand;
+      if (GS[i] > 1) {
+        const L = LEAD[i] >= 0 ? LEAD[i] : i; let cx = X[L], cy = Y[L], n = 1;
+        for (let k = 0; k < 4; k++) { const f = MEM[L * 4 + k]; if (f >= 0 && STT[f] !== ST.ACT && STT[f] !== ST.QUEUE) { cx += X[f]; cy += Y[f]; n++; } }
+        cx /= n; cy /= n; if (Math.hypot(cx - X[i], cy - Y[i]) > 0.15) YAW[i] = DYAW[i] = Math.atan2(cy - Y[i], cx - X[i]);
+      }
     }
   }
 
@@ -879,7 +920,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   crowd.update = update;
   crowd.setCount = (n) => { crowd.want = Math.max(0, Math.min(CAP, n | 0)); };
   crowd.setReduceMotion = (b) => { reduceMotion = !!b; };
-  crowd.dispose = () => { if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; } };
+  crowd.dispose = () => { disposed = true; if (worker) { try { worker.terminate(); } catch (e) { /* gone */ } worker = null; } };
   // debug access for the overlay and the tests
   Object.defineProperty(debug, 'D', { get: () => D });
   Object.assign(debug, {
@@ -907,7 +948,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     pumpLocal(n = 1e9) { while (n-- > 0 && pendingLocal.length) { const s = pendingLocal.shift(); if (local.has(s)) { local.set(s, localField(D.N, D.P, s)); trimLocal(); } } },   // tests: the Worker's job, outside the timed frame
     countStates() { const c = {}; const names = Object.keys(ST); for (let i = 0; i < CAP; i++) { if (STT[i] === ST.OFF) continue; const n = names[STT[i]]; c[n] = (c[n] || 0) + 1; } return c; },
   });
-  if (!worker) fallback();
+  if (groundP) groundP.then((g) => { groundGrid = g; if (!disposed) start(); }); else start();
   return crowd;
 }
 

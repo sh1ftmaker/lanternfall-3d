@@ -24,6 +24,13 @@ export function buildNav(nav, opt = {}) {
   // ── blocked fine cells ──
   const clr = new Uint8Array(n);                 // first used as the blocked mask (0 blocked, 255 free)
   for (let k = 0; k < n; k++) clr[k] = A[k] ? 255 : 0;
+  // surface classes (data/guestground.bin, optional): water and flower beds are not for walking
+  const G = opt.ground && opt.ground.data && opt.ground.w === W && opt.ground.h === H ? opt.ground : null;
+  if (G) {
+    const cls = G.classes || [], noWalk = new Uint8Array(256);
+    for (const name of ['water', 'bed']) { const c = cls.indexOf(name); if (c > 0) noWalk[c] = 1; }
+    const g = G.data; for (let k = 0; k < n; k++) if (noWalk[g[k]]) clr[k] = 0;
+  }
   const stepCode = Math.round((opt.step || STEP) * 100);
   for (let j = 0; j < H; j++) {
     const r = j * W;
@@ -102,7 +109,7 @@ export function buildNav(nav, opt = {}) {
   }
   const t2 = now();
   const N = { W, H, x0: nav.x0, y0: nav.y0, cell: nav.cell, A, clr, cw, ch, cidx, m, ccell, cfine, chgt, ccost, csurf, cnb,
-    times: { clearance: t1 - t0, coarse: t2 - t1 } };
+    times: { clearance: t1 - t0, coarse: t2 - t1 }, ground: !!G };
   return N;
 }
 

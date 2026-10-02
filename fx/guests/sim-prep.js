@@ -9,9 +9,9 @@ export function mulberry(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b
 // a site's local field covers its hub's window (all the hub's sources + a margin); this half-size is the fallback
 export const LOCAL_HALF = 88;
 
-export function prepare(nav, manifest, pois, seed = 1) {
+export function prepare(nav, manifest, pois, seed = 1, ground = null) {
   const t0 = now();
-  const N = buildNav(nav);
+  const N = buildNav(nav, { ground });
   const t1 = now();
   const P = buildSites(N, manifest, pois, mulberry(seed * 7919 + 13));
   const t2 = now();
