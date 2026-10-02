@@ -66,6 +66,9 @@ def main():
         try:
             import ground as GR
             out["ground"] = GR.write(nav, OUT, log=log)
+            import paths as PA
+            gr = np.frombuffer(gzip.decompress(open(os.path.join(OUT, "guestground.bin"), "rb").read()), np.uint8).reshape(nav["h"], nav["w"])
+            out["paths"] = PA.build(nav, gr, GR.CLASSES, log=log)
         except ImportError: pass
     elif "ground" in prev: out["ground"] = prev["ground"]
     for k in ("paths",):

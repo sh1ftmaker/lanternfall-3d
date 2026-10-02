@@ -11,7 +11,7 @@ import common as C
 COL = dict(bench=(80, 200, 255), stall=(255, 170, 40), queue=(255, 120, 0), view=(120, 255, 120), photo=(255, 80, 200),
            stage=(255, 255, 80), table=(200, 140, 255))
 
-def render(nav, pois, cx, cy, half, ppm, light=None, ground=None):
+def render(nav, pois, cx, cy, half, ppm, light=None, ground=None, paths=()):
     x0, y0 = cx - half, cy - half; N = int(2 * half * ppm)
     xs = x0 + (np.arange(N) + 0.5) / ppm; ys = y0 + (np.arange(N) + 0.5) / ppm
     X, Y = np.meshgrid(xs, ys[::-1])
@@ -26,6 +26,9 @@ def render(nav, pois, cx, cy, half, ppm, light=None, ground=None):
     im = Image.fromarray(img); d = ImageDraw.Draw(im)
     def P(x, y): return ((x - x0) * ppm, (y0 + 2 * half - y) * ppm)
     s = max(3.0, ppm * 0.35)
+    for pa in paths:
+        pts = [P(x, y) for x, y in pa["pts"]] + ([P(*pa["pts"][0])] if pa.get("closed") else [])
+        d.line(pts, fill=(255, 255, 255), width=max(1, int(pa["w"] * ppm * 0.25)))
     for p in pois:
         if abs(p["x"] - cx) > half + 2 or abs(p["y"] - cy) > half + 2: continue
         c = COL.get(p["type"], (255, 255, 255)); x, y = P(p["x"], p["y"])
@@ -49,7 +52,7 @@ if __name__ == "__main__":
     g = json.load(open(os.path.join(C.REPO, "data", "guests.json")))
     out = sys.argv[1]; a = sys.argv[2:]
     if not a:
-        render(nav, g["pois"], 35, 0, 312, 2).save(out + "_all.png")
+        render(nav, g["pois"], 35, 0, 312, 2, paths=g.get("paths", [])).save(out + "_all.png")
     for k in range(0, len(a), 4):
         cx, cy, half, ppm = map(float, a[k:k + 4])
         render(nav, g["pois"], cx, cy, half, ppm).save(out + "_%d_%d.png" % (cx, cy))

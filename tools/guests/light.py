@@ -40,7 +40,7 @@ def sample_ground(nav, parts=C.PARTS, dens=0.03, log=print):
             ix, iy, pts, lv, wt = ix[ok], iy[ok], pts[ok], lv[ok], wt[ok]
             for lev, key in ((0, "zA"), (1, "zB")):
                 zl = nav[key][iy, ix]
-                m = ~np.isnan(zl) & (pts[:, 2] > zl - 0.2) & (pts[:, 2] < zl + 0.2)
+                m = ~np.isnan(zl) & (pts[:, 2] > zl - 0.07) & (pts[:, 2] < zl + 0.07)
                 c = iy[m] * W + ix[m]
                 for k in range(3): acc[lev, :, k] += np.bincount(c, weights=lv[m, k] * wt[m], minlength=H * W)
                 wsum[lev] += np.bincount(c, weights=wt[m], minlength=H * W)
