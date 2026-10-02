@@ -52,7 +52,7 @@ export function init(S) {
   let vis = 0, t = 0;
   game.on('frame', ({ dt }) => {
     const w = game.weather, on = w && w.state === 'snow' && (!w.now || w.now.snow > 0.3);
-    vis += ((on ? 1 : 0) - vis) * Math.min(1, dt * 0.8); if (!on && vis < 0.01) vis = 0;
+    vis += ((on ? 1 : 0) - vis) * Math.min(1, dt * 1.6); if (!on && vis < 0.03) vis = 0;
     const show = vis > 0; prints.visible = show; box.visible = show && vis > 0.5; glow.sprite.visible = box.visible;
     if (!show) { t = 0; return; }
     t += dt; mat.opacity = Math.min(1, vis) * Math.min(1, t / 3) * 0.78;
