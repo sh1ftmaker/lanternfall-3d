@@ -770,7 +770,7 @@ function walkHop() { if (mode === 'walk' && walk.hop === 0 && walk.vh === 0) wal
 // touch: a Hop button on the right, above the dock (outside the canvas, so it never takes the stick's or the look's touch)
 const hopBtn = document.createElement('button');
 hopBtn.type = 'button'; hopBtn.id = 'hop'; hopBtn.textContent = 'Hop'; hopBtn.title = 'Hop'; hopBtn.hidden = true;
-hopBtn.style.cssText = 'position:fixed;z-index:6;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 200px);width:62px;height:62px;border-radius:50%;' +
+hopBtn.style.cssText = 'position:fixed;z-index:6;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 262px);width:62px;height:62px;border-radius:50%;' +
   'border:1px solid rgba(245,236,220,.22);background:rgba(13,11,38,.55);color:#f5ecdc;font:600 14px Figtree,system-ui,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)';
 hopBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); walkHop(); });
 hopBtn.addEventListener('contextmenu', (e) => e.preventDefault());
