@@ -48,6 +48,7 @@ export const PARAMS = {
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
   integrateNear: 25, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
   budget: 0.4,                       // ms per frame: the LOD distances shrink (down to 40 %) while the sim costs more
+  bias: null,                        // clock hook: where the evening draws people: { lands: { id: k }, pts: [{ x, y, r, k }], rail: k } (weights on picking a goal; null = none)
 };
 
 const ST = { OFF: 0, GO: 1, SETTLE: 2, ACT: 3, UNSETTLE: 4, QUEUE: 5, FOLLOW: 6, PAUSE: 7, WAIT: 8 };
@@ -340,7 +341,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     if (LEAVING[L] || crowd.active > crowd.want + 2) { want = 'gate'; LEAVING[L] = 1; }
     else {
       const lv = params.leaveShare * (0.3 + 8 * Math.exp(-Math.hypot(X[L] - P.gate.x, Y[L] - P.gate.y) / 80));   // mostly those near the gate go home
-      const rr = params.railShare * (0.5 + 1.5 * rhythm()), r = rnd() * (rr + params.siteShare + params.walkShare + lv);
+      const rr = params.railShare * (0.5 + 1.5 * rhythm()) * (params.bias && params.bias.rail || 1), r = rnd() * (rr + params.siteShare + params.walkShare + lv);
       want = r < rr ? 'rail' : r < rr + params.siteShare ? 'site' : r < rr + params.siteShare + params.walkShare ? 'walk' : 'gate';
       if (want === 'gate') LEAVING[L] = 1;
     }
@@ -366,6 +367,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
         if (d < minDist) continue;
         let w = s.weight * s.pop * (Math.exp(-d / params.reach) + 0.05);
         if (want === 'walk' && d < 25) w *= 0.1;
+        const B = params.bias; if (B) { if (B.lands && B.lands[s.land]) w *= B.lands[s.land]; if (B.pts) for (const q of B.pts) { const dq = Math.hypot(s.x - q.x, s.y - q.y); if (dq < q.r * 3) w *= 1 + (q.k - 1) * Math.exp(-dq / q.r); } }   // clock hook
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
         cand[n] = s.id; candW[n] = w; tot += w; n++;
       }
