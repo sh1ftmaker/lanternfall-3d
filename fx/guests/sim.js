@@ -25,7 +25,9 @@ import { prepare, localField, mulberry, LOCAL_HALF } from './sim-prep.js';
 export { ANIM };
 const TAU = Math.PI * 2;
 const PATH = new Int32Array(16);
-const MIN_D = 0.5, LOCAL_MAX = 512, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
+const HB = 8191, hb = (x, y) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) & HB;
+const clrByte = (N, x, y) => { const i = ((x - N.x0) / N.cell) | 0, j = ((y - N.y0) / N.cell) | 0; return (i < 0 || j < 0 || i >= N.W || j >= N.H) ? 0 : N.clr[j * N.W + i]; };
+const MIN_D = 0.42, LOCAL_MAX = 512, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
 // centre of the most open fine cell of a coarse cell
 const fineX = (N, c) => N.x0 + ((N.cfine[c] % N.W) + 0.5) * N.cell, fineY = (N, c) => N.y0 + (((N.cfine[c] / N.W) | 0) + 0.5) * N.cell;
 const wrapA = (a) => { if (a > Math.PI) { a -= TAU; if (a > Math.PI) a = ((a + Math.PI) % TAU) - Math.PI; } else if (a < -Math.PI) { a += TAU; if (a < -Math.PI) a = ((a - Math.PI) % TAU) + Math.PI; } return a; };
@@ -42,8 +44,9 @@ export const PARAMS = {
   groupMix: [0.36, 0.36, 0.17, 0.11],// share of parties of 1, 2, 3, 4
   railShare: 0.3, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.02,
   reach: 45,                         // m: sites this far away are picked e^-1 as often as next-door ones
-  lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 8 / 16 frames
-  integrateNear: 40, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
+  lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
+  integrateNear: 25, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
+  budget: 0.4,                       // ms per frame: the LOD distances shrink (down to 40 %) while the sim costs more
 };
 
 const ST = { OFF: 0, GO: 1, SETTLE: 2, ACT: 3, UNSETTLE: 4, QUEUE: 5, FOLLOW: 6, PAUSE: 7, WAIT: 8 };
@@ -63,7 +66,10 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const local = new Map();            // site id -> local field (null while pending); at most LOCAL_MAX, least recently used go
   let LUSE = new Int32Array(1);       // frame a site's local field was last used
   let worker = null, pendingLocal = [];
-  const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; D = prep; LUSE = new Int32Array(prep.P.sites.length); debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
+  // every site object gets the same shape (fast, monomorphic property access in the per-frame code)
+  const normSite = (o) => ({ id: o.id | 0, type: String(o.type), kind: String(o.kind), x: +o.x, y: +o.y, z: +o.z || 0, yaw: +o.yaw || 0, land: String(o.land || ''), cap: o.cap | 0,
+    name: String(o.name || ''), hub: o.hub | 0, slots: Int32Array.from(o.slots), weight: +o.weight || 1, open: !!o.open, dance: !!o.dance, pop: LAND_POP[o.land] || 1 });
+  const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; prep.P.sites = prep.P.sites.map(normSite); prep.P.gate = prep.P.sites[prep.P.gate.id]; D = prep; LUSE = new Int32Array(prep.P.sites.length); debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
 
   // ── preparation: Worker when possible ──
   const canWorker = !sync && typeof Worker !== 'undefined' && typeof window !== 'undefined';
@@ -109,20 +115,20 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const MODE = new Uint8Array(CAP), STUCK = new Float32Array(CAP), ACC = new Float32Array(CAP), LOD = new Uint8Array(CAP), SIDE = new Int8Array(CAP);
   const SX = new Float32Array(CAP), SY = new Float32Array(CAP), SZ = new Float32Array(CAP), ST0 = new Float32Array(CAP), STT2 = new Float32Array(CAP);   // settle glide
   const ZT = new Float32Array(CAP), VX = new Float32Array(CAP), VY = new Float32Array(CAP), PX = new Float32Array(CAP), PY = new Float32Array(CAP);
-  const OCCK = new Int32Array(CAP).fill(-1), STMASK = new Uint16Array(CAP), JAM = new Float32Array(CAP), GHOST = new Float32Array(CAP);       // fine cell where a standing guest stamped the occupancy grid
+  const GK = new Int32Array(CAP).fill(-1), OCCK = new Int32Array(CAP).fill(-1), STMASK = new Uint16Array(CAP), JAM = new Float32Array(CAP), GHOST = new Float32Array(CAP);       // fine cell where a standing guest stamped the occupancy grid
   let OCC = null;                                    // Uint8 per fine cell: standing guests (walkers steer round them)
   const TX = new Float32Array(CAP), TY = new Float32Array(CAP), RT = new Float32Array(CAP), DFOC = new Float32Array(CAP), AVX = new Float32Array(CAP), AVY = new Float32Array(CAP);
   const LEAVING = new Uint8Array(CAP), TACC = new Float32Array(CAP), UX = new Float32Array(CAP), UY = new Float32Array(CAP);
   const rnd = mulberry(seed * 104729 + 7);
-  let frameNo = 0, simTime = 0;
+  let frameNo = 0, simTime = 0, lodK = 1, lodInv = 1, costEma = 0;
   const free = [];                    // pool of unused agent indices
   // hash grid (2 m cells) over the walk grid
   let HG = null, SG = null;
 
   function init() {
     const { N } = D;
-    HG = { cs: 2, w: Math.ceil(N.W * N.cell / 2), h: Math.ceil(N.H * N.cell / 2), head: null, next: new Int32Array(CAP) };
-    HG.head = new Int32Array(HG.w * HG.h).fill(-1);
+    // neighbour grid: 2 m cells hashed into 8192 buckets (a small table that stays in cache; distances filter collisions)
+    HG = { cs: 2, w: Math.ceil(N.W * N.cell / 2), h: Math.ceil(N.H * N.cell / 2), head: new Int32Array(HB + 1).fill(-1), next: new Int32Array(CAP) };
     OCC = new Uint8Array(N.W * N.H);
     for (let i = CAP - 1; i >= 0; i--) free.push(i);
     // site grid (30 m cells) for picking nearby goals
@@ -161,16 +167,16 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     X[i] = x; Y[i] = y; Z[i] = z; ZT[i] = z; YAW[i] = yaw; DYAW[i] = yaw; SPD[i] = 0; DSPD[i] = 0; PH[i] = rnd() * 4; SEED[i] = rnd();
     PREF[i] = params.speedMin + (params.speedMax - params.speedMin) * rnd(); LANE[i] = (0.25 + 0.75 * rnd()) * params.lane;
     ANI[i] = ANIM.stand; STT[i] = ST.WAIT; TIMER[i] = 0.3 + rnd(); SITE[i] = -1; SLOT[i] = -1; LEAD[i] = -1; GI[i] = 0; GS[i] = 1; MODE[i] = 0;
-    STUCK[i] = 0; JAM[i] = 0; GHOST[i] = 0; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
+    STUCK[i] = 0; JAM[i] = 0; GHOST[i] = 0; GK[i] = -1; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
     for (let k = 0; k < 4; k++) MEM[i * 4 + k] = -1;
-    crowd.active++;
+    crowd.active++; orderDirty = true;
     return i;
   }
   function removeAgent(i) {
     releaseSlot(i); if (OCCK[i] >= 0) stamp(i, false);
     STT[i] = ST.OFF; ANI[i] = 255; state[i * 8 + 5] = 255; SITE[i] = -1; LEAD[i] = -1; GS[i] = 1;
     for (let k = 0; k < 4; k++) MEM[i * 4 + k] = -1;
-    free.push(i); crowd.active--;
+    free.push(i); crowd.active--; orderDirty = true;
   }
   function removeParty(L) { for (let k = 0; k < 4; k++) { const f = MEM[L * 4 + k]; if (f >= 0 && STT[f] !== ST.OFF) removeAgent(f); } removeAgent(L); }
   // a party at (x, y): leader + followers in formation; returns the leader or -1
@@ -276,7 +282,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         if (want === 'rail' ? s.kind !== 'rail' : want === 'walk' ? s.kind !== 'walk' : (s.kind === 'rail' || s.kind === 'walk')) continue;
         if (freeSlots(s, size) < 0) continue;
         const d = Math.hypot(s.x - X[L], s.y - Y[L]);
-        let w = (s.weight || 1) * (LAND_POP[s.land] || 1) * (Math.exp(-d / params.reach) + 0.05);
+        let w = s.weight * s.pop * (Math.exp(-d / params.reach) + 0.05);
         if (want === 'walk' && d < 25) w *= 0.1;
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
         cand[n] = s.id; candW[n] = w; tot += w; n++;
@@ -360,10 +366,21 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (reduceMotion) { calm(dt); writeState(); timing(t0); return; }
     const p = params;
     let thinkers = 0;
-    for (let i = 0; i < CAP; i++) {
-      const st = STT[i]; if (st === ST.OFF) continue;
-      if (st === ST.ACT || st === ST.QUEUE) { if (OCCK[i] < 0 && ANI[i] !== ANIM.sit) stamp(i, true); }
-      else if (OCCK[i] >= 0) stamp(i, false);
+    // agents are visited in spatial order (re-sorted now and then): neighbours touch the same grid memory, which
+    // matters more than the arithmetic once the renderer has flushed the caches
+    if (orderDirty || (frameNo % 30) === 0) sortOrder();
+    for (let q = 0; q < orderN; q++) {
+      const i = ORDER[q], st = STT[i]; if (st === ST.OFF) continue;
+      if (st === ST.ACT || st === ST.QUEUE) {
+        // standing, sitting, leaning: a cheap path (think every 6th frame; the idle phase runs every frame)
+        if (OCCK[i] < 0 && ANI[i] !== ANIM.sit) stamp(i, true);
+        if (GHOST[i] > 0) GHOST[i] = 0;
+        TACC[i] += dt; PH[i] = (PH[i] + dt * 0.3) % 256; ACC[i] = 0;
+        if ((frameNo + i) % 6 === 0) { const t = TACC[i] > 0.5 ? 0.5 : TACC[i]; TACC[i] = 0; think(i, t); thinkers++; }
+        if ((STT[i] === ST.ACT || STT[i] === ST.QUEUE) && SLOT[i] >= 0) { const dy = D.P.slots.yaw[SLOT[i]] - YAW[i]; if (dy > 0.002 || dy < -0.002) faceSlot(i, dt); }
+        continue;
+      }
+      if (OCCK[i] >= 0) stamp(i, false);
       // jams (a narrow lane, two streams): someone who wants to walk but cannot for 2.5 s may pass through others briefly
       if (st === ST.GO || st === ST.FOLLOW) {
         if (GHOST[i] > 0) GHOST[i] -= dt;
@@ -372,7 +389,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       } else if (GHOST[i] > 0) GHOST[i] = 0;
       // level of detail: distance to the focus, refreshed every 8th frame (staggered)
       if (((frameNo + i) & 7) === 0 || DFOC[i] === 0) { const dx = X[i] - focus.x, dy = Y[i] - focus.y, dz = Z[i] - focus.z; DFOC[i] = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.01; }
-      const d = DFOC[i], iv = d < p.lodNear ? 2 : d < p.lodMid ? 4 : d < p.lodFar ? 8 : 16;
+      const d = DFOC[i] * lodInv, iv = d < p.lodNear ? 2 : d < p.lodMid ? 4 : d < p.lodFar ? 6 : 10;
       ACC[i] += dt; TACC[i] += dt;
       const think_ = (frameNo + i) % iv === 0;
       if (think_) { think(i, TACC[i] > 0.5 ? 0.5 : TACC[i]); TACC[i] = 0; thinkers++; }
@@ -383,8 +400,23 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     writeState();
     timing(t0);
   }
+  const ORDER = new Int32Array(CAP), OKEY = new Float32Array(CAP);
+  let orderN = 0, orderDirty = true;
+  function sortOrder() {
+    if (orderDirty) { orderN = 0; for (let i = 0; i < CAP; i++) if (STT[i] !== ST.OFF) ORDER[orderN++] = i; orderDirty = false; }
+    for (let q = 0; q < orderN; q++) { const i = ORDER[q]; OKEY[i] = Math.floor((Y[i] + 400) / 8) * 1000 + (X[i] + 400) / 8; }
+    for (let q = 1; q < orderN; q++) {           // insertion sort: the order barely changes between sorts
+      const i = ORDER[q], k = OKEY[i]; let r = q - 1;
+      while (r >= 0 && OKEY[ORDER[r]] > k) { ORDER[r + 1] = ORDER[r]; r--; }
+      ORDER[r + 1] = i;
+    }
+  }
   function timing(t0) {
     const ms = now() - t0; debug.frameMs = ms; debug.frames++;
+    // adaptive level of detail: keep the average cost near the budget (timer resolution is coarse: average over frames)
+    costEma += (ms - costEma) * 0.02;
+    if (debug.frames > 120) { if (costEma > params.budget) lodK = Math.max(0.4, lodK - 0.002); else if (costEma < params.budget * 0.8) lodK = Math.min(1, lodK + 0.001); lodInv = 1 / lodK; }
+    debug.lodK = lodK;
     debug.frameMean += (ms - debug.frameMean) / Math.min(debug.frames, 300); if (ms > debug.frameMax) debug.frameMax = ms;
   }
   function writeState() {
@@ -401,7 +433,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       if (STT[i] === ST.OFF) continue;
       const gx = Math.floor((X[i] - x0) / 2), gy = Math.floor((Y[i] - y0) / 2);
       if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) { next[i] = -1; continue; }
-      const g = gy * gw + gx; next[i] = head[g]; head[g] = i;
+      const g = hb(gx, gy); next[i] = head[g]; head[g] = i;
     }
   }
   function shrink() {
@@ -427,8 +459,9 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   }
 
   // ── behaviour (think) ──
+  let thinkDt = 1 / 30;
   function think(i, dt) {
-    const st = STT[i];
+    const st = STT[i]; thinkDt = dt > 0.004 ? dt : 0.004;
     switch (st) {
       case ST.WAIT: case ST.PAUSE: {
         DSPD[i] = 0; TIMER[i] -= dt;
@@ -595,7 +628,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     formation(GS[L], GI[i], SIDE[L]);
     let tx = X[L] + s * FO[0] - c * FO[1], ty = Y[L] - c * FO[0] - s * FO[1];
     const N = D.N;
-    if (clearance(N, tx, ty) < 0.35 || clearance(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 0.3) { tx = X[L] - c * 0.85 * GI[i]; ty = Y[L] - s * 0.85 * GI[i]; }
+    if ((clrByte(N, tx, ty) < 7 && clearance(N, tx, ty) < 0.35) || (clrByte(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 7 && clearance(N, (tx + X[L]) * 0.5, (ty + Y[L]) * 0.5) < 0.3)) { tx = X[L] - c * 0.85 * GI[i]; ty = Y[L] - s * 0.85 * GI[i]; }
     const dx = tx - X[i], dy = ty - Y[i], d = Math.hypot(dx, dy), dl = Math.hypot(X[L] - X[i], Y[L] - Y[i]);
     if (dl > 10 || (d > 1.5 && !lineClear(N, X[i], Y[i], tx, ty, 0.2))) {
       // lost sight: take the leader's route (same goal)
@@ -604,7 +637,9 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const lsp = SPD[L];
     if (d < 0.3 && lsp < 0.1) { DSPD[i] = 0; DYAW[i] = YAW[L]; return; }
     // match the leader's velocity, close the gap
-    const k = 1.1, vx = Math.cos(lyaw) * lsp + dx * k, vy = Math.sin(lyaw) * lsp + dy * k;
+    const k = 1.1; let vx = Math.cos(lyaw) * lsp + dx * k, vy = Math.sin(lyaw) * lsp + dy * k;
+    // never walk into the leader: close to them, drop the part of the velocity that points at them
+    if (dl < 0.95 && dl > 1e-3) { const lx = (X[L] - X[i]) / dl, ly = (Y[L] - Y[i]) / dl, comp = vx * lx + vy * ly; if (comp > 0) { const f = Math.min(1, (0.95 - dl) / 0.4); vx -= lx * comp * f; vy -= ly * comp * f; } }
     let sp = Math.hypot(vx, vy); const cap = Math.max(PREF[i] * 1.35, lsp * 1.3);
     if (sp > cap) sp = cap;
     if (sp < 0.05) { DSPD[i] = 0; return; }
@@ -624,7 +659,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       const yy = gy + oy; if (yy < 0 || yy >= gh) continue;
       for (let ox = -1; ox <= 1; ox++) {
         const xx = gx + ox; if (xx < 0 || xx >= gw) continue;
-        for (let j = head[yy * gw + xx]; j >= 0; j = next[j]) {
+        for (let j = head[hb(xx, yy)]; j >= 0; j = next[j]) {
           if (j === i) continue;
           const px = X[j] - xi, py = Y[j] - yi, r2 = px * px + py * py;
           if (r2 > 4.84 || Math.abs(Z[j] - Z[i]) > 1.2) continue;
@@ -664,21 +699,24 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       }
     }
     // walls: push away from obstacles closer than 0.55 m (clearance gradient)
-    const c0 = clearance(N, xi, yi);
+    const c0 = clrByte(N, xi, yi) >= 9 ? 1 : clearance(N, xi, yi);     // 9 units = 1.5 m between cell centres: open ground
     if (c0 < 0.55) {
       const gxw = clearance(N, xi + 0.25, yi) - clearance(N, xi - 0.25, yi), gyw = clearance(N, xi, yi + 0.25) - clearance(N, xi, yi - 0.25), gl = Math.hypot(gxw, gyw);
       if (gl > 1e-3) { const k = (0.55 - c0) * 2.0; fx += gxw / gl * k; fy += gyw / gl * k; }
     }
     if (cxs !== 0 || cys !== 0) {
-      const cl = Math.hypot(cxs, cys); if (cl > 0.12) { cxs *= 0.12 / cl; cys *= 0.12 / cl; }
+      const cl = Math.hypot(cxs, cys), cap = 0.03 + thinkDt * 0.3; if (cl > cap) { cxs *= cap / cl; cys *= cap / cl; }
       const nx = xi + cxs, ny = yi + cys; if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; }
     }
     vx += fx; vy += fy;
     let sp = Math.hypot(vx, vy);
     if (sp > want * 1.15 + 0.05) sp = want * 1.15 + 0.05;
-    if (sp > 0.02) DYAW[i] = Math.atan2(vy, vx);
+    // the heading follows a low-passed desired velocity (no wiggle when the neighbours change)
+    const ks = thinkDt / (0.2 + thinkDt);
+    VX[i] += (vx - VX[i]) * ks; VY[i] += (vy - VY[i]) * ks;
+    if (VX[i] * VX[i] + VY[i] * VY[i] > 4e-4) DYAW[i] = Math.atan2(VY[i], VX[i]);
+    else if (sp > 0.02) DYAW[i] = Math.atan2(vy, vx);
     DSPD[i] = sp;
-    VX[i] = vx; VY[i] = vy;
   }
 
   // ── movement (every frame near the camera) ──
@@ -686,12 +724,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (dt <= 0) return;
     const st = STT[i], N = D.N, p = params;
     if (st === ST.SETTLE || st === ST.UNSETTLE) { AVX[i] = AVY[i] = 0; settleStep(i, dt); return; }
-    if (st === ST.ACT || st === ST.QUEUE) {
-      AVX[i] = AVY[i] = 0;
-      SPD[i] = 0; PH[i] = (PH[i] + dt * 0.3) % 256;
-      const s = SLOT[i]; if (s >= 0) { const dy = D.P.slots.yaw[s] - YAW[i]; if (dy > 0.002 || dy < -0.002) YAW[i] += wrapA(dy) * Math.min(1, dt * 3); }
-      return;
-    }
+    if (st === ST.ACT || st === ST.QUEUE) { faceSlot(i, dt); return; }
     // turn toward the desired heading (rate-limited, smoothed); slow down for sharp turns; never walk backwards
     const diff = wrapA(DYAW[i] - YAW[i]);
     const rate = SPD[i] < 0.3 ? p.turnRate * 1.4 : p.turnRate;
@@ -706,26 +739,31 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (SPD[i] > 0) {
       const c = Math.cos(YAW[i]), s = Math.sin(YAW[i]), step = SPD[i] * dt;
       let nx = X[i] + c * step, ny = Y[i] + s * step;
-      if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; moved = step; }
+      // fast path: open ground, nobody standing there, same height band
+      const fi = ((nx - N.x0) * 2) | 0, fj = ((ny - N.y0) * 2) | 0, fk = fj * N.W + fi;
+      if ((fi > 0 && fj > 0 && fi < N.W - 1 && fj < N.H - 1 && N.clr[fk] >= 7 && !OCC[fk] && fk === GK[i]) || canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; moved = step; }
       else {
-        // slide along the wall: the component of the step along the obstacle's tangent
+        // blocked (a wall, a standing guest): take the free direction closest to the heading — the wall's tangent or a
+        // side-step, own side first — turning toward it within this frame's turn budget, and move only as far as the
+        // heading allows (never sideways, never backwards)
         const gxw = clearance(N, X[i] + 0.25, Y[i]) - clearance(N, X[i] - 0.25, Y[i]), gyw = clearance(N, X[i], Y[i] + 0.25) - clearance(N, X[i], Y[i] - 0.25), gl = Math.hypot(gxw, gyw);
-        let ok = false;
+        let found = false, a = 0;
         if (gl > 1e-4) {
-          const tx = -gyw / gl, ty = gxw / gl, along = c * tx + s * ty;
-          let al = along; if (Math.abs(al) < 0.35) al = (al >= 0 ? 0.35 : -0.35);
-          nx = X[i] + tx * al * step; ny = Y[i] + ty * al * step;
-          if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; moved = Math.abs(al) * step; ok = true; SPD[i] *= 0.95; YAW[i] = wrapA(YAW[i] + wrapA(Math.atan2(ty * al, tx * al) - YAW[i]) * Math.min(1, dt * 3)); }
+          const tx = -gyw / gl, ty = gxw / gl, along = c * tx + s * ty, sg = Math.abs(along) > 0.1 ? Math.sign(along) : SIDE[i];
+          a = Math.atan2(ty * sg, tx * sg);
+          if (canStand(i, X[i] + Math.cos(a) * step, Y[i] + Math.sin(a) * step)) found = true;
         }
-        if (!ok) {
-          // still blocked (a standing guest, a corner): try stepping off to either side, own side first
-          for (let t = 0; t < 4 && !ok; t++) {
-            const a = YAW[i] + (t & 1 ? -1 : 1) * SIDE[i] * (t < 2 ? 0.7 : 1.4), ca = Math.cos(a), sa = Math.sin(a);
-            nx = X[i] + ca * step * 0.6; ny = Y[i] + sa * step * 0.6;
-            if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; moved = step * 0.6; ok = true; YAW[i] = wrapA(YAW[i] + wrapA(a - YAW[i]) * Math.min(1, dt * 4)); }
-          }
-          if (!ok) SPD[i] *= 0.5;
+        for (let t = 0; t < 4 && !found; t++) {
+          a = YAW[i] + (t & 1 ? -1 : 1) * SIDE[i] * (t < 2 ? 0.6 : 1.2);
+          if (canStand(i, X[i] + Math.cos(a) * step, Y[i] + Math.sin(a) * step)) found = true;
         }
+        if (found) {
+          const left = Math.max(0, rate * 1.15 * dt - Math.abs(turn * dt)), da = wrapA(a - YAW[i]);
+          YAW[i] = wrapA(YAW[i] + (da > left ? left : da < -left ? -left : da));
+          const off = Math.abs(wrapA(a - YAW[i])), fwd = Math.max(0, Math.cos(off) * 2 - 1);
+          if (fwd > 0) { const k = step * fwd; X[i] += Math.cos(a) * k; Y[i] += Math.sin(a) * k; moved = k; }
+          SPD[i] *= 0.96;
+        } else SPD[i] *= 0.5;
       }
     }
     // a party keeps apart every frame (members walk close together and think at different times)
@@ -734,11 +772,12 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       for (let k = -1; k < 4; k++) {
         const j = k < 0 ? L : MEM[L * 4 + k]; if (j < 0 || j === i || STT[j] === ST.OFF) continue;
         const dx = X[i] - X[j], dy = Y[i] - Y[j], r2 = dx * dx + dy * dy;
-        if (r2 < 0.3025 && r2 > 1e-6) { const r = Math.sqrt(r2), k2 = Math.min(0.02 + dt * 0.6, (0.55 - r) * 0.5), nx = X[i] + dx / r * k2, ny = Y[i] + dy / r * k2; if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; } }
+        if (r2 < 0.2025 && r2 > 1e-6) { const r = Math.sqrt(r2), k2 = Math.min(dt * 0.5, (0.45 - r) * 0.5), nx = X[i] + dx / r * k2, ny = Y[i] + dy / r * k2; if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; } }
       }
     }
     { const c = Math.cos(YAW[i]), s = Math.sin(YAW[i]); AVX[i] = c * SPD[i]; AVY[i] = s * SPD[i]; }
-    const g = ground(N, X[i], Y[i]); if (g === g && Math.abs(g - ZT[i]) < 0.6) ZT[i] = g;
+    { const fi = ((X[i] - N.x0) / N.cell) | 0, fj = ((Y[i] - N.y0) / N.cell) | 0, k = fj * N.W + fi;      // ground: read when the cell changes
+      if (k !== GK[i]) { GK[i] = k; const v = N.A[k]; if (v) { const g = (v - 1) / 100 - 2; if (Math.abs(g - ZT[i]) < 0.6) ZT[i] = g; } } }
     Z[i] += (ZT[i] - Z[i]) * Math.min(1, dt * 10);
     PH[i] = (PH[i] + (moved > 0 ? moved / 1.4 : dt * 0.3)) % 256;
     if (SPD[i] > 0.12) ANI[i] = ANIM.walk;
@@ -763,13 +802,18 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const party = LEAD[i] >= 0 ? LEAD[i] : i;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
       const xx = gx + ox, yy = gy + oy; if (xx < 0 || yy < 0 || xx >= gw || yy >= HG.h) continue;
-      for (let j = head[yy * gw + xx]; j >= 0; j = next[j]) {
+      for (let j = head[hb(xx, yy)]; j >= 0; j = next[j]) {
         if (OCCK[j] < 0 || (LEAD[j] >= 0 ? LEAD[j] : j) === party) continue;
         const d2 = (X[j] - x) * (X[j] - x) + (Y[j] - y) * (Y[j] - y);
         if (d2 < 0.3025 && d2 < (X[j] - X[i]) * (X[j] - X[i]) + (Y[j] - Y[i]) * (Y[j] - Y[i])) return true;
       }
     }
     return false;
+  }
+  function faceSlot(i, dt) {      // standing guests settle to the slot's facing (rate-limited)
+    AVX[i] = AVY[i] = 0; SPD[i] = 0;
+    const s = SLOT[i]; if (s < 0) return;
+    const dy = wrapA(D.P.slots.yaw[s] - YAW[i]); if (dy > 0.002 || dy < -0.002) { let t = dy * Math.min(1, dt * 3); const m = 2.5 * dt; if (t > m) t = m; else if (t < -m) t = -m; YAW[i] = wrapA(YAW[i] + t); }
   }
   function canStand(i, x, y) {
     const N = D.N, fi = ((x - N.x0) / N.cell) | 0, fj = ((y - N.y0) / N.cell) | 0;
@@ -852,7 +896,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         const gx = Math.floor((X[i] - N.x0) / 2), gy = Math.floor((Y[i] - N.y0) / 2);
         for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
           const xx = gx + ox, yy = gy + oy; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue;
-          for (let j = head[yy * gw + xx]; j >= 0; j = next[j]) {
+          for (let j = head[hb(xx, yy)]; j >= 0; j = next[j]) {
             if (j <= i) continue;
             const d = Math.hypot(X[j] - X[i], Y[j] - Y[i]); if (d < 0.35 && Math.abs(Z[j] - Z[i]) < 1) pairs++;
           }
