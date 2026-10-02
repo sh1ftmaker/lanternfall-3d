@@ -19,7 +19,7 @@
 //   poi        per site kind: slot utilisation (time-mean occupied slots / slots), share of sites never used, share of
 //              sites full >= 50 % of the time, Gini of use per site
 //   regions    entries per minute and mean occupancy for interiors and cut-off areas (the tavern, the castle courtyard,
-//              the Rose Maze centre) and the lake rail
+//              the Rose Maze: whole diamond and its centre) and the lake rail
 //   trips      leaders' trips to a goal: completed per minute, mean walked length / straight distance, mean speed made
 //              good (straight / time), abandoned per minute (goal changed while far from it)
 //   cost       update() ms per step: mean, p50, p99, max (Node; the Worker runs the same code), local-field pump ms
@@ -62,7 +62,8 @@ const BIAS = {
 const REG = [
   ['tavern', (x, y) => x > 124 && x < 146 && y > -31 && y < -11],
   ['courtyard', (x, y) => Math.hypot(x + 212, y - 1) < 9],
-  ['maze', (x, y) => Math.hypot(x + 115, y + 145) < 6],
+  ['maze', (x, y) => Math.abs(x + 92) + Math.abs(y + 150.7) < 21],          // the Rose Maze: a diamond centred (-92, -150.7) in the walk grid, about 23 m to a corner
+  ['mazecore', (x, y) => Math.hypot(x + 92, y + 150.7) < 6],
   ['frostmere', (x, y) => landOf(x, y) === 'frostmere'],
   ['lantern-row', (x, y) => landOf(x, y) === 'lantern-row'],
   ['stage', (x, y) => Math.hypot(x - STAGE[0], y - STAGE[1]) < 25],
@@ -265,5 +266,5 @@ for (const c of crops) {
 }
 if (+opt('minutes', 20) > 0) for (const s of SCEN) {
   const T = Date.now(), r = run(s);
-  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
+  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn}/${r.regions.mazecore.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
 }
