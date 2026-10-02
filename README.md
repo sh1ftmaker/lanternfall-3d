@@ -45,6 +45,15 @@ code (`fx/guests/assets.js`), animated in the vertex shader and lit by where the
 (`fx/guests/sim.js`) runs in a Worker on the walk grid, using benches, stall fronts and viewpoints extracted from
 the Blender model (`data/guests.json`, generator in `tools/guests/`). A "Guests" switch is in the settings sheet.
 
+## Sound
+
+Press the speaker button (or `M`) for sound; headphones are best. Every land has its own ambience and music, placed
+in the world: music comes from the bandstand, the tavern or the dance floor and fades with distance, the monorail
+passes overhead, the carousel organ circles with the carousel, and fireworks arrive a moment after the flash.
+Nothing audio is downloaded until sound is switched on. All music is synthesised from code (`tools/audio/`);
+ambiences mix synthesis with CC0 field recordings credited in `fx/audio/CREDITS.md`. Volume and separate Music and
+Ambience switches are in the settings sheet.
+
 ## Optional switches
 
 Add these after `#` in the address, separated by commas, then reload.
