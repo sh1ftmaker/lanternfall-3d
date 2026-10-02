@@ -212,8 +212,8 @@ export function buildSites(N, manifest, poiData, rnd) {
   }
 
   // ── waypoints: the ring promenade under the monorail, the shore promenade, the Lamplighters' Walk ──
-  const addWalk = (x, y, land, weight, name) => {
-    const p = findStand(x, y, 3.0, 0.9); if (!p) return null;
+  const addWalk = (x, y, land, weight, name, r = 0.9, R = 3.0) => {
+    const p = findStand(x, y, R, r); if (!p) return null;
     const s = newSite({ type: 'walk', kind: 'walk', x: p[0], y: p[1], z: ground(N, p[0], p[1]), yaw: 0, land, cap: 99, weight, name });
     addSlot(s, p[0], p[1], s.z, 0, p[0], p[1], ANIM.stand); return s;
   };
@@ -258,6 +258,23 @@ export function buildSites(N, manifest, poiData, rnd) {
       if (kept.some((q) => Math.abs(q[0] - p[0]) < 14 && Math.abs(q[1] - p[1]) < 14 && Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) continue;
       kept.push(p); addWalk(p[0], p[1], p[2], 0.9, 'land');
     }
+  }
+  // coverage: any reachable ground more than 11 m from every open site gets a waypoint of its own (a courtyard, the lanes of
+  // a maze: the wander points above need 1.6 m of room and a 14 m spacing and leave such places with nothing to draw guests)
+  {
+    const CG = 8, gw = Math.ceil(N.W * N.cell / CG), gh = Math.ceil(N.H * N.cell / CG), cov = new Uint8Array(gw * gh);
+    const stamp = (x, y) => { const i0 = Math.floor((x - N.x0) / CG), j0 = Math.floor((y - N.y0) / CG); for (let j = j0 - 2; j <= j0 + 2; j++) for (let i = i0 - 2; i <= i0 + 2; i++) if (i >= 0 && j >= 0 && i < gw && j < gh && Math.hypot((i - i0) * CG, (j - j0) * CG) <= 11) cov[j * gw + i] = 1; };
+    for (const q of sites) if (q.open && q.slots.length) stamp(q.x, q.y);
+    const cells = [];
+    for (let c = 0; c < N.m; c += 2) { if (N.csurf[c] !== 0 || comp.lab[c] !== main) continue; if (N.clr[N.cfine[c]] / 6 - 0.25 < 0.45) continue; cells.push([c, rnd()]); }
+    cells.sort((a, b) => a[1] - b[1]);
+    let added = 0;
+    for (const [c] of cells) {
+      const x = N.x0 + ((N.ccell[c] % N.cw) + 0.5) * 2 * N.cell, y = N.y0 + (((N.ccell[c] / N.cw) | 0) + 0.5) * 2 * N.cell;
+      const i = Math.floor((x - N.x0) / CG), j = Math.floor((y - N.y0) / CG); if (i < 0 || j < 0 || i >= gw || j >= gh || cov[j * gw + i]) continue;
+      const w = addWalk(x, y, landOf(x, y), 0.9, 'cover', 0.45, 1.5); if (w) { stamp(w.x, w.y); added++; } else cov[j * gw + i] = 1;
+    }
+    stats.coverWaypoints = added;
   }
   // the gate: arrivals appear and departures leave beyond the turnstiles
   const gate = newSite({ type: 'gate', kind: 'gate', x: 338, y: 0, z: 0.12, yaw: 0, land: 'gate', cap: 999 });
