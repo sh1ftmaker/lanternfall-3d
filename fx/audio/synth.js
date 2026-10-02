@@ -178,8 +178,8 @@ function babble(o, r, talkers, gain) {           // a crowd from pitched pulse t
   }
 }
 export function crowd(ctx, level, seed = 1) {   // 0 sparse chatter, 1 murmur, 2 dense crowd
-  const talkers = [4, 12, 32][level] || 12;
-  return loopBuf(ctx, 12, 2, (ch, o, r) => { babble(o, r, talkers, 1); if (level === 2) { const lp = biquad('lp', 700); for (let i = 0; i < o.length; i++) o[i] += 0.08 * lp(r() * 2 - 1); } normalise(o, 0.5); }, seed + level * 101);
+  const talkers = [4, 10, 16][level] || 10;
+  return loopBuf(ctx, 10, 2, (ch, o, r) => { babble(o, r, talkers, 1); if (level === 2) { const lp = biquad('lp', 900); for (let i = 0; i < o.length; i++) o[i] += 0.15 * lp(r() * 2 - 1); } normalise(o, 0.5); }, seed + level * 101);
 }
 
 export const ONESHOTS = {
@@ -228,4 +228,15 @@ export function rmsNorm(ab, db) {
   const rms = Math.sqrt(e / Math.max(1, n)) || 1e-9, k = Math.min(Math.pow(10, db / 20) / rms, 0.89 / m);
   for (let ch = 0; ch < ab.numberOfChannels; ch++) { const d = ab.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] *= k; }
   return ab;
+}
+
+// placeholder buffers by key ('bed:<zone>', 'music:<land>', 'emit:<kind>', 'crowd:<0..2>', 'one:<name>'), normalised to a
+// common loudness per role
+export function synthKey(ctx, key, seed = 1) {
+  const [kind, arg] = key.split(':');
+  if (kind === 'bed') return rmsNorm(bed(ctx, arg, seed), -24);
+  if (kind === 'music') return rmsNorm(music(ctx, arg, seed), -20);
+  if (kind === 'emit') return rmsNorm(emitterLoop(ctx, arg, seed), -21);
+  if (kind === 'crowd') return rmsNorm(crowd(ctx, +arg, seed), -24);
+  return oneshot(ctx, arg, seed);
 }

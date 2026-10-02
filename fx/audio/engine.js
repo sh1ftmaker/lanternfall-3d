@@ -66,14 +66,19 @@ function placeholderSpec(lands) {
   const crowd = [{ synth: 'crowd:0', gain: 0.5, density: [0.05, 0.35] }, { synth: 'crowd:1', gain: 0.5, density: [0.2, 0.6] }, { synth: 'crowd:2', gain: 0.5, density: [0.55, 1] }];
   return { version: 1, master: { gain: 1 }, zones, emitters, oneshots, crowd, placeholder: true };
 }
-// placeholder buffers by key, normalised to a common loudness per role
-function synthBuffer(ctx, key, seed = 1) {
-  const [kind, arg] = key.split(':');
-  if (kind === 'bed') return S.rmsNorm(S.bed(ctx, arg, seed), -24);
-  if (kind === 'music') return S.rmsNorm(S.music(ctx, arg, seed), -20);
-  if (kind === 'emit') return S.rmsNorm(S.emitterLoop(ctx, arg, seed), -21);
-  if (kind === 'crowd') return S.rmsNorm(S.crowd(ctx, +arg, seed), -24);
-  return S.oneshot(ctx, arg, seed);
+// placeholder synthesis runs in a worker (fx/audio/synth-worker.js) so it never blocks a frame; main thread fallback
+let worker = null, wseq = 0; const wjobs = new Map();
+function synthAsync(ctx, key, seed) {
+  if (worker === null) {
+    try { worker = new Worker(new URL('./synth-worker.js', import.meta.url), { type: 'module' }); worker.onmessage = (e) => { const j = wjobs.get(e.data.id); wjobs.delete(e.data.id); if (j) j(e.data); }; worker.onerror = () => { worker = false; for (const j of wjobs.values()) j(null); wjobs.clear(); }; }
+    catch (e) { worker = false; }
+  }
+  const local = () => S.synthKey(ctx, key, seed);
+  if (!worker) return new Promise((r) => setTimeout(() => r(local()), 0));
+  return new Promise((r) => { const id = ++wseq; wjobs.set(id, (m) => {
+    if (!m) return r(local());
+    const ab = ctx.createBuffer(m.data.length, m.data[0].length, m.sr); m.data.forEach((d, c) => ab.copyToChannel ? ab.copyToChannel(d, c) : ab.getChannelData(c).set(d)); r(ab);
+  }); worker.postMessage({ id, key, seed }); });
 }
 
 export function createAudio(opts) {
@@ -87,7 +92,7 @@ export function createAudio(opts) {
   const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), first: true };
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
-  let time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
+  let solo = null, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
   const shellSeen = new Float32Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
@@ -151,8 +156,7 @@ export function createAudio(opts) {
         const ab = await res.arrayBuffer(); a.bytes = ab.byteLength; st.bytes += ab.byteLength;
         a.buffer = await new Promise((ok, bad) => { const p = ctx.decodeAudioData(ab, ok, bad); if (p && p.catch) p.catch(bad); });
       } else {
-        await new Promise((r) => setTimeout(r, 0));                // one synthesis per task: keeps frames smooth
-        a.buffer = synthBuffer(ctx, a.synth || fallbackSynth(a), a.seed);
+        a.buffer = await synthAsync(ctx, a.synth || fallbackSynth(a), a.seed);
       }
       st.decoded += a.buffer.length * a.buffer.numberOfChannels * 4;
       a.state = 'ready';
@@ -272,7 +276,7 @@ export function createAudio(opts) {
   // play(name, pos?, {gain, delay, rate, ref, max, a}) ; pos: [x, y, z] in the Blender frame, or a three.js Vector3;
   // without pos the sound is at the listener (UI, footsteps). delay in seconds from now.
   function play(name, pos, o = {}) {
-    if (!st.enabled || !ctx || ctx.state !== 'running') return false;
+    if (!st.enabled || !ctx || (ctx.state !== 'running' && !opts.offline)) return false;
     const a = o.a || pick(name); if (!a) return false;
     if (a.state !== 'ready') { request(a, 0); pump(); return false; }
     const now = ctx.currentTime, p = toThree(pos, _sp);
@@ -396,6 +400,7 @@ export function createAudio(opts) {
     for (const s of sources) if (s.kind === 'music' && gmax > 0) { const rel = s.target / gmax; s.duck = rel; s.target *= 0.4 + 0.6 * rel * rel; }
     if (!st.music) for (const s of sources) if (s.kind === 'music') s.target = 0;
     if (!st.ambience) for (const s of sources) if (s.kind === 'bed' || s.kind === 'crowd' || s.kind === 'emitter') s.target = 0;
+    if (solo) for (const s of sources) if (!solo.test(s.id)) s.target = 0;      // tests: debug.solo = /regex/
     // reverb by place
     const rv = reverbFor(w, gx, gy, A); D.rev = rv;
     N.revS.gain.setTargetAtTime(rv[0], now, 0.5); N.revL.gain.setTargetAtTime(rv[1], now, 0.5);
@@ -413,7 +418,7 @@ export function createAudio(opts) {
       if (!a.stream && a.state !== 'ready') { request(a, -s.target); continue; }
       n++;
       s.chosen = true;
-      if (s.positional) { s.hrtfWant = posRank < HRTF_N; posRank++; }
+      if (s.positional) { s.hrtfWant = posRank < HRTF_N || (!!(s.ch && s.ch.hrtf) && posRank < HRTF_N + 2); posRank++; }   // hysteresis: rarely swapped
       if (!s.playing) startVoice(s, now);
     }
     let active = 0;
@@ -440,9 +445,9 @@ export function createAudio(opts) {
       }
       if (ch.hrtf !== s.hrtfWant) {                         // HRTF <-> equal-power: only after a second, with a dip
         if (!s.hrtfSince) s.hrtfSince = time;
-        else if (time - s.hrtfSince > 1 && now >= s.swapUntil) {
-          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.012); s.swapUntil = now + 0.09;
-          const want = s.hrtfWant; setTimeout(() => { ch.panner.panningModel = want ? 'HRTF' : 'equalpower'; ch.hrtf = want; }, 70);
+        else if (time - s.hrtfSince > 1.5 && now >= s.swapUntil) {
+          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.008); s.swapUntil = now + 0.06;
+          const want = s.hrtfWant; setTimeout(() => { ch.panner.panningModel = want ? 'HRTF' : 'equalpower'; ch.hrtf = want; }, 45);
           s.hrtfSince = 0;
         }
       } else s.hrtfSince = 0;
@@ -550,7 +555,7 @@ export function createAudio(opts) {
 
   function update(dt, t) {
     time = t;
-    if (!st.ready || !ctx || ctx.state !== 'running') { if (st.ready && wantTrack) trackOnly(); return; }
+    if (!st.ready || !ctx || (ctx.state !== 'running' && !opts.offline)) { if (st.ready && wantTrack) trackOnly(); return; }
     const now = ctx.currentTime;
     listener(dt, now);
     sourcePositions(dt);
@@ -602,9 +607,9 @@ export function createAudio(opts) {
     st.enabled = true;
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
     if (navigator.audioSession) try { navigator.audioSession.type = 'playback'; } catch (e) { /* not settable */ }   // iOS: play with the silent switch on
-    const r = ctx.resume && ctx.resume(); if (r && r.catch) r.catch(() => {});
+    if (!opts.offline) { const r = ctx.resume && ctx.resume(); if (r && r.catch) r.catch(() => {}); }
     if (!starting) starting = start();
-    return starting.then(() => { if (!st.enabled) return; L.first = true; if (!document.hidden) { const go = () => rampOut(st.volume * st.volume, 0.6); ctx.state === 'running' ? go() : ctx.resume().then(go, () => {}); } });
+    return starting.then(() => { if (!st.enabled) return; L.first = true; if (!document.hidden) { const go = () => rampOut(st.volume * st.volume, 0.6); ctx.state === 'running' || opts.offline ? go() : ctx.resume().then(go, () => {}); } });
   }
   function disable() {
     st.enabled = false;
@@ -646,7 +651,7 @@ export function createAudio(opts) {
       voices: () => sources.filter((s) => s.playing && !s.stopAt).map((s) => ({ id: s.id, kind: s.kind, zone: s.zone, db: +db(s.target).toFixed(1), d: s.positional ? +s.d.toFixed(1) : null, hrtf: s.ch && s.ch.hrtf, dop: s.dop ? +s.dop.toFixed(4) : undefined, x: s.pos.x, z: s.pos.z })),
       latency: () => ctx ? { base: ctx.baseLatency, output: ctx.outputLatency, rate: ctx.sampleRate, state: ctx.state } : null,
       loaded: () => { let n = 0, r = 0; for (const a of assets.values()) { n++; if (a.state === 'ready' || a.stream) r++; } return { assets: n, ready: r, bytes: st.bytes, decodedMB: +(st.decoded / 1048576).toFixed(1) }; },
-      distGain, play,
+      distGain, play, get solo() { return solo; }, set solo(r) { solo = r ? new RegExp(r) : null; },
     },
   };
   return api;
