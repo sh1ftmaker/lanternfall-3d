@@ -27,12 +27,13 @@ import * as S from './synth.js';
 import { makeZoner, reverbFor, groundType, makeDensity, smoothstep } from './space.js';
 
 const C = 343;                                   // speed of sound, m/s
+const MAKEUP = 1.33;                             // +2.5 dB: about -16 LUFS at the default volume (0.8) with content at its README levels
 const FLIGHT = 1.5;                              // fx/fireworks.js: seconds from launch to burst
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const db = (g) => (g > 1e-6 ? 20 * Math.log10(g) : -120);
 const blend3 = (v) => [v[0], v[2], -v[1]];      // Blender (x, y, z-up) -> three (x, y-up, z)
 const CAROUSEL = { x: -135.04, z: 125.18 };     // three coords (fx/animate.js)
-const ONESHOT_RANGE = { firework_burst: [70, 1400], firework_launch: [25, 600], lantern_release: [30, 300], splash: [4, 70], bell: [45, 900],
+const ONESHOT_RANGE = { firework_burst: [40, 1400], firework_launch: [25, 600], lantern_release: [30, 300], splash: [4, 70], bell: [45, 900],
   owl: [12, 170], laughter: [6, 90], coin: [2, 22] };
 
 // Placeholder content in the audio.json format, `synth` instead of `file` (the engine synthesises those).
@@ -93,12 +94,13 @@ export function createAudio(opts) {
   const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), pf: new THREE.Vector3(0, 0, -1), w: 0, slowFor: 0, hrtfOk: true, cutUntil: 0, first: true };
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
-  let solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
+  let nyq = 20000, solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
   const shellSeen = new Float64Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
   function build() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+    nyq = Math.min(20000, ctx.sampleRate * 0.45);                    // filter cut-offs stay below Nyquist (32 kHz on phones)
     const g = (v = 1) => { const n = ctx.createGain(); n.gain.value = v; return n; };
     N = { amb: g(st.ambience ? 1 : 0), music: g(st.music ? 1 : 0), fx: g(1), ui: g(1), mix: g(1), send: g(1), out: g(0) };
     const comp = ctx.createDynamicsCompressor();       // glue: gentle, slow
@@ -126,7 +128,7 @@ export function createAudio(opts) {
     const ch = { gain: ctx.createGain(), filter: null, panner: null, span: null, busy: 0, connected: null, hrtf: false };
     ch.gain.gain.value = 0;
     if (positional) {
-      ch.filter = ctx.createBiquadFilter(); ch.filter.type = 'lowpass'; ch.filter.frequency.value = 18000; ch.filter.Q.value = 0.5;
+      ch.filter = ctx.createBiquadFilter(); ch.filter.type = 'lowpass'; ch.filter.frequency.value = nyq; ch.filter.Q.value = 0.5;
       const p = ch.panner = ctx.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'linear'; p.refDistance = 1; p.maxDistance = 1e5; p.rolloffFactor = 0;
       ch.gain.connect(ch.filter); ch.filter.connect(p);
       ch.out = p;
@@ -310,7 +312,7 @@ export function createAudio(opts) {
       ch.filter.frequency.setValueAtTime(airCut(d), now);
       ch.panner.panningModel = d < 25 ? 'HRTF' : 'equalpower';
       setPannerPos(ch.panner, p.x, p.y, p.z, now, 0.001);
-    } else { ch.filter.frequency.setValueAtTime(20000, now); ch.panner.panningModel = 'equalpower'; setPannerPos(ch.panner, L.p.x + L.f.x * 0.5 + L.r.x * (o.pan || 0), L.p.y - 1.2, L.p.z + L.f.z * 0.5 + L.r.z * (o.pan || 0), now, 0.001); }
+    } else { ch.filter.frequency.setValueAtTime(nyq, now); ch.panner.panningModel = 'equalpower'; setPannerPos(ch.panner, L.p.x + L.f.x * 0.5 + L.r.x * (o.pan || 0), L.p.y - 1.2, L.p.z + L.f.z * 0.5 + L.r.z * (o.pan || 0), now, 0.001); }
     if (ch.connected !== (name === 'ui_click' ? N.ui : N.fx)) { if (ch.connected) ch.out.disconnect(); ch.connected = name === 'ui_click' ? N.ui : N.fx; ch.out.connect(ch.connected); }
     src.connect(ch.gain); src.start(when); src.onended = () => src.disconnect();
     ch.busy = when + a.buffer.duration / src.playbackRate.value + 0.05;
@@ -322,7 +324,7 @@ export function createAudio(opts) {
 
   /* ───────── mix math ───────── */
   function distGain(d, ref, max) { return (ref / (ref + Math.max(0, d - ref))) * (1 - smoothstep(0.6 * max, max, d)); }
-  function airCut(d) { return clamp(20000 * Math.exp(-d / 220), 1500, 20000); }
+  function airCut(d) { return clamp(20000 * Math.exp(-d / 220), 1500, nyq); }
 
   /* ───────── per frame ───────── */
   function listener(dt, now) {
@@ -471,7 +473,7 @@ export function createAudio(opts) {
     if (now >= s.swapUntil) ch.gain.gain.setTargetAtTime(s.target, now, now - s.started < 0.05 ? 0.15 : tau);
     if (s.positional) {
       if (now < L.cutUntil) setPannerPos(ch.panner, s.pos.x, s.pos.y, s.pos.z, L.cutUntil - 0.008, 0.001); else setPannerPos(ch.panner, s.pos.x, s.pos.y, s.pos.z, now);
-      let cut = airCut(s.d); if (s.kind === 'music' && s.duck !== undefined) cut = Math.min(cut, 1200 + 18000 * s.duck * s.duck);
+      let cut = airCut(s.d); if (s.kind === 'music' && s.duck !== undefined) cut = Math.min(cut, 1200 + (nyq - 1200) * s.duck * s.duck);
       ch.filter.frequency.setTargetAtTime(cut, now, 0.15);
       if (s.doppler && s.node && s.node.playbackRate) {     // manual Doppler: f' = f c / (c + v_r), v_r > 0 moving apart
         tmp.subVectors(s.pos, L.p); const d = Math.max(1, tmp.length()); tmp.divideScalar(d);
@@ -646,7 +648,7 @@ export function createAudio(opts) {
     st.loading = true;
     if (!N) build();
     spec = await loadSpec();
-    N.mix.gain.value = spec.master && spec.master.gain ? spec.master.gain : 1;
+    N.mix.gain.value = (spec.master && spec.master.gain ? spec.master.gain : 1) * MAKEUP;
     buildSources();
     st.ready = true; st.loading = false;
     L.first = true; trackOnly();
