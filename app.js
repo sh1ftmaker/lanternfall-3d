@@ -592,7 +592,20 @@ function setCaption(p) {
   for (const q of places) q.chip.setAttribute('aria-pressed', String(q.id === p.id));
 }
 const hintEl = $('#hint'); let hintTimer = 0;
+// clean view: hide the whole interface for an unobstructed picture (H, the eye button; Esc or the faint corner handle restores)
+let clean = false;
+function setClean(on) {
+  if (on === clean) return; clean = on;
+  if (on && settings.open) settings.close();
+  document.body.classList.toggle('clean', on); $('#btn-show').hidden = !on;
+  clearTimeout(hintTimer);
+  if (on) { hintEl.textContent = coarse ? 'Tap the corner to bring the controls back' : 'Press H to bring the controls back'; hintEl.classList.remove('off'); hintTimer = setTimeout(() => hintEl.classList.add('off'), 2600); }
+  else showHint();
+}
+$('#btn-hide').addEventListener('click', () => setClean(true));
+$('#btn-show').addEventListener('click', () => setClean(false));
 function showHint() {
+  if (clean) return;
   const txt = mode === 'tour' ? (coarse ? 'Drag to explore yourself · tap a place to fly there' : 'Drag to take over · pick a place to fly there')
     : mode === 'orbit' ? (coarse ? 'Drag to orbit · pinch to zoom · two fingers to pan' : 'Drag to orbit · scroll to zoom · right-drag or Shift+arrows to pan')
     : (coarse ? 'Left thumb walks · right thumb looks' : 'WASD or arrows to walk · drag to look · Shift to run · Esc to leave');
@@ -745,11 +758,12 @@ addEventListener('blur', () => keys.clear());
 // shortcuts: 1 / 2 / 3 modes, F full screen, Esc closes the settings sheet or leaves Walk for Explore
 addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || !ready) return;
-  if (e.key === 'Escape') { if (settings.open) settings.close(); else if (mode === 'walk') setMode('orbit'); return; }
+  if (e.key === 'Escape') { if (settings.open) settings.close(); else if (clean) setClean(false); else if (mode === 'walk') setMode('orbit'); return; }
   if (e.repeat) return;
   const m = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk' }[e.code];
   if (m) { if (m !== mode) setMode(m); return; }
   if (e.code === 'KeyF' && !fsBtn.hidden) fsBtn.click();
+  if (e.code === 'KeyH') setClean(!clean);
 });
 function orbitKeys(dt) {          // Explore from the keyboard: arrows / WASD orbit and tilt, +/- zoom, Shift + arrows pan
   const c = controls, k = (a, b) => keys.has(a) || (b && keys.has(b)); if (!keys.size || typeof c._rotateLeft !== 'function') return;
@@ -944,7 +958,7 @@ function frame() {
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
-  if ((lodTick & 15) === 0) view.want = coveredBand();
+  if ((lodTick & 15) === 0) view.want = clean ? 0 : coveredBand();      // clean view: nothing covers the scene
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
