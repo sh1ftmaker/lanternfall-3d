@@ -6,6 +6,7 @@
 // Lit like the guests: the park's ground-light grid + the moon's shadow map + hemisphere shaping + rim, plus its own
 // lantern (a warm point term on the body, an emissive paper lantern that the bloom picks up, a soft pool of light on
 // the ground) and a contact shadow. No real-time lights.
+import { DN_DECL, DN_LAMP } from '../game/daynight/uniforms.js';      // game hook: daynight
 export const BONES = ['hips', 'chest', 'head', 'armL', 'foreL', 'handL', 'armR', 'foreR', 'handR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR', 'pole', 'lantern', 'cape', 'hoodTip'];
 export const B = Object.fromEntries(BONES.map((n, i) => [n, i]));
 export const PARENT = [-1, 0, 1, 1, 3, 4, 1, 6, 7, 0, 9, 10, 0, 12, 13, 8, -1, 1, 2];
@@ -171,6 +172,9 @@ const FS = /* glsl */`
   uniform vec3 uFog, uMoon, uMoonCol; uniform float uFogD, uAmb, uRim;
   uniform vec3 uLantern, uLanternCol; uniform float uLanternK, uFlicker;
   varying vec3 vW, vAlb; varying float vEmit, vDist;
+  ${DN_DECL}
+  ${DN_LAMP}
+  uniform sampler2D tShadowS; uniform mat4 uShadowMS; uniform float uShadowOnS, uSSizeS;     // game hook: daynight
   #include <packing>
   vec3 groundLight(vec2 bxy){ if (uLightOn < 0.5) return uLightFallback; vec4 t = texture2D(tLight, (bxy - uLightXf.xy) * uLightXf.zw); return t.rgb * t.a * uLightRange; }
   float shTap(vec2 uv, float z){ return step(z, unpackRGBAToDepth(texture2D(tShadow, uv))); }
@@ -181,15 +185,29 @@ const FS = /* glsl */`
     float z = q.z - 0.0006; vec2 t = q.xy * uSSize - 0.5, f = fract(t), b = (floor(t) + 0.5) / uSSize, o = vec2(1.0 / uSSize, 0.0);
     return mix(mix(shTap(b, z), shTap(b + o.xy, z), f.x), mix(shTap(b + o.yx, z), shTap(b + o.xx, z), f.x), f.y);
   }
+  float sunShadow(vec3 p){
+    if (uShadowOnS < 0.5) return 1.0;
+    vec4 sc = uShadowMS * vec4(p + vec3(0.0, 0.2, 0.0), 1.0); vec3 q = sc.xyz * 0.5 + 0.5;
+    if (any(lessThan(q.xy, vec2(0.002))) || any(greaterThan(q.xy, vec2(0.998))) || q.z > 0.999) return 1.0;
+    float z = q.z - 0.0006; vec2 t = q.xy * uSSizeS - 0.5, f = fract(t), b = (floor(t) + 0.5) / uSSizeS, o = vec2(1.0 / uSSizeS, 0.0);
+    float a0 = step(z, unpackRGBAToDepth(texture2D(tShadowS, b))), a1 = step(z, unpackRGBAToDepth(texture2D(tShadowS, b + o.xy))), a2 = step(z, unpackRGBAToDepth(texture2D(tShadowS, b + o.yx))), a3 = step(z, unpackRGBAToDepth(texture2D(tShadowS, b + o.xx)));
+    return mix(mix(a0, a1, f.x), mix(a2, a3, f.x), f.y);
+  }
   void main(){
     vec3 dx = dFdx(vW), dy = dFdy(vW); vec3 n = normalize(cross(dx, dy));
     vec3 V = normalize(cameraPosition - vW); if (dot(n, V) < 0.0) n = -n;
     vec3 gl = groundLight(vec2(vW.x, -vW.z));
+    if (uDay > 0.0) gl *= dnLamp(vW.xz);                                                // game hook: daynight
     float hemi = 0.68 + 0.32 * n.y;
     float sh = uMoonOn > 0.5 ? moonShadow(vW) : 0.0;
     vec3 L = uLantern - vW; float d2 = dot(L, L); float ln = max(dot(n, L * inversesqrt(max(d2, 1e-4))), 0.0) * 0.75 + 0.25;
     vec3 lant = uLanternCol * uLanternK * uFlicker * ln / (0.05 + d2);
     vec3 light = gl * hemi * uAmb + uMoonCol * max(dot(n, uMoon), 0.0) * sh * uMoonOn + lant;
+    if (uDay > 0.0) {                                                                    // game hook: daynight
+      vec2 sf = normalize(uSunDir.xz + vec2(1e-5));
+      float ss = uSunOn > 0.5 ? sunShadow(vW) : 0.0;
+      light += uSunCol * (max(dot(n, uSunDir), 0.0) * ss) + mix(uAmbGnd, uAmbSky, n.y * 0.5 + 0.5) + uAmbGlow * max(dot(n, vec3(sf.x, 0.0, sf.y)), 0.0);
+    }
     vec3 col = vAlb * light;
     float fr = 1.0 - max(dot(n, V), 0.0); fr = fr * fr * fr;
     col += fr * uRim * (gl * 0.7 + uMoonCol * 0.6 * uMoonOn + lant * 0.5) * (0.3 + 0.7 * vAlb);
@@ -247,6 +265,7 @@ export function createCharacter({ THREE, scene, surface, guests, manifest }) {
     tShadow: surface.uniforms.tShadow, uShadowM: surface.uniforms.uShadowM, uShadowOn: surface.uniforms.uShadowOn, uSSize: surface.uniforms.uSSize,
     uMoonOn: surface.uniforms.uMoonOn, uMoon: surface.uniforms.uMoon, uMoonCol: surface.uniforms.uMoonCol, uFog: surface.uniforms.uFog, uFogD: surface.uniforms.uFogD,
     uAmb: { value: 1.6 }, uRim: { value: 0.55 },
+    ...(surface.dn || {}), tShadowS: surface.uniforms.tShadowS, uShadowMS: surface.uniforms.uShadowMS, uShadowOnS: surface.uniforms.uShadowOnS, uSSizeS: surface.uniforms.uSSizeS,     // game hook: daynight
     uLantern: { value: new THREE.Vector3() }, uLanternCol: { value: new THREE.Vector3(1.0, 0.62, 0.28) }, uLanternK: { value: 0.11 }, uFlicker: { value: 1 },
     uSize: { value: 0.3 }, uGround: { value: new THREE.Vector3() }, uR: { value: 2.6 }, uPoolK: { value: 0.07 }, uShadowK: { value: 0.55 },
   };
