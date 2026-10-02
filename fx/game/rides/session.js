@@ -3,6 +3,10 @@
 // A ride is { id, name, leave (button label), look: { yaw, pitch } limits (rad), sway (0..1), frame(dt, pose), exit(pose) -> { x, y, yaw },
 // onEnd(why) }. frame() fills pose.pos (three.js Vector3), pose.yaw, pose.pitch (radians, yaw 0 looks along -z) and may set pose.blend = seconds
 // to ease the camera from where it is to the new pose.
+// Photo mode may borrow the camera from a ride (game.takeCamera by 'photo'): the ride is paused (no button, no camera), its own
+// frame() keeps running so the boat, the train and the horses carry on, and `carry(out)` hands photo mode how far the seat has
+// moved so the photographer travels with the ride. When photo mode lets go the camera is taken back and eased in; an end the ride
+// reached meanwhile (the lap, the minute) is held back until then.
 const CSS = `
 #rides-leave{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 92px);appearance:none;border:1px solid rgba(255,181,71,.7);
   border-radius:999px;padding:12px 22px;min-height:44px;background:rgba(13,11,38,.78);color:var(--paper,#f5ecdc);font:600 14px var(--ui,system-ui);cursor:pointer;
@@ -24,6 +28,7 @@ export function createSession(game) {
   const euler = new THREE.Euler(0, 0, 0, 'YXZ'), qT = new THREE.Quaternion(), blend = { p0: new THREE.Vector3(), q0: new THREE.Quaternion(), t: 9, dur: 1 };
   const look = { yaw: 0, pitch: 0, id: -1, x: 0, y: 0 };
   let cur = null, release = null, near0 = 0.22, wickWas = null, t = 0;
+  const carryAcc = new THREE.Vector3(), lastPose = new THREE.Vector3();
 
   function startBlend(sec) { blend.p0.copy(camera.position); blend.q0.copy(camera.quaternion); blend.t = 0; blend.dur = Math.max(0.01, sec); }
   const wickGroup = () => { const pf = game.platformer; return pf && pf.character && pf.character.group; };
@@ -31,6 +36,7 @@ export function createSession(game) {
   function tick(dt) {
     if (!cur) return;
     t += dt; const d = cur.def;
+    if (cur.resume) { cur.resume = false; startBlend(0.7); }              // photo mode has just given the camera back: ease in from where it left it
     d.frame(dt, pose);
     if (pose.blend) { startBlend(pose.blend); pose.blend = 0; }
     let k = 1;
@@ -49,7 +55,7 @@ export function createSession(game) {
   function start(def) {
     if (cur) return false;
     if (game.cameraHeld) return false;
-    cur = { def, ending: false, why: '' }; t = 0; look.yaw = look.pitch = 0; look.id = -1;
+    cur = { def, ending: false, why: '', paused: false, pending: '', resume: false }; t = 0; look.yaw = look.pitch = 0; look.id = -1;
     near0 = camera.near; camera.near = 0.08; camera.updateProjectionMatrix();
     const g = wickGroup(); wickWas = g ? g.visible : null; if (g) g.visible = false;
     release = game.takeCamera(tick, { name: 'rides' });
@@ -62,6 +68,7 @@ export function createSession(game) {
   function end(why = 'button') {
     if (!cur || cur.ending) return;
     if (why === 'mode' || why === 'taken') { finish(why); return; }
+    if (cur.paused) { cur.pending = cur.pending || why; return; }              // photo mode has the camera: the end waits for it
     cur.ending = true; cur.why = why;
     const e = cur.def.exit(); cur.exit = e;                              // { x, y, yaw: where the walker goes back to; pos (three.js), cyaw, cpitch: the camera's last pose }
     cur.def = { ...cur.def, frame() {} }; pose.pos.copy(e.pos); pose.yaw = e.cyaw; pose.pitch = e.cpitch ?? 0;
@@ -86,13 +93,13 @@ export function createSession(game) {
 
   // look round by dragging (mouse or one finger); handled before the viewer's own pointer code
   const onDown = (e) => {
-    if (!cur || cur.ending || e.target !== canvas) return;
+    if (!cur || cur.ending || cur.paused || e.target !== canvas) return;
     e.stopImmediatePropagation(); e.preventDefault();
     if (look.id !== -1) return;
     look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* gone */ }
   };
   const onMove = (e) => {
-    if (!cur || e.target !== canvas) return;
+    if (!cur || cur.paused || e.target !== canvas) return;
     e.stopImmediatePropagation();
     if (e.pointerId !== look.id) return;
     const k = e.pointerType === 'touch' ? 0.0052 : 0.0034, L = cur.def.look || { yaw: 1.7, pitch: 0.7 };
@@ -100,14 +107,14 @@ export function createSession(game) {
     look.pitch = Math.max(-L.pitch, Math.min(L.pitch * 0.7, look.pitch - (e.clientY - look.y) * k));
     look.x = e.clientX; look.y = e.clientY;
   };
-  const onUp = (e) => { if (e.pointerId === look.id) look.id = -1; if (cur && e.target === canvas) e.stopImmediatePropagation(); };
+  const onUp = (e) => { if (e.pointerId === look.id) look.id = -1; if (cur && !cur.paused && e.target === canvas) e.stopImmediatePropagation(); };
   for (const [n, f] of [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['pointercancel', onUp]]) window.addEventListener(n, f, true);
   // capture phase, and stopped: the viewer's own Esc (and Wick's) would otherwise leave Walk for Explore first
   // Wick's action keys are swallowed too: the platformer latches them while its update waits, so E (its swing) pressed
   // on a ride swung the pole on the way out and boarded the monorail again
   const WICK_KEYS = /^(Space|Key[EFJKXCLZQ]|Shift(Left|Right))$/;
   window.addEventListener('keydown', (e) => {
-    if (!cur) return;
+    if (!cur || cur.paused) return;
     if (e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); end('button'); }
     else if (game.player.wick && WICK_KEYS.test(e.code) && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
@@ -121,7 +128,24 @@ export function createSession(game) {
   const depth = window.__park && window.__park.depth;
   if (depth && typeof depth.update === 'function') { const du = depth.update; depth.update = (nf) => { if (cur) depth.cap = Math.min(depth.cap ?? Infinity, 0.1); return du(nf); }; }
   game.on('mode', ({ mode }) => { if (cur && mode !== 'walk') end('mode'); });
-  game.on('camera', ({ held, by }) => { if (cur && held && by !== 'rides') end('taken'); });
+  function pause() { cur.paused = true; btn.hidden = true; look.id = -1; lastPose.copy(pose.pos); carryAcc.set(0, 0, 0); }
+  function resume() {
+    cur.paused = false; release = game.takeCamera(tick, { name: 'rides' }); cur.resume = true;
+    const p = cur.pending; cur.pending = ''; if (p) end(p); else btn.hidden = false;
+  }
+  game.on('camera', ({ held, by }) => {
+    if (!cur) return;
+    if (held && by === 'photo' && !cur.ending && !cur.paused) pause();
+    else if (held && by !== 'rides' && by !== 'photo') end('taken');
+    else if (held && by === 'photo' && cur.ending) finish('taken');
+    else if (!held && by === 'photo' && cur.paused) resume();
+  });
+  game.on('frame', ({ dt }) => {                          // paused for photo mode: the ride goes on without the camera
+    if (!cur || !cur.paused || cur.pending) return;
+    t += dt; cur.def.frame(dt, pose); pose.blend = 0;
+    carryAcc.x += pose.pos.x - lastPose.x; carryAcc.y += pose.pos.y - lastPose.y; carryAcc.z += pose.pos.z - lastPose.z; lastPose.copy(pose.pos);
+  });
 
-  return { start, end, setLeave, get active() { return !!cur; }, get ending() { return !!cur && cur.ending; }, look, get riding() { return cur && cur.def.id; } };
+  const carry = (out) => { out.copy(carryAcc); carryAcc.set(0, 0, 0); return out; };
+  return { start, end, setLeave, carry, get photoOk() { return !!cur && !cur.ending && !cur.paused; }, get paused() { return !!cur && cur.paused; }, get active() { return !!cur; }, get ending() { return !!cur && cur.ending; }, look, get riding() { return cur && cur.def.id; } };
 }

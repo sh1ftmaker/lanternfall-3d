@@ -9,26 +9,29 @@ the top bar. On a 390 px phone the top bar has no room (brand plus five buttons 
 **What it does.**
 - Borrows the camera with `game.takeCamera(fn, { name: 'photo' })` from exactly the current view; shows the clean view
   (`game.ctx.setClean(true)`) and restores the earlier clean state, camera position, orientation and fov on leaving.
-  Refuses to start while another module holds the camera; leaves by itself if another module takes it.
+  Refuses to start while another module holds the camera (the toast says why); leaves by itself if another module takes it.
+  A ride (`rides`) may lend its camera: the ride is paused (`rides/session.js`), carries on without the camera, and photo mode
+  travels with it (`rides.carry`); on leaving the ride takes the camera back and eases in. A ride that is ending is refused.
 - Framing: drag looks; two fingers or right-drag slide sideways/up/down; pinch or wheel move forward and back; WASD move,
-  Q/E down/up, arrows look, Shift is faster. Kept within 25 m of the start and 0.45 m above `game.ground`.
+  Q/E down/up, arrows look, Shift is faster. Kept within 25 m of the start, 0.45 m above `game.ground`, and out of walls, roofs and floors (`walls.js`: the baked park triangles around the camera, gathered a few ms per frame into a 4 m grid, each move clipped against them with a 0.35 m margin, then slid along the surface; the window is rebuilt as the camera drifts).
   Lens slider (vertical field of view 20 to 75 degrees, shown as an equivalent focal length; wider if the start view was
   wider), Roll slider (+-15 degrees; tap the label to level). Crops: Free, 1:1, 4:5, 16:9 with the outside dimmed, and a
-  rule-of-thirds overlay; the crop sits above the control strip.
+  rule-of-thirds overlay; the crop sits above the control strip. On short screens (height 520 px or less, a phone on its side) the strip is a column down the right edge, the panels open to its left, and the picture keeps the rest; the panel starts closed there.
 - Focus blur: tap the picture to focus there (the depth under the tap is read in the shader), Blur slider 0..100.
 - Looks: Natural, Warm lantern, Cold moon, Faded print, Black and white, plus a Vignette slider centred on the crop.
 - Wick: a Pose button (only when entered as Wick) cycles Stand, Look around, Trim the lantern, Warm hands by swapping
   `platformer.animator.update` while photo mode is on.
 - Saving: the shutter flashes (not with Reduce motion), the next frame is read back right after `composer.render` (via
-  `Q.afterRender`), cropped to the chosen aspect at the canvas's full resolution, JPEG. On touch devices with
+  `Q.afterRender`), cropped to the chosen aspect, JPEG. The picture is at least 1280 px wide where the device allows: for that one frame `Q.dpr` and `Q.maxPixels` are raised (up to 4x and 9 megapixels, and the texture limit) and put back after the capture. The thumbnail is 320 px wide. On touch devices with
   `navigator.canShare({files})` it opens the share sheet, otherwise it downloads `lanternfall-YYYY-MM-DD-HHMMSS.jpg`.
 - Time: nothing is frozen (Wick is already held with the camera; guests and particles stay alive).
 
 **The post pass.** `pass.js` is ONE extra pass, added as the last pass of the composer only while photo mode is on and
 an effect is on (aperture above zero, a look, or a vignette). The composer is rebuilt when that changes, and again on
 leaving. With blur on, a small pass after the scene pass converts the scene depth to metres in its own half-float
-target (the composer reuses and clears its depth textures later in the chain), and the last pass gathers (72 taps
-desktop, 32 phone) scaled by a circle of confusion. The blur works in Fast too (it has the same half-float composer);
+target (the composer reuses and clears its depth textures later in the chain), and the last pass gathers scaled by a circle of confusion
+(Cinematic 144 taps desktop, 72 phone; HD 96 and 56; Fast 36 and 20), the pattern turned per pixel by interleaved gradient noise. Cinematic and HD then run a
+second, small smoothing pass in the last shader (12 or 8, 10 or 6 taps, weighted so it never crosses a depth edge) that averages the gather's grain away; Fast skips it. The blur works in Fast too (it has the same half-float composer);
 only with no HDR targets (`Q.hdr` false) it is unavailable and the Focus tab says so.
 
 **Edits outside this folder** (all marked `game hook: photo`): `app.js` (depth texture for the legacy chain, one call to
@@ -36,7 +39,9 @@ only with no HDR targets (`Q.hdr` false) it is unavailable and the Focus tab say
 
 **Events.** `photo:taken` `{ place, t }`, `photo:mode` `{ on }`.
 
-**Saved state** (key `photo`): `{ shots: [{ img (192 px JPEG data URL), place, t, w, h, at }] (newest first, 12 kept), prefs: { aspect, thirds, look } }`.
+**Saved state** (key `photo`): `{ shots: [{ img (320 px JPEG data URL), place, t, w, h, at }] (newest first, 12 kept), prefs: { aspect, thirds, look } }`.
+
+The save is read through a sanitiser: a missing, null, non-object or older-shaped save starts from defaults, and only thumbnails that are real `data:image/jpeg` URLs are kept.
 
 **Hash tokens.** None.
 
@@ -45,4 +50,4 @@ only with no HDR targets (`Q.hdr` false) it is unavailable and the Focus tab say
 **Test.** `node tools/game/photo.test.mjs [url]` (SHOTS=dir writes screenshots, ONLY=0,1,2,3 picks configurations:
 desktop Cinematic, phone Cinematic, desktop HD, phone Fast). It enters from Tour, Explore, Wick and first person,
 moves, rolls, zooms, bounds, crops, focus, blur, looks, takes a picture (download or share intercepted), checks the
-thumbnails survive a reload, leaves and compares camera, interface and Wick, and loses the WebGL context in photo mode.
+thumbnails survive a reload, leaves and compares camera, interface and Wick, and loses the WebGL context in photo mode. It also checks the camera stops short of a wall, saves are at least 1280 px wide, a landscape phone (844x390) strip, and odd saves (`EXTRA=no` skips these two, `ONLY=extra` runs only them).

@@ -50,12 +50,12 @@ export function createMonorail(game, session, { count }) {
     let lead = null, bd = 1e9; for (const g of ls) { const d = distTo(g); if (d < bd) { bd = d; lead = g; } }
     run = { lead, phase: 'wait', left: false, yaw: 0, pitch: -0.05, lastTxt: '', first: true };
     const def = {
-      id: 'monorail', name: 'the monorail', leave: 'Get off at the next stop', look: { yaw: 1.75, pitch: 0.8 }, sway: 1, blendIn: 0.9, blendOut: 1.0,
+      id: 'monorail', name: 'the Meridian Loop', leave: 'Get off at the next stop', look: { yaw: 1.75, pitch: 0.8 }, sway: 1, blendIn: 0.9, blendOut: 1.0,
       frame, exit,
       onEnd(why) { game.track('rides', null); if (run) run.lead.visible = true; run = null; },
     };
     if (!session.start(def)) { run = null; return; }
-    game.track('rides', 'The monorail: waiting on the platform', { order: 1 });
+    game.track('rides', 'Meridian Loop: waiting on the platform', { order: 1 });
     game.toast('Wait here. A train will come in.', { ms: 3000 });
   }
   function exit() {
@@ -66,7 +66,7 @@ export function createMonorail(game, session, { count }) {
     const r = run, g = r.lead, d = distTo(g);
     if (r.phase === 'wait') {
       const eta = d / SPEED, txt = eta < 2.5 ? 'The train is coming in' : `The next train is ${Math.round(eta)} seconds away`;
-      if (txt !== r.lastTxt) { r.lastTxt = txt; game.track('rides', 'The monorail: ' + txt.toLowerCase(), { order: 1 }); session.setLeave('Never mind'); }
+      if (txt !== r.lastTxt) { r.lastTxt = txt; game.track('rides', 'Meridian Loop: ' + txt.toLowerCase(), { order: 1 }); session.setLeave('Never mind'); }
       // watch it come in: the train once it is near, else the stretch of beam it will arrive along
       let tx, ty, tz;
       if (d < 110) { seatOf(g, seat); tx = seat.x; ty = seat.y; tz = seat.z; } else { const p = rail.at(s0 - 70); tx = p.x; ty = top + 1.5; tz = -p.y; }
@@ -83,9 +83,9 @@ export function createMonorail(game, session, { count }) {
     pose.yaw = g.rotation.y - Math.PI / 2; pose.pitch = -0.04;
     if (d > rail.len * 0.5) r.left = true;
     const p = rail.at(rail.sOf(pose.pos.x, -pose.pos.z)), name = landName(p.x, p.y);
-    if (name !== r.land) { r.land = name; game.track('rides', `The monorail: over ${name}`, { order: 1 }); }
+    if (name !== r.land) { r.land = name; game.track('rides', `Meridian Loop: over ${name}`, { order: 1 }); }
     if (r.left && d < 3) session.end('done');
   }
-  it = game.interact({ id: 'rides:monorail', x: board.x, y: board.y, z: board.z, r: 3.6, label: 'Board the monorail', show: () => !game.cameraHeld, use: begin });
+  it = game.interact({ id: 'rides:monorail', x: board.x, y: board.y, z: board.z, r: 3.6, label: 'Board the Meridian Loop', show: () => !game.cameraHeld, use: begin });
   return { board, faceYaw, s0, rail, begin, get run() { return run; }, distTo, leads };
 }

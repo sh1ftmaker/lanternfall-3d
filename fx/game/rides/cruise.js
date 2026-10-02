@@ -6,6 +6,8 @@ const PHI = (-38 * Math.PI) / 180;       // bearing of the jetty from the lake's
 const SPEED = 2.7;                       // m/s
 const R0 = 27, R1 = 31;                  // the circuit round the Spire (the lantern punt keeps further out, 34 m and more)
 const WATER = -0.8;
+// the lantern punt (fx/water.js boatAt: an ellipse in the Blender frame, 1.15 m/s; its progress is `fxWater.boat.s`). The cruise never shares water with it.
+const PUNT = { A: 46, B: 40, CX: -12, CY: 2, V: 1.15 }, PUNT_PER = 2 * Math.PI * Math.sqrt((PUNT.A * PUNT.A + PUNT.B * PUNT.B) / 2), CLEAR = 6;   // CLEAR: metres between hull centres (the half-lengths are 3 m and 2.1 m: 5.1 m is touching; 4 m is the 15 in 200 departures that met it, 6 m leaves a boat's width of water)
 const SEAT = [0.35, 1.55, 0.45];             // boat-local eye position (x forward, y up)
 const mod = (a, n) => ((a % n) + n) % n;
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -142,6 +144,23 @@ export function createCruise(game, session, { count }) {
   const _p = new THREE.Vector3(), _t = new THREE.Vector3();
   const at = (s, p, t) => { const u = Math.min(1, Math.max(0, s / LCURVE)); curve.getPointAt(u, p); curve.getTangentAt(u, t); };
 
+  // when would the cruise meet the punt? the cruise's own timeline (position every 0.25 s from the jetty, from the same speed law as frame())
+  // against the punt's, for each possible wait; the shortest wait that keeps CLEAR metres between them all the way round is the plan
+  let tl = null;
+  function timeline() {
+    if (tl) return tl; const p = new THREE.Vector3(), tg = new THREE.Vector3(), o = []; let s = 0;
+    while (s < LCURVE) { const u = Math.min(1, Math.max(0, s / LCURVE)); curve.getPointAt(u, p); o.push(p.x, -p.z); s += SPEED * Math.min(1, 0.22 + Math.min(s, LCURVE - s) / 14) * 0.25; }
+    return (tl = o);
+  }
+  function plan(sp, clear = CLEAR) {                 // sp: the punt's progress in metres (default: now); -> { delay (s), clear (m, with that delay) }
+    const w = ctx.getWater && ctx.getWater();
+    if (sp === undefined) { if (!w || !w.boat || !w.boat.grp || !Number.isFinite(w.boat.s)) return { delay: 0, clear: Infinity }; sp = w.boat.s; }
+    const T = timeline(), n = T.length / 2, k = (Math.PI * 2) / PUNT_PER;
+    const clearAt = (d) => { let m = 1e9; for (let i = 0; i < n; i++) { const a = (sp + PUNT.V * (d + i * 0.25)) * k; m = Math.min(m, Math.hypot(T[2 * i] - (PUNT.A * Math.cos(a) + PUNT.CX), T[2 * i + 1] - (PUNT.B * Math.sin(a) + PUNT.CY))); } return m; };
+    let best = { delay: 0, clear: clearAt(0) }; if (best.clear >= clear) return best;
+    for (let d = 1; d <= PUNT_PER / PUNT.V; d++) { const c = clearAt(d); if (c >= clear) return { delay: d, clear: c }; if (c > best.clear) best = { delay: d, clear: c }; }
+    return best;                      // no wait clears it (cannot happen with the present route): go at the widest margin
+  }
   const _boatPos = new THREE.Vector3(), seatV = new THREE.Vector3();
   let run = null, clockT = 0;
   function place(headBlender, x, y, time, k) {              // k: 0 at rest ... 1 under way (scales the bob and roll)
@@ -156,6 +175,12 @@ export function createCruise(game, session, { count }) {
   const phaseText = (r, rr) => { if (rr < 38) r.circled = true; return r.s < 20 ? 'leaving the jetty' : rr < 38 ? 'circling the Spire' : r.circled ? 'heading home' : 'crossing Stillwater'; };
   function frame(dt, cp) {
     const r = run, w = ctx.getWater && ctx.getWater(), time = game.uTime.value;
+    if (r.hold > 0) {                 // at the jetty until the lantern punt is out of the way (re-planned twice a second: the punt keeps its pace, a slow frame does not)
+      r.hold -= dt; r.holdT += dt; if (r.holdT >= 0.5) { r.holdT = 0; r.hold = plan().delay; }
+      place(pose.head, pose.x, pose.y, time, 0); boat.localToWorld(cp.pos.set(SEAT[0], SEAT[1], SEAT[2])); cp.yaw = pose.head - Math.PI / 2; cp.pitch = -0.03;
+      if (r.txt !== 'hold') { r.txt = 'hold'; game.track('rides', 'Harbor Cruise: waiting for the lantern punt to pass', { order: 1 }); }
+      return;
+    }
     const remain = LCURVE - r.s, v = SPEED * Math.min(1, 0.22 + Math.min(r.s, remain) / 14);        // easing off at both ends
     r.s = Math.min(LCURVE, r.s + v * dt); r.v = v;
     at(r.s, _p, _t);
@@ -168,7 +193,7 @@ export function createCruise(game, session, { count }) {
     cp.yaw = head - Math.PI / 2; cp.pitch = -0.03;
     // water: the hull pushes it aside, as the lantern punt does
     if (w && w.sim && w.sim.on) { const c = Math.cos(-head), s = Math.sin(-head); for (const [f, amp, rr] of [[2.4, -0.11, 0.8], [1.0, -0.06, 0.95], [-0.8, -0.04, 0.95], [-2.4, 0.04, 0.75]]) w.sim.events.push({ x: _p.x + c * f, z: _p.z + s * f, amp: amp * v * 0.6, r: rr, cont: true }); }
-    const txt = phaseText(r, Math.hypot(_p.x, _p.z)); if (txt !== r.txt) { r.txt = txt; game.track('rides', 'Harbor cruise: ' + txt, { order: 1 }); }
+    const txt = phaseText(r, Math.hypot(_p.x, _p.z)); if (txt !== r.txt) { r.txt = txt; game.track('rides', 'Harbor Cruise: ' + txt, { order: 1 }); }
     if (r.s >= LCURVE - 0.01) session.end('done');
   }
   function exit() {
@@ -177,15 +202,16 @@ export function createCruise(game, session, { count }) {
   }
   function begin() {
     if (session.active || run) return;
-    run = { s: 0, v: 0, txt: '' };
-    const def = { id: 'cruise', name: 'the harbor cruise', leave: 'Return to the jetty', look: { yaw: 2.4, pitch: 0.8 }, sway: 0.4, blendIn: 1.1, blendOut: 1.0, frame, exit,
-      onEnd(why) { game.track('rides', null); run = null; at(0, _p, _t); place(pose.head, pose.x, pose.y, game.uTime.value, 0); } };
+    run = { s: 0, v: 0, txt: '', hold: plan().delay, holdT: 0 };
+    const def = { id: 'cruise', name: 'the Harbor Cruise', leave: 'Return to the jetty', look: { yaw: 2.4, pitch: 0.8 }, sway: 0.4, blendIn: 1.1, blendOut: 1.0, frame, exit,
+      onEnd(why) { game.track('rides', null); run = null; glow.sprite.visible = true; lanternMesh.visible = true; at(0, _p, _t); place(pose.head, pose.x, pose.y, game.uTime.value, 0); } };
     if (!session.start(def)) { run = null; return; }
+    glow.sprite.visible = false; lanternMesh.visible = false;     // the bow lantern and its glow sit in the camera's view from the seat
     count('cruise'); game.emit('rides:board', { ride: 'cruise' });
-    game.toast('Take a seat under the canopy. The cruise takes about two and a half minutes.', { ms: 4200 });
+    game.toast('Take a seat under the canopy. The Harbor Cruise takes about two and a half minutes.', { ms: 4200 });
   }
   // at rest the boat rocks gently on the water
   game.on('frame', () => { if (run) return; const near = Math.hypot(game.camera.position.x - pose.x, game.camera.position.z + pose.y) < 220; boat.visible = near; glow.sprite.visible = near && true; lamp.sprite.visible = near; if (near) place(pose.head, pose.x, pose.y, game.uTime.value, 0); });
-  const it = game.interact({ id: 'rides:cruise', x: land[0], y: land[1], z: deckZ, r: 3.4, label: 'Take the harbor cruise', show: () => !game.cameraHeld && !run, use: begin });
-  return { board: { x: land[0], y: land[1], z: deckZ }, jetty, boat, begin, length: LCURVE, get run() { return run; }, path: () => samples };
+  const it = game.interact({ id: 'rides:cruise', x: land[0], y: land[1], z: deckZ, r: 3.4, label: 'Take the Harbor Cruise', show: () => !game.cameraHeld && !run, use: begin });
+  return { board: { x: land[0], y: land[1], z: deckZ }, jetty, boat, glow, begin, plan, length: LCURVE, get run() { return run; }, path: () => samples };
 }

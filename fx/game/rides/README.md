@@ -4,7 +4,7 @@ Three things to ride. Module `fx/game/rides/` (`index.js` wires them, `session.j
 
 ## What the visitor can do
 
-- **The monorail.** On the south platform of the Meridian Loop station the prompt "Board the monorail" appears. The camera
+- **The Meridian Loop (the monorail).** On the south platform of the Meridian Loop station the prompt "Board the monorail" appears. The camera
   moves to the platform edge and watches the next train come in ("The next train is N seconds away" in the tracker), then
   joins the front seat of its lead car (behind the glass nose, eye 1.85 m above the car's origin, 12.9 m above the ground)
   and rides one full lap of the loop (about 104 s). The tracker names the land being passed. "Get off at the next stop"
@@ -14,13 +14,13 @@ Three things to ride. Module `fx/game/rides/` (`index.js` wires them, `session.j
   Brinewatch shore. "Take the harbor cruise" seats the visitor under the canopy; the boat backs off, crosses Stillwater to the
   Spire, circles the island once (radius 27 m rising to 31 m) and comes home (about 420 m, 2 min 45 s). It bobs
   gently (not with Reduce motion) and pushes the lake's ripple simulation aside with the same wake sources as the lantern
-  punt (`fxWater.sim.events`). "Return to the jetty" ends it early. When nobody is aboard the boat rocks at the jetty.
+  punt (`fxWater.sim.events`). It never meets the lantern punt: before leaving, the boat's whole timeline is checked against the punt's (`cruise.plan(puntS)`, 6 m clear all the way round) and the boat waits at the jetty, tracker "waiting for the lantern punt to pass", until the shortest wait that clears it is over (re-planned twice a second). "Return to the jetty" ends it early. When nobody is aboard the boat rocks at the jetty.
 - **The carousel.** Twelve seated riders (eight adults, four children) on the Pavilion of Wings' horses, one InstancedMesh,
   matrices rebuilt each frame from the carousel's own clock and parameters (`CAROUSEL`, `CAROUSEL_MOTION`, `horseAngleDeg`
   exported from `fx/animate.js`), so they turn and rise and fall with the horses. "Ride the carousel" seats the camera on
   an empty horse for one minute.
 
-While riding: drag (mouse or one finger) looks round within limits; Wick is hidden and restored; the walker is put back
+While riding: drag (mouse or one finger) looks round within limits; the bow lantern and its glow are hidden on the cruise; photo mode can borrow the camera (the ride pauses and carries on without it, see `session.js`); Wick is hidden and restored; the walker is put back
 where the ride began (`game.teleport`, then the height of the platform or jetty is restored); switching to Tour or
 Explore ends the ride cleanly; another module taking the camera ends it too.
 
@@ -40,7 +40,7 @@ Explore ends the ride cleanly; another module taking the camera ends it too.
 
 ## Saved state
 
-Key `rides`: `{ monorail: n, cruise: n, carousel: n }`, times ridden. Journal section "Rides" shows where to board and the counts.
+Key `rides`: `{ monorail: n, cruise: n, carousel: n }`, times ridden (read through a sanitiser: anything but a whole non-negative number counts as zero; a null or non-object save starts from defaults). Journal section "Rides" shows where to board and the counts.
 
 ## Hash tokens
 
@@ -55,5 +55,5 @@ Marked `// game hook: rides`.
 
 `node tools/game/rides.test.mjs http://127.0.0.1:PORT/index.html` (puppeteer-core, system Chromium). It rides the monorail
 and the cruise (early leave and one natural end), checks camera height and travel, drag look, the walker coming back and
-Wick moving again, mode switches during a ride, and takes carousel screenshots. Desktop and 390x844 touch. Takes several minutes.
-Test hooks: `game.modules.rides.monorail` (`board`, `distTo`), `.cruise` (`board`, `boat`, `length`, `run`), `.carousel` (`mesh`, `horse(i, t, motion)`).
+Wick moving again, mode switches during a ride, and takes carousel screenshots. Desktop and 390x844 touch. The full run takes over ten minutes; `--quick` (under 3 minutes: desktop and phone Wick, no natural ends, the waiting train moved to 5 s away) is for every merge.
+Test hooks: `game.modules.rides.monorail` (`board`, `distTo`), `.cruise` (`board`, `boat`, `glow`, `plan(puntS)`, `length`, `run`), `.carousel` (`mesh`, `horse(i, t, motion)`).

@@ -1,6 +1,7 @@
 // fx/game/photo: photo mode. Stop, frame the park, take a picture home. See README.md.
 // Borrows the camera (game.takeCamera), shows the clean view, adds one post pass while an effect is on (pass.js).
 import { makePhotoPass, LOOKS } from './pass.js';
+import { createWalls } from './walls.js';
 
 const CSS = `
 #ph-root{position:fixed;inset:0;z-index:8;overflow:hidden;pointer-events:none;font:500 13px var(--ui);color:var(--paper)} #ph-root[hidden]{display:none}
@@ -43,6 +44,16 @@ const CSS = `
 body.photo-on .pf-touch,body.photo-on #hop,body.photo-on #stick,body.photo-on #hint,body.photo-on #btn-show,body.photo-on #game-track{display:none!important}
 #btn-photo{display:none} @media (min-width:641px){ #btn-photo{display:grid} }
 @media (prefers-reduced-motion:reduce){ #ph-flash.go{animation:none} #ph-ring,#ph-note{transition:none} }
+/* short screens (a phone on its side): the controls become a column down the right edge, the panels open to its left, and the picture keeps the rest */
+@media (max-height:520px){
+  #ph-bar{left:auto;right:calc(env(safe-area-inset-right,0px) + 8px);top:8px;bottom:8px;transform:none;width:auto;max-width:calc(100vw - 16px);padding:6px;border-radius:16px;display:flex;flex-direction:row-reverse;gap:8px;align-items:stretch}
+  .ph-main{flex-direction:column;justify-content:space-between;align-items:center;gap:4px}
+  .ph-tabs{flex-direction:column;justify-content:center;flex:1 1 auto;gap:2px;width:100%} .ph-tab{flex:0 0 auto;min-height:40px;padding:0 8px;font-size:12.5px}
+  .ph-done{min-height:36px;padding:0 10px;font-size:12.5px} #ph-shutter{width:52px;height:52px}
+  .ph-panel{width:min(290px,44vw);margin:0;padding:0 8px 0 0;border-bottom:0;border-right:1px solid var(--line);overflow:auto;max-height:100%;justify-content:center}
+  .ph-two{grid-template-columns:1fr} .ph-sl input{height:30px}
+  #ph-note{left:8px;transform:none;top:8px;bottom:auto}
+}
 `;
 const ASPECTS = [['free', 'Free', 0], ['1:1', '1:1', 1], ['4:5', '4:5', 4 / 5], ['16:9', '16:9', 16 / 9]];
 const KEEP = 12, RADIUS = 25, MIN_FOV = 20, MAX_FOV = 75;
@@ -52,13 +63,26 @@ export function init(game) {
   const { THREE, camera, renderer, Q, ctx } = game;
   const el = (tag, id, cls, html) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
   const style = el('style'); style.textContent = CSS; document.head.appendChild(style);
-  const prefs = { aspect: 'free', thirds: true, look: 'natural', ...(game.save.get('photo', {}).prefs || {}) };
-  const saved = () => game.save.get('photo', { shots: [], prefs });
+  // the save may be missing, null, not an object, or of an older shape: start from defaults and keep only fields of the right type
+  const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v), num = (v) => typeof v === 'number' && Number.isFinite(v);
+  const clean = (raw) => {
+    const o = isObj(raw) ? raw : {}, p = isObj(o.prefs) ? o.prefs : {};
+    return {
+      prefs: { aspect: ASPECTS.some((a) => a[0] === p.aspect) ? p.aspect : 'free', thirds: typeof p.thirds === 'boolean' ? p.thirds : true, look: typeof p.look === 'string' && p.look in LOOKS ? p.look : 'natural' },
+      shots: (Array.isArray(o.shots) ? o.shots : []).filter((s) => isObj(s) && typeof s.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(s.img) && s.img.length < 400000)
+        .map((s) => ({ img: s.img, place: typeof s.place === 'string' ? s.place.slice(0, 80) : 'Lanternfall', t: typeof s.t === 'string' ? s.t.slice(0, 12) : '', w: num(s.w) ? s.w : 0, h: num(s.h) ? s.h : 0, at: num(s.at) ? s.at : 0 })).slice(0, KEEP),
+    };
+  };
+  const saved = () => clean(game.save.get('photo', null));
+  const prefs = saved().prefs;
   const st = { aperture: 0, focus: [0.5, 0.5], look: 'natural', vig: 0, crop: [0, 0, 1, 1] };   // read live by the post pass
   const cam = { p: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, fov: 52, minFov: MIN_FOV, maxFov: MAX_FOV, home: new THREE.Vector3(), floor: 0 };
   let active = false, release = null, prev = null, wasClean = false, aspect = ASPECTS.some((a) => a[0] === prefs.aspect) ? prefs.aspect : 'free', thirds = prefs.thirds !== false, tab = 'frame';
   let lensTouched = false, setFov = 0, builtSig = '', passRef = null, want = false, noteT = 0, ringT = 0;
   const keys = new Set(), ptrs = new Map(); let pinch = 0, mid = null;
+  const walls = createWalls(THREE, () => ctx.getPark && ctx.getPark(), () => window.__park && window.__park.lodMeshes), lastP = new THREE.Vector3(), clipP = new THREE.Vector3(), carryV = new THREE.Vector3();
+  const compact = () => matchMedia('(max-height:520px)').matches;
+  let boost = null;
   const e = new THREE.Euler(0, 0, 0, 'YXZ'), fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmp = new THREE.Vector3();
 
   /* ── DOM ── */
@@ -98,8 +122,9 @@ export function init(game) {
     const vw = innerWidth, vh = innerHeight, r = ASPECTS.find((a) => a[0] === aspect)[2];
     let x = 0, y = 0, w = vw, h = vh;
     if (r) {
-      const top = bar.getBoundingClientRect().top, aw = vw - 16, ah = Math.max(80, top - 16);
-      w = Math.min(aw, ah * r); h = w / r; x = (vw - w) / 2; y = 8 + (ah - h) / 2;
+      const bb = bar.getBoundingClientRect();
+      if (compact()) { const aw = Math.max(80, bb.left - 16), ah = vh - 16; w = Math.min(aw, ah * r); h = w / r; x = 8 + (aw - w) / 2; y = 8 + (ah - h) / 2; }     // the controls are a column on the right
+      else { const aw = vw - 16, ah = Math.max(80, bb.top - 16); w = Math.min(aw, ah * r); h = w / r; x = (vw - w) / 2; y = 8 + (ah - h) / 2; }
     }
     crop.className = (r ? '' : 'free ') + (thirds ? 'thirds' : '');
     Object.assign(crop.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
@@ -118,7 +143,7 @@ export function init(game) {
   vig.addEventListener('input', () => { st.vig = +vig.value / 100; syncUI(); syncPass(); });
   $('#ph-done').addEventListener('click', () => leave());
   $('#ph-shutter').addEventListener('click', () => shoot());
-  function remember() { game.save.update('photo', (s) => ({ ...s, prefs: { aspect, thirds, look: st.look } }), { shots: [] }); }
+  function remember() { game.save.update('photo', (s) => ({ ...clean(s), prefs: { aspect, thirds, look: st.look } }), null); }
 
   /* ── the post pass: present only while an effect is on; the composer is rebuilt when that changes ── */
   const canBlur = () => !!Q.hdr;
@@ -133,7 +158,8 @@ export function init(game) {
   /* ── entering and leaving ── */
   function enter() {
     if (active || !game.started) return false;
-    const held = game.cameraHeld; if (held) { game.toast('Not just now.'); return false; }
+    const held = game.cameraHeld, rides = game.modules.rides;       // a ride lends the camera and takes it back (session.js); anything else holding it is refused, and says why
+    if (held && !(held === 'rides' && rides && rides.photoOk && rides.photoOk())) { game.toast(held === 'rides' ? 'The ride is ending. Try again in a moment.' : 'Not just now: something else has the view.'); return false; }
     if (game.journal.isOpen) game.journal.close();
     prev = { pos: camera.position.clone(), quat: camera.quaternion.clone(), fov: camera.fov, mode: game.player.mode };
     e.setFromQuaternion(camera.quaternion, 'YXZ'); cam.yaw = e.y; cam.pitch = e.x; cam.roll = e.z; cam.p.copy(camera.position); cam.home.copy(camera.position); cam.fov = camera.fov;
@@ -142,8 +168,8 @@ export function init(game) {
     active = true; document.body.classList.add('photo-on'); root.hidden = false;
     st.look = prefs.look in LOOKS ? prefs.look : 'natural'; st.aperture = 0; st.vig = 0; st.focus = [0.5, 0.5];
     lens.value = sOf(clamp(cam.fov, MIN_FOV, cam.maxFov)); roll.value = clamp(cam.roll * 180 / Math.PI, -15, 15); blur.value = 0; vig.value = 0;
-    $('#ph-pose').hidden = !(game.player.wick && game.player.mode === 'walk');
-    keys.clear(); ptrs.clear(); tab = 'frame'; lensTouched = false; setFov = 0; syncUI(); layoutCrop(); syncPass();
+    syncPose();
+    keys.clear(); ptrs.clear(); tab = compact() ? '' : 'frame'; walls.reset(); lastP.copy(cam.p); boost = null; lensTouched = false; setFov = 0; syncUI(); layoutCrop(); syncPass();
     release = game.takeCamera(drive, { name: 'photo' });
     Q.afterRender = afterRender;
     game.emit('photo:mode', { on: true });
@@ -151,7 +177,7 @@ export function init(game) {
   }
   function leave(why) {
     if (!active) return;
-    active = false; if (release && why !== 'replaced') release(); release = null;
+    unboost(); active = false; if (release && why !== 'replaced') release(); release = null;
     document.body.classList.remove('photo-on'); root.hidden = true; Q.afterRender = null; want = false; keys.clear(); ptrs.clear();
     unpose();
     camera.position.copy(prev.pos); camera.quaternion.copy(prev.quat); camera.fov = prev.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
@@ -169,15 +195,20 @@ export function init(game) {
       basis(); cam.p.addScaledVector(fwd, ((k('KeyW') ? 1 : 0) - (k('KeyS') ? 1 : 0)) * sp).addScaledVector(right, ((k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0)) * sp);
       cam.p.y += ((k('KeyE') ? 1 : 0) - (k('KeyQ') ? 1 : 0)) * sp;
     }
-    place(); poseFrame(dt);
+    const rd = game.modules.rides; if (rd && rd.carry) { rd.carry(carryV); if (carryV.lengthSq() > 0) { cam.p.add(carryV); cam.home.add(carryV); lastP.add(carryV); } }   // on a ride the photographer travels with it
+    place(); syncPose(); poseFrame(dt);
   }
+  // the Pose button is for Wick standing in the park: shown as soon as Wick is there (he may load after photo mode opens), never on a ride
+  function syncPose() { const b = $('#ph-pose'), want = !!(game.player.wick && game.player.mode === 'walk' && !(game.modules.rides && game.modules.rides.session && game.modules.rides.session.riding)); if (b.hidden === want) b.hidden = !want; }
   function basis() { e.set(cam.pitch, cam.yaw, 0, 'YXZ'); fwd.set(0, 0, -1).applyEuler(e); right.set(1, 0, 0).applyEuler(e); }
   function place() {
     cam.pitch = clamp(cam.pitch, -1.45, 1.45);
     // within RADIUS of where it started, and above the ground there
     tmp.copy(cam.p).sub(cam.home); if (tmp.length() > RADIUS) cam.p.copy(cam.home).addScaledVector(tmp, RADIUS / tmp.length());
+    walls.update(cam.p); if (walls.ready) { walls.clip(lastP, cam.p, clipP); cam.p.copy(clipP); }          // not through walls, roofs or floors: stop short, slide along
     const g = game.ground(cam.p.x, -cam.p.z, cam.p.y), floor = g === null ? Math.min(cam.home.y, 0.5) : Math.min(g + 0.45, Math.max(cam.home.y, g + 0.45));
     if (cam.p.y < floor) cam.p.y = floor;
+    lastP.copy(cam.p);
     camera.position.copy(cam.p); e.set(cam.pitch, cam.yaw, cam.roll, 'YXZ'); camera.quaternion.setFromEuler(e);
     // the viewer re-derives its fov when the clean view takes the interface's offset away: follow it until the lens is touched
     if (!lensTouched && camera.fov !== setFov && setFov) { cam.fov = camera.fov; cam.maxFov = Math.max(MAX_FOV, cam.fov); lens.value = sOf(clamp(cam.fov, MIN_FOV, cam.maxFov)); syncUI(); }
@@ -258,23 +289,44 @@ export function init(game) {
     for (const q of game.places) if (q.land) { const d = Math.abs(((phi - q.land.phi + Math.PI * 3) % (Math.PI * 2)) - Math.PI); if (d < bd) { bd = d; best = q; } }
     return best ? best.name : 'Lanternfall';
   }
+  // Saved pictures are at least MIN_W wide where the device allows: the drawing buffer is at screen resolution (a phone's is a fraction of that),
+  // so for the one frame that is kept the viewer's pixel budget is raised (Q.dpr, Q.maxPixels; the page's resize handler applies them) and put back after.
+  const MIN_W = 1290, MAX_PX = 10e6;       // a little over 1280: the crop is rounded to whole pixels
+  function raise() {
+    const r = layoutCrop(), pr = renderer.getPixelRatio(), cw = r.w * pr;
+    if (cw >= MIN_W) return null;
+    const maxTex = renderer.capabilities.maxTextureSize || 4096, cap = Math.min(4, maxTex / Math.max(r.vw, r.vh) * 0.95, Math.sqrt(MAX_PX / (r.vw * r.vh))), want = Math.min(MIN_W / r.w, cap);
+    if (want <= pr * 1.05) return null;
+    const b = { dpr: Q.dpr, mp: Q.maxPixels, to: want, mp2: want * want * r.vw * r.vh * 1.02, tries: 0 };
+    Q.dpr = Math.max(Q.dpr, want); Q.maxPixels = Math.max(Q.maxPixels, b.mp2); dispatchEvent(new Event('resize'));
+    return b;
+  }
+  function unboost() {
+    if (!boost) return; const b = boost; boost = null;
+    if (Math.abs(Q.dpr - Math.max(b.dpr, b.to)) < 1e-6) Q.dpr = b.dpr; if (Q.maxPixels >= b.mp) Q.maxPixels = b.mp; dispatchEvent(new Event('resize'));
+  }
   function shoot() {
-    if (!active || want) return; want = true;
+    if (!active || want) return; want = true; boost = raise(); settle = boost ? 3 : 0;
     if (!game.reduceMotion) { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
   }
+  let settle = 0;
   function afterRender() {                    // right after composer.render(): the drawing buffer is still readable
-    if (!want) return; want = false;
+    if (!want) return; if (settle > 0) { settle--; return; }
+    // the viewer's frame-time governor may have lowered the budget again while the big frame was slow: put it back and wait a little
+    if (boost && renderer.getPixelRatio() < boost.to * 0.98 && boost.tries++ < 24) { Q.dpr = Math.max(Q.dpr, boost.to); Q.maxPixels = Math.max(Q.maxPixels, boost.mp2); dispatchEvent(new Event('resize')); settle = 2; return; }
+    want = false;
     const c = renderer.domElement, r = layoutCrop(), sx = Math.round(r.x / r.vw * c.width), sy = Math.round(r.y / r.vh * c.height);
     const sw = Math.min(c.width - sx, Math.round(r.w / r.vw * c.width)), sh = Math.min(c.height - sy, Math.round(r.h / r.vh * c.height));
     const out = document.createElement('canvas'); out.width = sw; out.height = sh; out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
-    const th = document.createElement('canvas'); th.width = 192; th.height = Math.max(1, Math.round(192 * sh / sw)); th.getContext('2d').drawImage(out, 0, 0, th.width, th.height);
+    const th = document.createElement('canvas'); th.width = 320; th.height = Math.max(1, Math.round(320 * sh / sw)); th.getContext('2d').drawImage(out, 0, 0, th.width, th.height);
+    unboost();
     const thumb = th.toDataURL('image/jpeg', 0.72), place = placeName(), t = game.clock.fmt(), d = new Date();
     const name = `lanternfall-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}.jpg`;   // seconds: two pictures in a minute must not share a name
     out.toBlob((blob) => { if (blob) deliver(blob, name, { thumb, place, t, w: sw, h: sh }); }, 'image/jpeg', 0.92);
   }
   async function deliver(blob, name, m) {
     const shot = { img: m.thumb, place: m.place, t: m.t, w: m.w, h: m.h, at: Date.now() };
-    game.save.update('photo', (s) => ({ ...s, shots: [shot, ...(s.shots || [])].slice(0, KEEP) }), { shots: [] });
+    game.save.update('photo', (s) => ({ ...clean(s), shots: [shot, ...clean(s).shots].slice(0, KEEP) }), null);
     api.last = { blob, name, ...m }; game.emit('photo:taken', { place: m.place, t: m.t });
     let shared = false, cancelled = false;
     try {
@@ -282,7 +334,7 @@ export function init(game) {
       if (game.coarse && navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Lanternfall' }); shared = true; }
     } catch (err) { cancelled = !!err && err.name === 'AbortError'; }      // the visitor closed the share sheet: no download behind their back
     if (!shared && !cancelled) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
-    note.innerHTML = `<img alt="" src="${m.thumb}"><span>${shared ? 'Shared' : cancelled ? 'Not shared' : 'Saved'} · ${m.place} · ${m.t}</span>`; note.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 10) + 'px';
+    note.innerHTML = `<img alt="" src="${m.thumb}"><span>${shared ? 'Shared' : cancelled ? 'Not shared' : 'Saved'} · ${game.esc(m.place)} · ${game.esc(m.t)}</span>`; note.style.bottom = compact() ? '' : (innerHeight - bar.getBoundingClientRect().top + 10) + 'px';
     note.classList.add('on'); clearTimeout(noteT); noteT = setTimeout(() => note.classList.remove('on'), 3200);
     game.journal.refresh();
   }
@@ -294,15 +346,15 @@ export function init(game) {
     b.type = 'button'; b.title = 'Take a photo (O)'; b.setAttribute('aria-label', 'Take a photo'); b.addEventListener('click', () => enter()); bh.parentNode.insertBefore(b, bh);
   }
   game.journal.section({ id: 'photo', title: 'Photographs', order: 90, render(box) {
-    const shots = saved().shots || [];
+    const shots = saved().shots;
     box.innerHTML = '<div class="gj-body"><p>Frame the park, then keep a picture of it.</p><button type="button" class="ph-take">Take a photo</button></div>';
     box.querySelector('.ph-take').addEventListener('click', () => enter());
     if (!shots.length) return;
     const g = el('div', '', 'ph-sheet'); box.appendChild(g);
-    shots.forEach((s) => { const b = el('button'); b.type = 'button'; b.title = `${s.place} · ${s.t}`; b.setAttribute('aria-label', `Photograph: ${s.place}, ${s.t}`); b.innerHTML = `<img alt="" src="${s.img}">`;
+    shots.forEach((s) => { const b = el('button'); b.type = 'button'; b.title = `${s.place} · ${s.t}`; b.setAttribute('aria-label', `Photograph: ${s.place}, ${s.t}`); const im = el('img'); im.alt = ''; im.src = s.img; b.appendChild(im);
       b.addEventListener('click', () => { lightbox.querySelector('img').src = s.img; lightbox.querySelector('span').textContent = `${s.place} · ${s.t}`; lightbox.hidden = false; }); g.appendChild(b); });
   } });
 
-  const api = { enter, leave, get active() { return active; }, state: st, cam, last: null, shoot, get shots() { return saved().shots || []; }, get pass() { return passRef; }, cropRect: layoutCrop };
+  const api = { enter, leave, get active() { return active; }, state: st, cam, last: null, shoot, get shots() { return saved().shots; }, get pass() { return passRef; }, cropRect: layoutCrop, walls };
   return api;
 }

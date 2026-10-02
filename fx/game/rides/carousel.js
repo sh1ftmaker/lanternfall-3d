@@ -69,7 +69,7 @@ export function createCarousel(game, session, { count }) {
     let best = null, bd = 1e9; for (const s of freeOuter) { horse(s, time, motion, H); const d = Math.hypot(H.p.x - me.x, H.p.z + me.y); if (d < bd) { bd = d; best = s; } }
     run = { seat: best, t0: time, left: -1 };
     const def = {
-      id: 'carousel', name: 'the carousel', leave: 'Get off the carousel', look: { yaw: 2.2, pitch: 0.8 }, sway: 0.5, blendIn: 1.0, blendOut: 0.9,
+      id: 'carousel', name: 'the Pavilion of Wings', leave: 'Get off the carousel', look: { yaw: 2.2, pitch: 0.8 }, sway: 0.5, blendIn: 1.0, blendOut: 0.9,
       frame(dt, pose) {
         const ff = fx(); if (!ff) { session.end('button'); return; }
         const tm = ff.uniforms.uFxTime.value, mo = ff.uniforms.uFxMotion.value;
@@ -88,6 +88,6 @@ export function createCarousel(game, session, { count }) {
     run.start = performance.now();
     count('carousel'); game.emit('rides:board', { ride: 'carousel' });
   }
-  const it = game.interact({ id: 'rides:carousel', x: board.x, y: board.y, z: 0.7, r: 5.2, label: 'Ride the carousel', show: () => !game.cameraHeld && !!fx(), use: begin });
+  const it = game.interact({ id: 'rides:carousel', x: board.x, y: board.y, z: 0.7, r: 5.2, label: 'Ride the carousel at the Pavilion of Wings', show: () => !game.cameraHeld && !!fx(), use: begin });
   return { mesh, seats, horse: (i, time, motion) => horse(seats[i], time, motion, { p: new THREE.Vector3(), yaw: 0 }), board, begin };
 }
