@@ -33,7 +33,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const db = (g) => (g > 1e-6 ? 20 * Math.log10(g) : -120);
 const blend3 = (v) => [v[0], v[2], -v[1]];      // Blender (x, y, z-up) -> three (x, y-up, z)
 const CAROUSEL = { x: -135.04, z: 125.18 };     // three coords (fx/animate.js)
-const ONESHOT_RANGE = { firework_burst: [40, 1400], firework_launch: [25, 600], lantern_release: [30, 300], splash: [4, 70], bell: [45, 900],
+const ONESHOT_RANGE = { firework_burst: [40, 1400], firework_launch: [25, 600], lantern_release: [30, 300], splash: [12, 260], bell: [45, 900],
   owl: [12, 170], laughter: [6, 90], coin: [2, 22] };
 
 // Placeholder content in the audio.json format, `synth` instead of `file` (the engine synthesises those).
