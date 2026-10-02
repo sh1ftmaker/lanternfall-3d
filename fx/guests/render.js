@@ -14,6 +14,15 @@
 // mirror pass draws only that prefix), keeps glowing parts out of AO (alpha > 1 as fx/ao.js expects), caps the
 // dynamic near plane (fx/depth.js) so close guests are not clipped, and survives a WebGL context loss (all GPU data is
 // re-uploaded from CPU copies).
+//
+// API: const g = createGuests({ THREE, scene, crowd, uTime, Q, manifest, DATA, fetchBin, surface, mobile,
+//                               renderer?, camera?, depth?, nav?, focus?, reduceMotion? })
+//   g.update(camera, dt)            every frame, after the camera moved and before the lake's mirror pass
+//   g.setVisible(b) / g.setDensity(0..1) / g.setReduceMotion(b) / g.degrade(adaptStep) / g.dispose()
+//   g.setCrowd(crowd, { drive })    hand over a simulation (drive: g.update() also calls crowd.update(dt, time, focus))
+//   g.stats, g.prof(true) + g.profResult() (GPU ms per draw), g.cfg (= Q.guests: LOD thresholds, ambient, rim ...)
+// crowd = null: a stand-in crowd of random walkers is built from `nav` ('#guests=N' sets its size).
+// Hash tokens: '#no-guests' (app.js), '#crowd' (app.js: real simulation), '#guests=N', '#guests-avenue'.
 import { buildGuestGeometry, guestLook, lookMask, ITEMS } from './assets.js';
 import { RIG, LIGHT } from './assets-rig.js';
 
