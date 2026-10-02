@@ -78,3 +78,46 @@ class Geo:
         u = dx * ux + dy * uy; v = -dx * uy + dy * ux
         ok = (np.abs(u) <= half_u) & (np.abs(v) <= half_v) & (pts[:, 2] >= z0) & (pts[:, 2] <= z1)
         return np.stack([u[ok], v[ok], pts[ok, 2]], 1), tid[ok]
+
+class Vox:
+    """Coarse occupancy of all geometry (0.5 m voxels) for line-of-sight tests."""
+    def __init__(self, geo, nav, cs=0.5, z0=-2.0, nz=90, log=print):
+        self.cs, self.x0, self.y0, self.z0 = cs, nav["x0"], nav["y0"], z0
+        self.W = int(nav["w"] * nav["cell"] / cs); self.H = int(nav["h"] * nav["cell"] / cs); self.NZ = nz
+        occ = np.zeros((self.H, self.W, nz), bool)
+        glassy = np.zeros(len(geo.P), bool)
+        for k in range(len(geo.parts)):
+            g = np.array([bool(m.get("glass")) for m in C.load_part(geo.parts[k])["mats"]])
+            sel = geo.part == k; glassy[sel] = g[geo.mi[sel]]
+        ids = np.nonzero(~glassy)[0]
+        for s in range(0, len(ids), 300000):
+            pts, _ = geo.points(ids[s:s + 300000], 0.3)
+            i = np.floor((pts[:, 0] - self.x0) / cs).astype(np.int64); j = np.floor((pts[:, 1] - self.y0) / cs).astype(np.int64)
+            k = np.floor((pts[:, 2] - z0) / cs).astype(np.int64)
+            ok = (i >= 0) & (j >= 0) & (k >= 0) & (i < self.W) & (j < self.H) & (k < nz)
+            occ[j[ok], i[ok], k[ok]] = True
+        self.occ = occ
+        log("vox: %d occupied voxels" % occ.sum())
+
+    def clear(self, a, b, skip_end=1.0, skip_start=0.4):
+        """True if the segment a->b (3D) crosses no occupied voxel, ignoring the first/last metres."""
+        a = np.asarray(a, float); b = np.asarray(b, float); d = b - a; L = np.linalg.norm(d)
+        if L < skip_end + skip_start: return True
+        t = np.arange(skip_start, L - skip_end, self.cs * 0.5) / L
+        p = a[None] + d[None] * t[:, None]
+        i = np.floor((p[:, 0] - self.x0) / self.cs).astype(np.int64); j = np.floor((p[:, 1] - self.y0) / self.cs).astype(np.int64)
+        k = np.floor((p[:, 2] - self.z0) / self.cs).astype(np.int64)
+        ok = (i >= 0) & (j >= 0) & (k >= 0) & (i < self.W) & (j < self.H) & (k < self.NZ)
+        return not self.occ[j[ok], i[ok], k[ok]].any()
+
+def objects(geo):
+    """Per (part, object name): dict(c centroid (area weighted), lo, hi, area, ids)."""
+    key = geo.part.astype(np.int64) * 100000 + geo.oid
+    o = np.argsort(key, kind="stable"); ks = key[o]
+    cut = np.nonzero(np.diff(ks))[0] + 1; starts = np.r_[0, cut]; ends = np.r_[cut, len(ks)]
+    c = geo.P.mean(1); out = {}
+    for a, b in zip(starts, ends):
+        ids = o[a:b]; p = int(geo.part[ids[0]]); nm = geo.names[p][geo.oid[ids[0]]]
+        w = geo.area[ids].astype(np.float64) + 1e-9
+        out[nm] = dict(part=geo.parts[p], c=(c[ids] * w[:, None]).sum(0) / w.sum(), lo=geo.lo[ids].min(0), hi=geo.hi[ids].max(0), area=float(w.sum()), ids=ids)
+    return out
