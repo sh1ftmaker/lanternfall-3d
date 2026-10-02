@@ -13,6 +13,7 @@ Colours of surviving vertices are untouched; new vertices interpolate the colour
 """
 import math
 import numpy as np
+import par
 
 FLOOR_COS = 0.985              # |nz| above this: horizontal group (frame = z)
 PAR_COS = math.cos(math.radians(6.0))
@@ -176,16 +177,23 @@ def run(PARTS, log, clip=True):
     grp = np.where(floor, -1, baz * 1000 + (bel + 500))
     grp = np.where(inreg, grp, -999)
     # ---- candidate pairs per orientation group
-    PT, PO, DMIN, DMAX, OAR = [], [], [], [], []
     groups, ginv = np.unique(grp, return_inverse=True)
     members = np.split(np.argsort(ginv, kind="stable"), np.cumsum(np.bincount(ginv))[:-1])
     gindex = {int(g): m for g, m in zip(groups, members)}
+    # (build.py) groups are independent and the pairs of a group come out sorted by T: big groups are split into
+    # T ranges, the pieces run in parallel and are concatenated in order (same pairs, same order as one serial pass)
+    tasks = []
     for g in groups:
         g = int(g)
         if g == -999: continue
-        tris = gindex[g]
+        n = len(gindex[g]); k = max(1, n // 40000)
+        tasks += [(g, lo, hi) for lo, hi in par.ranges(n, k)]
+    tasks.sort(key=lambda t: -(t[2] - t[1]))                  # biggest first for the pool, put back in order below
+    def group_pairs(g, lo, hi):
+        PT, PO, DMIN, DMAX, OAR = [], [], [], [], []
+        tris = gindex[g][lo:hi]
         if g == -1:
-            occs = tris; band = BAND_BACK; cell = 1.5
+            occs = gindex[g]; band = BAND_BACK; cell = 1.5
         else:
             a, e = g // 1000, g % 1000 - 500
             nbrs = [((a + da) % nb_az) * 1000 + (e + de + 500) for da in (-1, 0, 1) for de in (-1, 0, 1)]
@@ -236,7 +244,12 @@ def run(PARTS, log, clip=True):
             dmin = np.where(valid, dz, np.inf).min(1); dmax = np.where(valid, dz, -np.inf).max(1)
             ok = (dmax > -BAND_BACK) & (dmin < BAND_BACK)
             PT.append(a[ok]); PO.append(b[ok]); DMIN.append(dmin[ok]); DMAX.append(dmax[ok]); OAR.append(ar[ok])
-        log("hsr: group %-7s %7d tris %7d occluders -> %d pairs" % (g, len(tris), len(occs), sum(len(x) for x in PT)))
+        z = lambda L, t: np.concatenate(L) if L else np.zeros(0, t)
+        return z(PT, np.int64), z(PO, np.int64), z(DMIN, float), z(DMAX, float), z(OAR, float)
+    res = dict(zip(tasks, par.pmap(group_pairs, tasks)))
+    res = [res[t] for t in sorted(tasks, key=lambda t: (int(np.searchsorted(groups, t[0])), t[1]))]
+    PT, PO, DMIN, DMAX, OAR = ([r[i] for r in res] for i in range(5))
+    log("hsr: %d orientation groups in %d tasks" % (len(groups), len(tasks)))
     pt = np.concatenate(PT); po = np.concatenate(PO); dmin = np.concatenate(DMIN); dmax = np.concatenate(DMAX); oar = np.concatenate(OAR)
     log("hsr: %d overlapping near-parallel pairs" % len(pt))
     # frame used for each T (sign of "front")
@@ -391,17 +404,35 @@ def run(PARTS, log, clip=True):
         cin = np.zeros(T, bool); cin[a[inside]] = True
         return cin & ~crossing_T, (ta[cross], eo[cross], ei[cross], opn[cross])
 
+    # (build.py) covered() decides each T from T's own pairs only, so it runs in parallel over T ranges (balanced by
+    # pair count); the per-range results are concatenated in order and equal one serial call
+    cum = np.cumsum(np.bincount(pt, minlength=T))
+    def covered_many(specs):
+        """[covered(sel, margin) for sel, margin in specs], computed in parallel."""
+        skirt_hit(np.zeros((0, 3)))                           # build the steep-triangle hash before forking
+        b = np.searchsorted(cum, np.linspace(0, cum[-1], 2 * par.workers() + 1)[1:-1], "right")
+        b = np.unique(np.r_[0, b, T])
+        tasks = [(i, int(lo), int(hi)) for i in range(len(specs)) for lo, hi in zip(b[:-1], b[1:])]
+        def one(i, lo, hi):
+            sel, margin = specs[i]
+            full, cr = covered(sel & (pt >= lo) & (pt < hi), margin)
+            return np.nonzero(full)[0], cr
+        res = par.pmap(one, tasks); out = []
+        for i in range(len(specs)):
+            rs = [r for t, r in zip(tasks, res) if t[0] == i]
+            full = np.zeros(T, bool)
+            for f, _ in rs: full[f] = True
+            out.append((full, tuple(np.concatenate([cr[k] for _, cr in rs]) for k in range(4))))
+        return out
+
     zmax = S.P[:, :, 2].max(1)
     hiT = np.where(floor, BAND_FLOOR, BAND_WALL)[pt]
     def front(hi): return lod_ok & (dmin > EPS) & (dmax <= hi)
     def back(hi): return lod_ok & (dmax < -EPS) & (dmin >= -hi)
     cop = lod_ok & coplanar
-    cov_f, _ = covered(front(hiT) | cop)
-    cov_b, _ = covered(back(hiT) | cop)
-    close_f, _ = covered(front(BAND_BACK), False)
-    close_b, _ = covered(back(BAND_BACK), False)
-    touch_f, _ = covered(front(BAND_TOUCH) | cop)
-    touch_b, _ = covered(back(BAND_TOUCH) | cop)
+    (cov_f, _), (cov_b, _), (close_f, _), (close_b, _), (touch_f, _), (touch_b, _) = covered_many([
+        (front(hiT) | cop, True), (back(hiT) | cop, True), (front(BAND_BACK), False), (back(BAND_BACK), False),
+        (front(BAND_TOUCH) | cop, True), (back(BAND_TOUCH) | cop, True)])
     ground = floor & (zmax < 0.6) & ~lake          # earth below: back side never seen
     keepme = S.emis | ~inreg
     # "nearly touching" may only replace T's back-side view: the occluder must lie on the side T faces (bake.py
@@ -430,7 +461,8 @@ def run(PARTS, log, clip=True):
         done = cull | keepme
         def groups_of(sel, want, margin=True):
             """crossing boundary edges and occluders of the T in `want`, grouped per T."""
-            full, (ta, eo, ei, op) = covered(sel, margin)
+            sel = sel & want[pt]                              # (only the T in want are read: same result, less work)
+            full, (ta, eo, ei, op) = covered_many([(sel, margin)])[0]
             m = want[ta]; ta, eo, ei, op = ta[m], eo[m], ei[m], op[m]
             o = np.argsort(ta, kind="stable"); ta, eo, ei, op = ta[o], eo[o], ei[o], op[o]
             ps, pb = pt[sel], po[sel]; m = want[ps]; ps, pb = ps[m], pb[m]
@@ -464,15 +496,20 @@ def run(PARTS, log, clip=True):
             getB = groups_of(closefn(), want & ~noclose, False)[1] if closefn is not None else None
             ids = np.nonzero(want)[0]
             nclip = nfull = 0; ntri = []
-            for t in ids:
-                eoF, eiF, oF, opF = getF(t)
-                if getB is not None and not noclose[t]:
-                    eoB, eiB, oB, _ = getB(t)
-                    if len(oB) == 0: continue
-                else:
-                    eoB = eiB = oB = None
-                kept = _clip_one(S, t, eoF, eiF, oF, CLIP_BUDGET, eoB, eiB, oB, opF)
-                if kept is None: continue                       # nothing removable, or too complex
+            def clip_range(lo, hi):                           # (build.py) each t is cut on its own: run in parallel
+                res = []
+                for t in ids[lo:hi]:
+                    eoF, eiF, oF, opF = getF(t)
+                    if getB is not None and not noclose[t]:
+                        eoB, eiB, oB, _ = getB(t)
+                        if len(oB) == 0: continue
+                    else:
+                        eoB = eiB = oB = None
+                    kept = _clip_one(S, t, eoF, eiF, oF, CLIP_BUDGET, eoB, eiB, oB, opF)
+                    if kept is None: continue                   # nothing removable, or too complex
+                    res.append((t, kept, oF[0] if len(oF) else -1))
+                return res
+            for t, kept, o0 in [x for r in par.pmap(clip_range, par.ranges(len(ids), 4 * par.workers())) for x in r]:
                 if len(kept) and (mingap[t] >= CLIP_GAP or not contrast[t] or S.area[t] < CLIP_MIN_TRI):
                     continue                                    # partial cuts only where a fight would show
                 done[t] = True
@@ -480,8 +517,8 @@ def run(PARTS, log, clip=True):
                 else:
                     pieces[t] = kept; nclip += 1; ntri.append(sum(len(p) - 2 for p in kept))
                     if STATS is not None:
-                        rT = S.refs[S.rid[t]]; rO = S.refs[S.rid[oF[0]]]
-                        k_ = (name, rT["names"][rT["mat"][S.loc[t]]], rO["names"][rO["mat"][S.loc[oF[0]]]])
+                        rT = S.refs[S.rid[t]]; rO = S.refs[S.rid[o0]]
+                        k_ = (name, rT["names"][rT["mat"][S.loc[t]]], rO["names"][rO["mat"][S.loc[o0]]])
                         STATS[k_] = STATS.get(k_, 0) + ntri[-1]
             log("hsr: clip %-6s: %6d candidates, %5d culled, %5d clipped into %d tris" % (name, len(ids), nfull, nclip, sum(ntri)))
         pieces = {t: v for t, v in pieces.items() if not cull[t]}

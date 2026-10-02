@@ -15,15 +15,27 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--out", required=True); ap.add_argument("--parts", default=",".join(pc.ALL_PARTS))
 ap.add_argument("--export", default=""); ap.add_argument("--samples", type=int, default=64)
 ap.add_argument("--lmax", type=float, default=3.0); ap.add_argument("--lfine", type=float, default=0.7)
+# (build.py) start from web_export/scene.py's cached park instead of building it; the dumps are the same
+ap.add_argument("--scene-blend", default="")
+ap.add_argument("--no-trains", action="store_true"); ap.add_argument("--trains-only", action="store_true")
+ap.add_argument("--draft", action="store_true", help="no Cycles: dump joined geometry only (light arrays empty)")
 a = ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 PARTS = [p for p in a.parts.split(",") if p]; EXPORT = [p for p in a.export.split(",") if p] or PARTS
 os.makedirs(a.out, exist_ok=True)
 T0 = time.time()
 def log(*s): print("[bake %6.0fs]" % (time.time() - T0), *s, flush=True)
 
-scene = pc.reset_scene()
 cols = {}
-for part in PARTS:
+if a.scene_blend:
+    bpy.ops.wm.open_mainfile(filepath=a.scene_blend); scene = bpy.context.scene
+    for part in PARTS: cols[part] = bpy.data.collections["PART_" + part]
+    for c in [c for c in bpy.data.collections if c.name.startswith("PART_") and c.name[5:] not in PARTS]:
+        for o in list(c.all_objects): bpy.data.objects.remove(o, do_unlink=True)
+        bpy.data.collections.remove(c)
+    log("opened %s" % os.path.basename(a.scene_blend))
+else:
+    scene = pc.reset_scene()
+for part in PARTS if not a.scene_blend else []:
     cols[part], dt = studio.load_part(part, scene)
 pc.setup_world(scene); pc.setup_render(scene, (64, 64), a.samples, bloom=False)
 scene.cycles.use_denoising = False; scene.cycles.use_adaptive_sampling = False
@@ -236,6 +248,9 @@ def orient(ob):
 
 def bake_and_dump(ob, path, names=None, extra=None, do_orient=True):
     me = ob.data
+    if a.draft:          # (build.py) geometry only, no Cycles; build.py carries the light over from the last bake
+        z = np.zeros((len(me.loops), 3), np.float32)
+        return dump(ob, path, z, z, z, z, names, extra)
     if do_orient: orient(ob)
     light = bake(ob, 'DIFFUSE', {'DIRECT', 'INDIRECT'})
     # the same again without the moon, so the viewer can add moonlight (and its shadows) per pixel
@@ -248,6 +263,10 @@ def bake_and_dump(ob, path, names=None, extra=None, do_orient=True):
         lightnm = light
     alb = bake(ob, 'DIFFUSE', {'COLOR'}, samples=4)
     emit = bake(ob, 'EMIT', samples=4)
+    dump(ob, path, light, lightnm, alb, emit, names, extra)
+
+def dump(ob, path, light, lightnm, alb, emit, names=None, extra=None):
+    me = ob.data
     co, tri, mi, nr = tri_arrays(me)
     oid = np.zeros(len(tri), np.int32)
     if me.attributes.get("oid") is not None: me.attributes["oid"].data.foreach_get("value", oid)
@@ -296,7 +315,7 @@ SKIP_PREFIX = ("core_forest_", "core_src_", "core_finale_lanterns", "core_water"
 for part in EXPORT:
     log("== %s ==" % part)
     objs = [o for o in cols[part].all_objects if not o.name.startswith(SKIP_PREFIX)]
-    if part == "transit":
+    if part == "transit" and not a.no_trains and not a.draft:
         # train cars: bake one instance of each distinct mesh in place, export as movable prototypes
         cars = [o for o in cols[part].all_objects if o.name.startswith("transit_train_") and o.type == 'MESH']
         protos = {}; inst = []
@@ -311,6 +330,7 @@ for part in EXPORT:
             bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.triangulate(bm, faces=bm.faces[:]); bm.to_mesh(me); bm.free(); me.update()
             ensure_attr(me)
             bake_and_dump(o, os.path.join(a.out, "train__%s.npz" % mname), extra=dict(instances=[i for i in inst if i["mesh"] == mname], rail_top=pc.RAIL_TOP), do_orient=False)
+    if a.trains_only: continue
     ob, names = prepare_joined(part, objs)
     bake_and_dump(ob, os.path.join(a.out, "part__%s.npz" % part), names)
 log("done")

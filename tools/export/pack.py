@@ -269,22 +269,45 @@ tot_t = tot_v = tot_b = 0
 ORDER = ["core", "transit"] + pc.LAND_IDS
 if opt("--parts"): ORDER = [p for p in ORDER if p in opt("--parts").split(",")]     # iterate on a subset
 PARTS = {}
-for part in ORDER:
+import par                     # (build.py) parts are processed / encoded in forked worker processes, results in order
+def _process(part):
     f = os.path.join(SRC, "part__%s.npz" % part)
-    if not os.path.exists(f): log("missing", part); continue
-    PARTS[part] = process(np.load(f), part)
+    if not os.path.exists(f): return None, []
+    n = len(MOON_SAMPLES); r = process(np.load(f), part)
+    return r, MOON_SAMPLES[n:]
+# (build.py) --keep p,q: take these parts exactly as the last pack into OUT left them (its .bin files, manifest
+# entries, nav triangles and moon samples, recorded under --state DIR) instead of processing them again
+STATE = opt("--state"); KEEP = [p for p in (opt("--keep") or "").split(",") if p in ORDER]
+if KEEP and not STATE: sys.exit("--keep needs --state")
+MOONP = {}
+todo = [p for p in ORDER if p not in KEEP]
+for part, (r, ms) in zip(todo, par.pmap(_process, [(p,) for p in todo])):
+    if r is None: log("missing", part); continue
+    PARTS[part] = r; MOONP[part] = ms
     log("processed", part, sum(len(r["tri"]) for r in PARTS[part]), "tris")
+KEPT = {}
+for part in KEEP:
+    rec = json.load(open(os.path.join(STATE, part + ".json"))); t = np.load(os.path.join(STATE, part + "_tris.npz"))
+    for f in rec["files"]: assert os.path.getsize(os.path.join(OUT, f["file"])) == f["bytes"], "kept file changed: " + f["file"]
+    KEPT[part] = (rec, [(t["P%d" % i], t["N%d" % i]) for i in range(len(t.files) // 2)])
+    MOONP[part] = [(np.array(c), n) for c, n in rec["moon"]]
+    log("kept", part, "as packed before")
+for part in ORDER: MOON_SAMPLES.extend(MOONP.get(part, []))
 if "--no-hsr" not in sys.argv:
     import hsr
     hsr.run(PARTS, log)
 MATNAMES = {}
-for pi, part in enumerate(PARTS):
-    meshes = []
+def write_same(path, data):
+    """(build.py) leave a file that already holds exactly these bytes alone (browsers keep unchanged files cached)"""
+    if os.path.exists(path) and os.path.getsize(path) == len(data) and open(path, "rb").read() == data: return
+    open(path, "wb").write(data)
+def _encode(pi, part):
+    meshes = []; wt = []
     for r in PARTS[part]:
         kind, pos, col, tri, cls, aux = finish(r)
         if kind == "opaque": 
             P = r["pos"][tri]; N = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
-            world_tris.append((P.astype(np.float32), (N / np.maximum(np.linalg.norm(N, axis=1), 1e-12)[:, None]).astype(np.float32)))
+            wt.append((P.astype(np.float32), (N / np.maximum(np.linalg.norm(N, axis=1), 1e-12)[:, None]).astype(np.float32)))
         lab = None
         if DUMP_PATH:
             mids = np.array([MATNAMES.setdefault(n, len(MATNAMES)) for n in r["names"]])
@@ -297,15 +320,34 @@ for pi, part in enumerate(PARTS):
         if cur and cur_raw + len(blob) > 40_000_000: files.append(cur); cur = []; cur_raw = 0
         cur.append((blob, m)); cur_raw += len(blob)
     if cur: files.append(cur)
+    out = []
     for fi, group in enumerate(files):
         raw = b"".join(b for b, _ in group)
-        name = "%s%s.bin" % (part, "" if len(files) == 1 else "_%d" % fi)
-        gz = gzip.compress(raw, 9)
-        open(os.path.join(OUT, name), "wb").write(gz)
-        nt = sum(m["ni"] for _, m in group) // 3; nv = sum(m["nv"] for _, m in group)
+        out.append((fi, len(files), [m for _, m in group], len(raw), gzip.compress(raw, 9, mtime=0)))
+    return out, wt
+enc = [_encode(pi, part) for pi, part in enumerate(PARTS)] if DUMP_PATH else par.pmap(_encode, list(enumerate(PARTS)))
+ENC = dict(zip(list(PARTS), enc))
+if STATE: os.makedirs(STATE, exist_ok=True)
+for part in [p for p in ORDER if p in ENC or p in KEPT]:
+    if part in KEPT:
+        rec, wt = KEPT[part]; world_tris += wt
+        for f in rec["files"]:
+            manifest["parts"].append(f); nt = sum(m["ni"] for m in f["meshes"]) // 3; nv = sum(m["nv"] for m in f["meshes"])
+            tot_t += nt; tot_v += nv; tot_b += f["bytes"]
+        continue
+    out, wt = ENC[part]
+    world_tris += wt; files = []
+    for fi, nfiles, group, raw_len, gz in out:
+        name = "%s%s.bin" % (part, "" if nfiles == 1 else "_%d" % fi)
+        write_same(os.path.join(OUT, name), gz)
+        nt = sum(m["ni"] for m in group) // 3; nv = sum(m["nv"] for m in group)
         tot_t += nt; tot_v += nv; tot_b += len(gz)
-        manifest["parts"].append(dict(id=part, file=name, bytes=len(gz), raw=len(raw), meshes=[m for _, m in group]))
-        log("%-12s %-16s %3d meshes %8d tris %8d verts  raw %5.1f MB -> gz %5.1f MB" % (part, name, len(group), nt, nv, len(raw) / 1e6, len(gz) / 1e6))
+        manifest["parts"].append(dict(id=part, file=name, bytes=len(gz), raw=raw_len, meshes=group)); files.append(manifest["parts"][-1])
+        log("%-12s %-16s %3d meshes %8d tris %8d verts  raw %5.1f MB -> gz %5.1f MB" % (part, name, len(group), nt, nv, raw_len / 1e6, len(gz) / 1e6))
+    if STATE:
+        json.dump(dict(files=files, moon=[[[float(x) for x in c], int(n)] for c, n in MOONP.get(part, [])], hsr="--no-hsr" not in sys.argv),
+                  open(os.path.join(STATE, part + ".json"), "w"))
+        np.savez(os.path.join(STATE, part + "_tris.npz"), **{k: v for i, (P, N) in enumerate(wt) for k, v in (("P%d" % i, P), ("N%d" % i, N))})
     PARTS[part] = None
 if DUMP_PATH:
     np.savez(DUMP_PATH, P=np.concatenate([p for p, _ in DUMP]), names=np.array(list(MATNAMES)), parts=np.array(list(PARTS)),
@@ -350,7 +392,7 @@ for f in sorted(glob.glob(os.path.join(SRC, "train__*.npz"))):
         dr = (ins["rz"] - ang + math.pi) % (2 * math.pi) - math.pi
         ex_meta["trains"].append(dict(name=ins["name"], mesh=mname, s=s, chord=chord, flip=abs(dr) > 1.5, z=ins["loc"][2]))
 if train_blobs:
-    raw = b"".join(train_blobs); gz = gzip.compress(raw, 9); open(os.path.join(OUT, "trains.bin"), "wb").write(gz)
+    raw = b"".join(train_blobs); gz = gzip.compress(raw, 9, mtime=0); write_same(os.path.join(OUT, "trains.bin"), gz)
     ex_meta["train_file"] = dict(file="trains.bin", bytes=len(gz), raw=len(raw))
     log("trains: %d instances, %d prototype meshes, %.2f MB" % (len(ex_meta["trains"]), len(ex_meta["train_meshes"]), len(gz) / 1e6))
 
@@ -379,7 +421,7 @@ if os.path.exists(f):
         P = g("P").astype(np.float32); inst = np.concatenate([to_three(P), g("rz")[:, None], g("sc")[:, None]], 1).astype(np.float32)
         ex_meta["forest"].append(dict(name=k, nv=int(len(vp)), count=int(len(inst)), pos=add_extra(vp.astype(np.float32)), col=add_extra(vc.astype(np.float32)), inst=add_extra(inst)))
     log("forest:", [(e["name"], e["count"], e["nv"] // 3) for e in ex_meta["forest"]])
-raw = b"".join(extras); gz = gzip.compress(raw, 9); open(os.path.join(OUT, "extras.bin"), "wb").write(gz)
+raw = b"".join(extras); gz = gzip.compress(raw, 9, mtime=0); write_same(os.path.join(OUT, "extras.bin"), gz)
 ex_meta["file"] = dict(file="extras.bin", bytes=len(gz), raw=len(raw)); manifest["extras"] = ex_meta
 
 # ───────────── walk-mode navigation grid ─────────────
@@ -477,7 +519,7 @@ def build_nav():
     for h in (hA, hB):
         dlt = np.diff(h.astype(np.int32), axis=1, prepend=0).astype(np.int32) & 0xFFFF
         planes.append((dlt & 0xFF).astype(np.uint8).tobytes()); planes.append((dlt >> 8).astype(np.uint8).tobytes())
-    gz = gzip.compress(b"".join(planes), 9); open(os.path.join(OUT, "nav.bin"), "wb").write(gz)
+    gz = gzip.compress(b"".join(planes), 9, mtime=0); write_same(os.path.join(OUT, "nav.bin"), gz)
     manifest["nav"] = dict(file="nav.bin", bytes=len(gz), w=W, h=H, x0=X0, y0=Y0, cell=CS, levels=2)
     log("nav: %dx%d grid, levelA cells %d, levelB cells %d, %.2f MB" % (W, H, int((hA > 0).sum()), int((hB > 0).sum()), len(gz) / 1e6))
     return hA, hB
