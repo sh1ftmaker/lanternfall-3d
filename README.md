@@ -62,8 +62,9 @@ Walk is first entered.
 
 ## Weather
 
-The settings sheet has a Weather row: Clear (the default), Mist, Rain, Storm and Snow; the choice is remembered, and
-`#weather=rain` in the address sets it. Rain falls only under open sky (a height map of the park is rendered once
+The weather changes by itself every two minutes: it starts clear, then rain, storm, mist, clear again, snow, and
+round. The Weather row in the settings sheet holds one of Clear, Mist, Rain, Storm or Snow instead (or lets it change
+again); the choice is remembered, and `#weather=rain` in the address holds that weather. Rain falls only under open sky (a height map of the park is rendered once
 from above), wets the paving, fills puddles that pick up the nearby lamps and neon, and rings the lake. Storm adds
 wind and slow, soft lightning with thunder that arrives late by distance; with Reduce motion there are no flashes.
 Snow settles on surfaces that face the sky. With sound on, rain sounds different on open paving, at the lake shore

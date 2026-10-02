@@ -6,7 +6,9 @@
 //   shade.js   wet / snowy ground (patched into fx/surface.js), rain on the lake (fx/water.js), cloud deck, fog,
 //              moonlight, lightning
 //   audio.js   rain, wind and thunder through the sound engine (fx/audio/), only once sound is on
-// Control: the "Weather" row in the settings sheet, '#weather=rain' in the URL, window.__park.weather (set, state, now).
+// By default the weather changes by itself every two minutes (CYCLE); picking one in the settings holds it.
+// Control: the "Weather" row in the settings sheet, '#weather=rain' (held) or '#weather=auto' in the URL,
+// window.__park.weather (set, setAuto, auto, state, now).
 import { createCover } from './cover.js';
 import { createPrecip } from './precip.js';
 import { createShade } from './shade.js';
@@ -27,9 +29,11 @@ const NOTES = { clear: 'A clear, starlit night.', mist: 'Fog over the lake and b
 // seconds to ease most of the way (wetness and snow cover change slowly, like the real thing)
 const TAU = { rain: 2.2, snow: 2.5, wet: 6, dust: 12, cloud: 4, fog: 4, mist: 4, wind: 3, storm: 1.5 };
 const STORE = 'lanternfall.weather';
+// the changing weather: starts clear, comes back to clear between the wet spell and the snow
+const CYCLE = ['clear', 'rain', 'storm', 'mist', 'clear', 'snow'], PERIOD = 120;
 
 export function createWeather(opts) {
-  if (/(^|[#,&+])no-weather($|[,&+])/.test(location.hash)) return { set: () => false, update() {}, state: 'clear', now: { ...STATES.clear }, blend: { ...STATES.clear }, STATES, setReduceMotion() {}, degrade() {}, off: true };   // '#no-weather': not even the shader patches
+  if (/(^|[#,&+])no-weather($|[,&+])/.test(location.hash)) return { set: () => false, setAuto() {}, auto: false, update() {}, state: 'clear', now: { ...STATES.clear }, blend: { ...STATES.clear }, STATES, setReduceMotion() {}, degrade() {}, off: true };   // '#no-weather': not even the shader patches
   const { THREE, scene, camera, renderer, Q, surface, uTime, mobile } = opts;
   const now = { ...STATES.clear };
   let state = 'clear', target = STATES.clear, reduceMotion = !!opts.reduceMotion, degrade = 0;
@@ -39,13 +43,22 @@ export function createWeather(opts) {
   shadeAll();                                  // patches the shaders now, before they first compile (Clear = untouched path)
   const idle = () => Object.keys(now).every((k) => now[k] === STATES.clear[k]);
 
-  function set(name, { user = false, instant = false } = {}) {
+  let auto = false, autoT = 0, autoI = 0;                           // changing by itself: seconds in this weather, place in CYCLE
+  const save = (v) => { try { localStorage.setItem(STORE, v); } catch (e) { /* not remembered */ } };
+  // picking a weather (the settings row, set() from a script, '#weather=rain') holds it; keep: a step of the cycle
+  function set(name, { user = false, instant = false, keep = false } = {}) {
     if (!STATES[name]) return false;
     state = name; target = STATES[name];
+    if (!keep) auto = false;
     if (instant) Object.assign(now, target);
-    if (user) { try { localStorage.setItem(STORE, name); } catch (e) { /* not remembered */ } }
+    if (user) save(name);
     ui.sync();
     return true;
+  }
+  function setAuto(on, { user = false } = {}) {
+    auto = !!on; autoT = 0; const i = CYCLE.indexOf(state); autoI = i < 0 ? 0 : i;      // carries on from the weather it is in
+    if (user) save(auto ? 'auto' : state);
+    ui.sync();
   }
 
   /* cover map: rendered when first needed, again when more of the park has loaded or after a context restore */
@@ -61,6 +74,7 @@ export function createWeather(opts) {
 
   let wasIdle = true, patched = false;
   function update(dt, time) {
+    if (auto && (autoT += Math.min(dt, 0.25)) >= PERIOD) { autoT = 0; autoI = (autoI + 1) % CYCLE.length; set(CYCLE[autoI], { keep: true }); }
     // ease toward the target
     for (const k in now) {
       const t = target[k], d = t - now[k];
@@ -97,16 +111,23 @@ export function createWeather(opts) {
       if (!d) return; e.preventDefault(); e.stopPropagation();
       const i = (btns.findIndex((b) => b.dataset.w === state) + d + btns.length) % btns.length; btns[i].focus(); btns[i].click();
     });
-    return { sync() { for (const b of btns) { const on = b.dataset.w === state; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } note.textContent = NOTES[state]; } };
+    const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'tog'; tog.setAttribute('role', 'switch');
+    tog.innerHTML = '<span>Changes every two minutes</span><i aria-hidden="true"></i>';
+    tog.addEventListener('click', () => setAuto(!auto, { user: true }));
+    const togs = document.createElement('div'); togs.className = 'toggles'; togs.appendChild(tog); box.appendChild(togs);
+    return { sync() { for (const b of btns) { const on = b.dataset.w === state; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } note.textContent = NOTES[state]; tog.setAttribute('aria-checked', String(auto)); } };
   })();
 
-  // start: '#weather=rain' wins, then the saved choice; Clear otherwise. A page opened in weather starts in it.
+  // start: '#weather=rain' wins (held), then the saved choice (a held weather, or changing); otherwise it starts
+  // clear and changes by itself. A page opened in a held weather starts in it.
   const hw = /(?:^|[#,&+])weather=(\w+)/.exec(location.hash);
   let saved = null; try { saved = localStorage.getItem(STORE); } catch (e) { /* none */ }
-  set(hw && STATES[hw[1]] ? hw[1] : saved && STATES[saved] ? saved : 'clear', { instant: true });
+  const held = hw && STATES[hw[1]] ? hw[1] : !hw && saved && STATES[saved] ? saved : null;
+  set(held || 'clear', { instant: true });
+  if (!held) setAuto(true);
 
   return {
-    set: (n, o) => set(n, o || {}), update,
+    set: (n, o) => set(n, o || {}), setAuto, get auto() { return auto; }, get autoIn() { return auto ? PERIOD - autoT : Infinity; }, CYCLE, update,
     get state() { return state; }, now, get blend() { return { ...now }; }, STATES,
     setReduceMotion(on) { reduceMotion = !!on; },
     degrade(step) { degrade = step; },
