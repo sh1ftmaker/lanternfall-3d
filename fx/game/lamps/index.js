@@ -10,7 +10,7 @@ const STYLE = {   // per land: [post height m, head width, head height, colour r
 };
 const DIRS = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'];
 const CSS = `
-#lamps-wish,#lamps-card{left:50%;right:auto;transform:translateX(-50%);width:min(380px,calc(100vw - 32px));top:calc(env(safe-area-inset-top,0px) + 80px)}
+#lamps-wish,#lamps-card{box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);width:min(380px,calc(100vw - 32px));top:calc(env(safe-area-inset-top,0px) + 80px)}
 #lamps-wish input{box-sizing:border-box;width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(7,6,26,.6);color:var(--paper);font:400 16px var(--ui)}
 #lamps-wish input:focus{outline:2px solid var(--amber);outline-offset:1px}
 #lamps-wish .lw-row{display:flex;justify-content:space-between;gap:10px;margin:6px 2px 10px;font:400 12px var(--ui);color:var(--muted)}
