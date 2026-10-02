@@ -1,3 +1,23 @@
+diff --git i/src/debug_print.h w/src/debug_print.h
+index 987cc31..3a70c14 100644
+--- i/src/debug_print.h
++++ w/src/debug_print.h
+@@ -5,6 +5,10 @@
+ 
+ extern SM64DebugPrintFunctionPtr g_debug_print_func;
+ 
++#ifdef LIBSM64_PARK
++// park build: no debug messages (keeps the binary free of their text)
++#define DEBUG_PRINT( ... ) do { } while(0)
++#else
+ #define DEBUG_PRINT( ... ) do { \
+     if( g_debug_print_func ) { \
+         char debugStr[1024]; \
+@@ -12,3 +16,4 @@ extern SM64DebugPrintFunctionPtr g_debug_print_func;
+         g_debug_print_func( debugStr ); \
+     } \
+ } while(0)
++#endif
 diff --git i/src/decomp/engine/surface_collision.c w/src/decomp/engine/surface_collision.c
 index 2c94abe..9af4c29 100644
 --- i/src/decomp/engine/surface_collision.c

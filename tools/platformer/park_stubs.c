@@ -50,6 +50,23 @@ EXPORT void park_tick( int32_t id )
     e[23] = m->marioBodyState ? (float)m->marioBodyState->torsoAngle[2] : 0.0f;
 }
 
+// The wrapper's whole interface, under neutral names (the build exports only these: see build-wasm.sh)
+EXPORT void park_init( const int16_t *animTable, uint32_t count ) { sm64_global_init_norom( animTable, count ); }
+EXPORT void park_load_surfaces( const struct SM64Surface *s, uint32_t n ) { sm64_static_surfaces_load( s, n ); }
+EXPORT int32_t park_create( float x, float y, float z ) { return sm64_mario_create( x, y, z ); }
+EXPORT void park_delete( int32_t id ) { sm64_mario_delete( id ); }
+EXPORT void park_set_position( int32_t id, float x, float y, float z ) { sm64_set_mario_position( id, x, y, z ); }
+EXPORT void park_set_velocity( int32_t id, float x, float y, float z ) { sm64_set_mario_velocity( id, x, y, z ); }
+EXPORT void park_set_forward_velocity( int32_t id, float v ) { sm64_set_mario_forward_velocity( id, v ); }
+EXPORT void park_set_face_angle( int32_t id, float a ) { sm64_set_mario_faceangle( id, a ); }
+EXPORT void park_set_action( int32_t id, uint32_t action, uint32_t arg ) { sm64_set_mario_action_arg( id, action, arg ); }
+EXPORT void park_set_health( int32_t id, uint16_t h ) { sm64_set_mario_health( id, h ); }
+EXPORT void park_set_water_level( int32_t id, int32_t y ) { sm64_set_mario_water_level( id, y ); }
+EXPORT void park_set_invincibility( int32_t id, int16_t t ) { sm64_set_mario_invincibility( id, t ); }
+EXPORT float park_find_floor( float x, float y, float z ) { return sm64_surface_find_floor_height( x, y, z ); }
+EXPORT float park_find_ceil( float x, float y, float z ) { return sm64_surface_find_ceil( x, y, z, 0 ); }
+EXPORT int32_t park_find_wall( float *x, float *y, float *z, float offY, float r ) { return sm64_surface_find_wall_collision( x, y, z, offY, r ); }
+
 // struct layout check for the wrapper: sizes and the offsets it relies on
 EXPORT uint32_t park_layout( int32_t k )
 {

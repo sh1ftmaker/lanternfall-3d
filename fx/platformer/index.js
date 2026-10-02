@@ -20,7 +20,7 @@ const CSS = `
 .pf-stick{position:fixed;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;border:1px solid rgba(245,236,220,.22);background:rgba(13,11,38,.35)}
 .pf-stick[hidden]{display:none}
 .pf-stick i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(255,181,71,.85)}
-.pf-btns{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 112px);width:176px;height:176px;pointer-events:none}
+.pf-btns{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 128px);width:176px;height:176px;pointer-events:none}
 .pf-b{position:absolute;pointer-events:auto;appearance:none;border:1px solid rgba(245,236,220,.3);background:rgba(13,11,38,.55);color:#f5ecdc;border-radius:50%;
   font:600 12px Figtree,system-ui,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .pf-b.on{background:rgba(255,181,71,.85);color:#2a1a02}
@@ -28,6 +28,7 @@ const CSS = `
 .pf-crouch{right:98px;bottom:2px;width:62px;height:62px}
 .pf-act{right:14px;bottom:100px;width:62px;height:62px}
 body.pf-on #stick{display:none}
+@media (pointer:coarse),(max-width:640px){ body.pf-on .caption{opacity:0;pointer-events:none} }
 #pfdebug{position:fixed;left:12px;top:64px;z-index:9;font:11px/1.35 ui-monospace,Menlo,monospace;color:#cfe;background:rgba(5,4,15,.72);padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none;max-width:calc(100vw - 24px);overflow:hidden}
 `;
 
@@ -70,7 +71,7 @@ export async function createPlatformer(ctx) {
   let job = null;
   function loadWindow(x, y, z, now = false) {     // x, y, z in metres (three.js)
     if (now) { job = null; const g = col.gather(x, z, 30); send(g, x, y, z); return; }
-    job = { x, y, z, it: col.gatherSteps(x, z, 30, 2.5) };
+    job = { x, y, z, it: col.gatherSteps(x, z, 30, 1.2) };
   }
   function send(g, x, y, z) { S.window = { x, y, z, stats: g.stats }; worker.postMessage({ type: 'surfaces', packed: g.packed, count: g.count, seq: ++S.seq }, [g.packed.buffer]); }
   function runJob() { if (!job) return; const r = job.it.next(); if (r.done) { const j = job; job = null; send(r.value, j.x, j.y, j.z); } }
@@ -156,7 +157,7 @@ export async function createPlatformer(ctx) {
       S.active = true; ch.setVisible(true); input.setActive(true); document.body.classList.add('pf-on'); pressed(true);
       if (ctx.setFov) ctx.setFov(58);
       if (dbgOn) ensureDebug();
-      ctx.hint && ctx.hint(ctx.coarse ? 'Left thumb moves · Jump, Crouch, Swing on the right · drag to look' : 'WASD move · Space jump · Shift crouch · E swing · drag to look · P back to Walk');
+      ctx.hint && ctx.hint(ctx.coarse ? 'Left thumb moves · drag to look' : 'WASD move · Space jump · Shift crouch · E swing · drag to look · P back to Walk');
     },
     exit(toMode) {
       if (!S.active) return;
@@ -194,8 +195,9 @@ export async function createPlatformer(ctx) {
         const lx = camDX / cl, lz = camDZ / cl;
         let mx = inp.mx, my = inp.my;
         if (inp.world) { const [dx, dz] = inp.world; my = -(dx * lx + dz * lz); mx = dx * lz - dz * lx; }   // forward = -camLook, right = (lz, -lx)
+        const btn = inp.device === 'test' ? inp : input.take(inp);
         worker.postMessage({ type: 'tick', seq: ++S.posted, water, cam,
-          input: { camLookX: lx, camLookZ: lz, stickX: -mx, stickY: my, a: inp.a ? 1 : 0, b: inp.b ? 1 : 0, z: inp.z ? 1 : 0 } });
+          input: { camLookX: lx, camLookZ: lz, stickX: -mx, stickY: my, a: btn.a ? 1 : 0, b: btn.b ? 1 : 0, z: btn.z ? 1 : 0 } });
         S.pending = true;
       }
       const v = S.latest > 0 ? sample(S.posted - 1 + S.acc / STEP) : null;

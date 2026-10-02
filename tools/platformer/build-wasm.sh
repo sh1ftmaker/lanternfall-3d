@@ -31,7 +31,10 @@ FLAGS=(--target=wasm32-wasip1 --sysroot="$SYSROOT" -Oz -flto -fno-strict-aliasin
        -I src -I src/decomp/include)
 mkdir -p build-park; OBJS=()
 for f in $SRCS "$HERE/park_stubs.c"; do o="build-park/$(echo "$f" | tr '/' '_').o"; "$CC" "${FLAGS[@]}" -c "$f" -o "$o"; OBJS+=("$o"); done
-"$CC" "${FLAGS[@]}" -mexec-model=reactor -Wl,--export-dynamic -Wl,--export=malloc -Wl,--export=free \
-  -Wl,--gc-sections -Wl,--strip-debug -Wl,-Map=build-park/sm64.map -o "$OUT" "${OBJS[@]}"
+EXPORTS=(park_init park_load_surfaces park_create park_delete park_tick park_inputs park_state park_extra park_layout park_set_position
+  park_set_velocity park_set_forward_velocity park_set_face_angle park_set_action park_set_health park_set_water_level park_set_invincibility
+  park_find_floor park_find_ceil park_find_wall malloc free)
+"$CC" "${FLAGS[@]}" -mexec-model=reactor ${EXPORTS[@]/#/-Wl,--export=} \
+  -Wl,--gc-sections -Wl,--strip-all -Wl,-Map=build-park/sm64.map -o "$OUT" "${OBJS[@]}"
 echo "built $OUT ($(stat -c %s "$OUT") bytes) from libsm64 $COMMIT"
 node "$HERE/audit-wasm.mjs" "$OUT" build-park/sm64.map

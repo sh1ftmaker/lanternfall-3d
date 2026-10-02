@@ -29,8 +29,10 @@ if (mapFile && fs.existsSync(mapFile)) {
 // the ROM's internal name must not appear anywhere in the binary
 const romName = Buffer.from('SUPER MARIO 64');
 const hasRomName = buf.indexOf(romName) >= 0;
+// nor the character's name: exports are park_* only and the library's debug messages are compiled out
+const nameHits = (buf.toString('latin1').match(/mario/gi) || []).length;
 dataSyms.sort((a, b) => b[0] - a[0]);
-const ok = !bad.length && !hasRomName && (sizes.data || 0) < 40000 && imports.every((i) => /^(env\.(play_sound|stop_sound|play_music|stop_background_music|fadeout_background_music)|wasi_snapshot_preview1\.\w+)$/.test(i));
-console.log(JSON.stringify({ file, bytes: buf.length, sizes, imports, exports: exports.length, sm64Exports: exports.filter((e) => /^(sm64_|park_)/.test(e)),
-  largestData: dataSyms.slice(0, 12).map(([n, s]) => `${n} ${s}`), forbidden: bad, romNameInBinary: hasRomName, ok }, null, 1));
+const ok = !bad.length && !hasRomName && nameHits === 0 && (sizes.data || 0) < 40000 && imports.every((i) => /^(env\.(play_sound|stop_sound|play_music|stop_background_music|fadeout_background_music)|wasi_snapshot_preview1\.\w+)$/.test(i));
+console.log(JSON.stringify({ file, bytes: buf.length, sizes, imports, exports: exports.length, parkExports: exports.filter((e) => /^park_/.test(e)), otherExports: exports.filter((e) => !/^park_/.test(e)),
+  largestData: dataSyms.slice(0, 12).map(([n, s]) => `${n} ${s}`), forbidden: bad, romNameInBinary: hasRomName, nameHits, ok }, null, 1));
 if (!ok) process.exit(1);

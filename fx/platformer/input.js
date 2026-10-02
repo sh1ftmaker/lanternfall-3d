@@ -5,14 +5,18 @@
 // read() -> { mx, my (move, -1..1, my = forward), a, b, z (held), orbitX, orbitY (camera, rad this frame), zoom, used }
 export function createInput({ canvas, coarse, onExit, onSwitch }) {
   const keys = new Set();
-  const st = { on: false, stick: { id: -1, ox: 0, oy: 0, x: 0, y: 0 }, orbit: { id: -1, x: 0, y: 0, dx: 0, dy: 0 }, btn: { a: false, b: false, z: false }, wheel: 0, lastDevice: coarse ? 'touch' : 'keyboard', pad: null };
+  const st = { latch: { a: false, b: false, z: false }, on: false, stick: { id: -1, ox: 0, oy: 0, x: 0, y: 0 }, orbit: { id: -1, x: 0, y: 0, dx: 0, dy: 0 }, btn: { a: false, b: false, z: false }, wheel: 0, lastDevice: coarse ? 'touch' : 'keyboard', pad: null };
   const KEYMAP = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1, ShiftLeft: 1, ShiftRight: 1, KeyC: 1, KeyE: 1, KeyF: 1, KeyQ: 1, KeyJ: 1, KeyK: 1, KeyL: 1, KeyX: 1, KeyZ: 1 };
   const onKeyDown = (e) => {
     if (!st.on || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     if (e.code === 'Escape') { e.stopPropagation(); e.preventDefault(); onExit && onExit(); return; }
     if (e.code === 'KeyP' || e.code === 'Tab') { e.stopPropagation(); e.preventDefault(); if (!e.repeat) onSwitch && onSwitch(); return; }
-    if (KEYMAP[e.code]) { keys.add(e.code); st.lastDevice = 'keyboard'; e.stopPropagation(); e.preventDefault(); }
+    if (KEYMAP[e.code]) {
+      keys.add(e.code); st.lastDevice = 'keyboard'; e.stopPropagation(); e.preventDefault();
+      // a tap shorter than a 30 Hz tick must still count: presses are latched until the next tick takes them
+      if (!e.repeat) { if (/Space|KeyJ/.test(e.code)) st.latch.a = true; else if (/KeyE|KeyF|KeyK|KeyX/.test(e.code)) st.latch.b = true; else if (/Shift|KeyC|KeyL|KeyZ/.test(e.code)) st.latch.z = true; }
+    }
   };
   const onKeyUp = (e) => { if (keys.delete(e.code) && st.on) e.stopPropagation(); };
   addEventListener('keydown', onKeyDown, true); addEventListener('keyup', onKeyUp, true);
@@ -31,7 +35,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
   const stickEl = ui.querySelector('.pf-stick'), knob = stickEl.firstElementChild;
   for (const b of ui.querySelectorAll('.pf-b')) {
     const k = b.dataset.k;
-    const down = (e) => { e.preventDefault(); e.stopPropagation(); st.btn[k] = true; b.classList.add('on'); st.lastDevice = 'touch'; try { b.setPointerCapture(e.pointerId); } catch (er) { /* fine */ } };
+    const down = (e) => { e.preventDefault(); e.stopPropagation(); st.btn[k] = true; st.latch[k] = true; b.classList.add('on'); st.lastDevice = 'touch'; try { b.setPointerCapture(e.pointerId); } catch (er) { /* fine */ } };
     const up = (e) => { e.preventDefault(); st.btn[k] = false; b.classList.remove('on'); };
     b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
     b.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -75,6 +79,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
       const r = { mx: dz(p.axes[0] || 0), my: -dz(p.axes[1] || 0), ox: dz(p.axes[2] || 0), oy: dz(p.axes[3] || 0), a: b(0), b: b(2) || b(1), z: b(6) || b(7) || b(4) || b(5), any: false };
       r.any = r.a || r.b || r.z || Math.abs(r.mx) + Math.abs(r.my) + Math.abs(r.ox) + Math.abs(r.oy) > 0;
       if (r.any) st.lastDevice = 'gamepad';
+      for (const k of ['a', 'b', 'z']) { if (r[k] && !st.padPrev?.[k]) st.latch[k] = true; } st.padPrev = { a: r.a, b: r.b, z: r.z };
       return r;
     }
     return null;
@@ -101,5 +106,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
     ui.hidden = !(on && (coarse || st.lastDevice === 'touch'));
     if (!on) { st.stick.id = -1; stickEl.hidden = true; st.orbit.id = -1; }
   }
-  return { read, setActive, ui, st, dispose() { removeEventListener('keydown', onKeyDown, true); removeEventListener('keyup', onKeyUp, true); removeEventListener('pointerdown', onDown, true); removeEventListener('pointermove', onMove, true); removeEventListener('pointerup', onUp, true); removeEventListener('pointercancel', onUp, true); ui.remove(); } };
+  // the tick takes the latched presses: held OR pressed since the last tick
+  function take(inp) { const o = { a: inp.a || st.latch.a, b: inp.b || st.latch.b, z: inp.z || st.latch.z }; st.latch.a = st.latch.b = st.latch.z = false; return o; }
+  return { read, take, setActive, ui, st, dispose() { removeEventListener('keydown', onKeyDown, true); removeEventListener('keyup', onKeyUp, true); removeEventListener('pointerdown', onDown, true); removeEventListener('pointermove', onMove, true); removeEventListener('pointerup', onUp, true); removeEventListener('pointercancel', onUp, true); ui.remove(); } };
 }

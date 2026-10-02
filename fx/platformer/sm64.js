@@ -49,17 +49,17 @@ export async function loadSM64(src) {
     input: { camLookX: 0, camLookZ: 1, stickX: 0, stickY: 0, a: 0, b: 0, z: 0 },
     init(animTable) {
       const p = X.malloc(animTable.byteLength); new Int16Array(mem.buffer, p, animTable.length).set(animTable);
-      X.sm64_global_init_norom(p, animTable.length / 6); X.free(p);
+      X.park_init(p, animTable.length / 6); X.free(p);
     },
     // packed: Int32Array, 11 per surface: [type | force << 16, terrain, x1, y1, z1, x2, y2, z2, x3, y3, z3]
     loadSurfaces(packed, n) {
       const bytes = n * 44;
       if (bytes > surfCap) { if (surfPtr) X.free(surfPtr); surfCap = Math.ceil(bytes * 1.25); surfPtr = X.malloc(surfCap); }
       new Int32Array(mem.buffer, surfPtr, n * 11).set(packed.subarray(0, n * 11));
-      X.sm64_static_surfaces_load(surfPtr, n);
+      X.park_load_surfaces(surfPtr, n);
     },
-    create(x, y, z) { return X.sm64_mario_create(x, y, z); },
-    remove(id) { X.sm64_mario_delete(id); },
+    create(x, y, z) { return X.park_create(x, y, z); },
+    remove(id) { X.park_delete(id); },
     tick(id) {
       const I = api.input, f = new Float32Array(mem.buffer, pIn, 4), u = new Uint8Array(mem.buffer, pIn + 16, 3);
       f[0] = I.camLookX; f[1] = I.camLookZ; f[2] = I.stickX; f[3] = I.stickY; u[0] = I.a ? 1 : 0; u[1] = I.b ? 1 : 0; u[2] = I.z ? 1 : 0;
@@ -76,19 +76,19 @@ export async function loadSM64(src) {
       state.peakY = e[20]; state.inputBits = e[21]; state.torsoPitch = e[22] * S16; state.torsoRoll = e[23] * S16;
       return state;
     },
-    setWaterLevel(id, y) { X.sm64_set_mario_water_level(id, Math.round(y)); },
-    setHealth(id, h) { X.sm64_set_mario_health(id, h); },
-    setPosition(id, x, y, z) { X.sm64_set_mario_position(id, x, y, z); },
-    setVelocity(id, x, y, z) { X.sm64_set_mario_velocity(id, x, y, z); },
-    setForwardVel(id, v) { X.sm64_set_mario_forward_velocity(id, v); },
-    setFaceAngle(id, a) { X.sm64_set_mario_faceangle(id, a); },
-    setAction(id, a, arg = 0) { X.sm64_set_mario_action_arg(id, a >>> 0, arg >>> 0); },
-    setInvincibility(id, t) { X.sm64_set_mario_invincibility(id, t); },
-    findFloor(x, y, z) { return X.sm64_surface_find_floor_height(x, y, z); },
-    findCeil(x, y, z) { return X.sm64_surface_find_ceil(x, y, z, 0); },
+    setWaterLevel(id, y) { X.park_set_water_level(id, Math.round(y)); },
+    setHealth(id, h) { X.park_set_health(id, h); },
+    setPosition(id, x, y, z) { X.park_set_position(id, x, y, z); },
+    setVelocity(id, x, y, z) { X.park_set_velocity(id, x, y, z); },
+    setForwardVel(id, v) { X.park_set_forward_velocity(id, v); },
+    setFaceAngle(id, a) { X.park_set_face_angle(id, a); },
+    setAction(id, a, arg = 0) { X.park_set_action(id, a >>> 0, arg >>> 0); },
+    setInvincibility(id, t) { X.park_set_invincibility(id, t); },
+    findFloor(x, y, z) { return X.park_find_floor(x, y, z); },
+    findCeil(x, y, z) { return X.park_find_ceil(x, y, z); },
     findWall(x, y, z, offY, radius) {          // returns pushed-out position
       const p = X.malloc(12), f = new Float32Array(mem.buffer, p, 3); f[0] = x; f[1] = y; f[2] = z;
-      const n = X.sm64_surface_find_wall_collision(p, p + 4, p + 8, offY, radius); const r = [f[0], f[1], f[2], n]; X.free(p); return r;
+      const n = X.park_find_wall(p, p + 4, p + 8, offY, radius); const r = [f[0], f[1], f[2], n]; X.free(p); return r;
     },
   };
   return api;
