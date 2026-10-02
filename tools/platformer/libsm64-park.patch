@@ -255,7 +255,7 @@ index a0869ce..33669e7 100644
  extern void unload_mario_anims( void );
 \ No newline at end of file
 diff --git i/src/load_surfaces.c w/src/load_surfaces.c
-index afe66a7..46f5b17 100644
+index afe66a7..31b8621 100644
 --- i/src/load_surfaces.c
 +++ w/src/load_surfaces.c
 @@ -170,6 +170,16 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
@@ -275,7 +275,7 @@ index afe66a7..46f5b17 100644
      surface->vertex1[0] = x1;
      surface->vertex2[0] = x2;
      surface->vertex3[0] = x3;
-@@ -208,6 +218,104 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
+@@ -208,6 +218,109 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
      surface->isValid = 1;
  }
  
@@ -309,11 +309,14 @@ index afe66a7..46f5b17 100644
 +static void grid_build( void )
 +{
 +    grid_free();
-+    if( s_static_surface_count == 0 ) return;
++    int32_t valid = 0;
++    for( uint32_t k = 0; k < s_static_surface_count; ++k ) valid += s_static_surface_list[k].isValid ? 1 : 0;
++    if( valid == 0 ) return;
 +    int32_t x0 = 0x7fffffff, x1 = -0x7fffffff, z0 = 0x7fffffff, z1 = -0x7fffffff;
 +    for( uint32_t k = 0; k < s_static_surface_count; ++k )
 +    {
 +        const struct SM64SurfaceCollisionData *f = &s_static_surface_list[k];
++        if( !f->isValid ) continue;       // degenerate triangles are left half-initialised by engine_surface_from_lib_surface
 +        const int32_t *v[3] = { f->vertex1, f->vertex2, f->vertex3 };
 +        for( int q = 0; q < 3; ++q )
 +        {
@@ -327,6 +330,7 @@ index afe66a7..46f5b17 100644
 +    s_grid_start = calloc( cells + 1, sizeof( uint32_t ));
 +    for( uint32_t k = 0; k < s_static_surface_count; ++k )
 +    {
++        if( !s_static_surface_list[k].isValid ) continue;
 +        int32_t i0, i1, j0, j1; grid_cell_range( &s_static_surface_list[k], &i0, &i1, &j0, &j1 );
 +        for( int32_t j = j0; j <= j1; ++j ) for( int32_t i = i0; i <= i1; ++i ) s_grid_start[ j * s_grid_w + i + 1 ]++;
 +    }
@@ -335,6 +339,7 @@ index afe66a7..46f5b17 100644
 +    uint32_t *fill = calloc( cells, sizeof( uint32_t ));
 +    for( uint32_t k = 0; k < s_static_surface_count; ++k )
 +    {
++        if( !s_static_surface_list[k].isValid ) continue;
 +        int32_t i0, i1, j0, j1; grid_cell_range( &s_static_surface_list[k], &i0, &i1, &j0, &j1 );
 +        for( int32_t j = j0; j <= j1; ++j ) for( int32_t i = i0; i <= i1; ++i )
 +        {
@@ -380,7 +385,7 @@ index afe66a7..46f5b17 100644
  uint32_t loaded_surface_iter_group_count( void )
  {
      return 1 + s_surface_object_count;
-@@ -216,7 +324,11 @@ uint32_t loaded_surface_iter_group_count( void )
+@@ -216,7 +329,11 @@ uint32_t loaded_surface_iter_group_count( void )
  uint32_t loaded_surface_iter_group_size( uint32_t groupIndex )
  {
      if( groupIndex == 0 )
@@ -392,7 +397,7 @@ index afe66a7..46f5b17 100644
  
      return s_surface_object_list[ groupIndex - 1 ].surfaceCount;
  }
-@@ -224,7 +336,11 @@ uint32_t loaded_surface_iter_group_size( uint32_t groupIndex )
+@@ -224,7 +341,11 @@ uint32_t loaded_surface_iter_group_size( uint32_t groupIndex )
  struct SM64SurfaceCollisionData *loaded_surface_iter_get_at_index( uint32_t groupIndex, uint32_t surfaceIndex )
  {
      if( groupIndex == 0 )
@@ -404,7 +409,7 @@ index afe66a7..46f5b17 100644
  
      return &s_surface_object_list[ groupIndex - 1 ].engineSurfaces[ surfaceIndex ];
  }
-@@ -239,6 +355,9 @@ void surfaces_load_static( const struct SM64Surface *surfaceArray, uint32_t numS
+@@ -239,6 +360,9 @@ void surfaces_load_static( const struct SM64Surface *surfaceArray, uint32_t numS
  
      for( int i = 0; i < numSurfaces; ++i )
          engine_surface_from_lib_surface( &s_static_surface_list[i], &surfaceArray[i], NULL );
@@ -414,7 +419,7 @@ index afe66a7..46f5b17 100644
  }
  
  uint32_t surfaces_load_object( const struct SM64SurfaceObject *surfaceObject )
-@@ -327,6 +446,10 @@ void surfaces_unload_all( void )
+@@ -327,6 +451,10 @@ void surfaces_unload_all( void )
      free( s_static_surface_list );
      s_static_surface_count = 0;
      s_static_surface_list = NULL;

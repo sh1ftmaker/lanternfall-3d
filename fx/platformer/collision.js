@@ -4,8 +4,9 @@
 // as three.js, which share the library's convention: y up, counter-clockwise = front). This module
 //   1. prepare(): once, when the Platformer is first chosen, walks every chunk's BASE-detail triangles (the `n0` range
 //      the viewer draws from far away), de-quantises them, drops what the player can never stand on or bump into
-//      (degenerate slivers, wall scraps under 0.04 m^2, tiny floor scraps, anything above 50 m, anything outside the
-//      park), and files a reference to each kept triangle in a 16 m bucket grid by its centroid (time-sliced);
+//      (degenerate slivers, wall pieces under 0.16 m^2 (posts, rails, trim), floor pieces under 0.015 m^2, anything above
+//      50 m, anything outside the park; tools/platformer/validate-collision.mjs checks the floors that remain against
+//      the walk grid), and files a reference to each kept triangle in a 16 m bucket grid by its centroid (time-sliced);
 //   2. gather(x, z): packs the triangles of the buckets around a point into the library's surface records, adding
 //      what the visual data lacks: a lake bed 4 m under Stillwater's surface (so the player can swim across to the
 //      Spire), invisible walls along the park's perimeter, and the ice rink at Frostmere as an ice surface.
@@ -25,7 +26,7 @@ function toLocal(F, x, y) { const dx = x - F.cx, dy = y - F.cy; return [dx * F.u
 export function inPoly(pl, x, y) { let c = false; for (let i = 0, j = pl.length - 1; i < pl.length; j = i++) { const [xi, yi] = pl[i], [xj, yj] = pl[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
 function distToPoly(pl, x, y) { let best = 1e18; for (let a = 0, b = pl.length - 1; a < pl.length; b = a++) { const [ax, ay] = pl[a], [bx, by] = pl[b], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1; const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)), ex = ax + t * dx - x, ey = ay + t * dy - y; best = Math.min(best, ex * ex + ey * ey); } return Math.sqrt(best); }
 
-export function createCollision({ park, lodMeshes, manifest, nav }) {
+export function createCollision({ park, lodMeshes, manifest, nav, flipDown = true, minWall = 0.16, minFloor = 0.015 }) {
   const lod = new Map(lodMeshes.map((e) => [e.mesh, e.m]));
   const meshes = park.children.filter((m) => m.isMesh && m.geometry.attributes.aCol && !m.material.transparent && m.geometry.index);
   const NBX = Math.ceil((X1 - X0) / BUCKET), NBZ = Math.ceil((Z1 - Z0) / BUCKET);
@@ -63,8 +64,8 @@ export function createCollision({ park, lodMeshes, manifest, nav }) {
         const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz), area = l / 2;
         if (area < 1e-4) { st.dropped.degenerate++; continue; }
         const yn = ny / l;
-        if (Math.abs(yn) <= 0.5) { if (area < 0.04) { st.dropped.smallWall++; continue; } }
-        else if (area < 0.0025) { st.dropped.tinyFloor++; continue; }
+        if (Math.abs(yn) <= 0.5) { if (area < minWall) { st.dropped.smallWall++; continue; } }
+        else if (area < minFloor) { st.dropped.tinyFloor++; continue; }
         const ref = (mi << 22) | (t / 3);
         const ext = Math.max(Math.max(ax, bx, cx) - Math.min(ax, bx, cx), Math.max(az, bz, cz) - Math.min(az, bz, cz));
         if (ext > BUCKET) { big.push(ref); st.big++; continue; }
@@ -135,9 +136,13 @@ export function createCollision({ park, lodMeshes, manifest, nav }) {
     const emit = (type, terrain, x1, y1, z1, x2, y2, z2, x3, y3, z3) => {
       if ((n + 1) * 11 > buf.length) { const b2 = new Int32Array(buf.length * 2); b2.set(buf); buf = b2; }
       const o = n * 11; buf[o] = type & 0xffff; buf[o + 1] = terrain;
-      buf[o + 2] = Math.round(x1 * UNITS); buf[o + 3] = Math.round(y1 * UNITS); buf[o + 4] = Math.round(z1 * UNITS);
-      buf[o + 5] = Math.round(x2 * UNITS); buf[o + 6] = Math.round(y2 * UNITS); buf[o + 7] = Math.round(z2 * UNITS);
-      buf[o + 8] = Math.round(x3 * UNITS); buf[o + 9] = Math.round(y3 * UNITS); buf[o + 10] = Math.round(z3 * UNITS); n++;
+      const X1 = buf[o + 2] = Math.round(x1 * UNITS), Y1 = buf[o + 3] = Math.round(y1 * UNITS), Z1 = buf[o + 4] = Math.round(z1 * UNITS);
+      const X2 = buf[o + 5] = Math.round(x2 * UNITS), Y2 = buf[o + 6] = Math.round(y2 * UNITS), Z2 = buf[o + 7] = Math.round(z2 * UNITS);
+      const X3 = buf[o + 8] = Math.round(x3 * UNITS), Y3 = buf[o + 9] = Math.round(y3 * UNITS), Z3 = buf[o + 10] = Math.round(z3 * UNITS);
+      // rounding to whole units can collapse a sliver: the library rejects those, so do not send them
+      const ux = X2 - X1, uy = Y2 - Y1, uz = Z2 - Z1, vx = X3 - X1, vy = Y3 - Y1, vz = Z3 - Z1;
+      if (uy * vz - uz * vy === 0 && uz * vx - ux * vz === 0 && ux * vy - uy * vx === 0) return;
+      n++;
     };
     const counts = { floors: 0, flipped: 0, walls: 0, ceils: 0, ice: 0, perimeter: 0, bed: 0 };
     const doTri = (ref) => {
@@ -160,7 +165,7 @@ export function createCollision({ park, lodMeshes, manifest, nav }) {
           }
         }
         if (yn > 0) { emit(type, terrain, ax, ay, az, bx, by, bz, qx, qy, qz); counts.floors++; }
-        else { emit(0, terrain, ax, ay, az, bx, by, bz, qx, qy, qz); emit(type, terrain, ax, ay, az, qx, qy, qz, bx, by, bz); counts.ceils++; counts.flipped++; }
+        else { emit(0, terrain, ax, ay, az, bx, by, bz, qx, qy, qz); counts.ceils++; if (flipDown) { emit(type, terrain, ax, ay, az, qx, qy, qz, bx, by, bz); counts.flipped++; } }
       } else { emit(0, terrain, ax, ay, az, bx, by, bz, qx, qy, qz); counts.walls++; }
     };
     // buckets hold triangles by centroid and no kept triangle is wider than a bucket, so a half-bucket margin covers
