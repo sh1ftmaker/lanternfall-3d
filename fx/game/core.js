@@ -17,7 +17,6 @@ const CSS = `
   touch-action:manipulation;-webkit-user-select:none;user-select:none;max-width:calc(100vw - 32px)}
 #game-prompt[hidden]{display:none} #game-prompt kbd{font:600 11px var(--ui);border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:8px;opacity:.8}
 @media (pointer:coarse){ #game-prompt kbd{display:none} #game-prompt{bottom:calc(env(safe-area-inset-bottom,0px) + 330px)} }
-@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 #game-toasts{position:fixed;z-index:7;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(420px,calc(100vw - 32px))}
 .game-toast{padding:9px 16px;border-radius:14px;background:rgba(13,11,38,.8);border:1px solid var(--line);color:var(--paper);font:500 14px/1.35 var(--ui);text-align:center;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
@@ -28,6 +27,7 @@ const CSS = `
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
 #game-journal .gj-reset{margin-top:10px;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);opacity:.7;font:500 12px var(--ui);padding:6px 12px;cursor:pointer}
+@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 body.clean #game-track,body.clean #game-prompt,body.clean #game-toasts{opacity:0;pointer-events:none}
 @media (prefers-reduced-motion:reduce){ .game-toast{animation:none} }
 `;
