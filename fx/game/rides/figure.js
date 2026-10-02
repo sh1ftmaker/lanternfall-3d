@@ -64,11 +64,9 @@ export function figureMaterial() {
   const m = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('void main() {', 'attribute float aTone; attribute vec2 aVar;\nvoid main() {')
-      .replace('#include <color_vertex>', `#if defined( USE_COLOR )
-        vColor = color.rgb;
-        #ifdef USE_INSTANCING_COLOR
-          if (aTone > 0.5 && aTone < 1.5) vColor *= instanceColor.rgb; else if (aTone > 1.5 && aTone < 2.5) vColor *= aVar.x; else if (aTone > 2.5) vColor *= aVar.y;
-        #endif
+      .replace('#include <color_vertex>', `vColor = vec4( color.rgb, 1.0 );
+      #ifdef USE_INSTANCING_COLOR
+        if (aTone > 0.5 && aTone < 1.5) vColor.rgb *= instanceColor.rgb; else if (aTone > 1.5 && aTone < 2.5) vColor.rgb *= aVar.x; else if (aTone > 2.5) vColor.rgb *= aVar.y;
       #endif`);
   };
   return m;
