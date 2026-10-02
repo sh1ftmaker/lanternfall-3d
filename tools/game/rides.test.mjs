@@ -182,7 +182,7 @@ async function run(mobile, fp) {
     if (cr) {
       await standAt(cr.x, cr.y, 0, 0); await use(); await until('__park.game.cameraHeld === "rides"', 4000, 'cruise again'); const t0 = Date.now();
       check('natural cruise ends by itself', await until('!__park.game.cameraHeld', 240000, 'natural cruise end'), `${((Date.now() - t0) / 1000).toFixed(0)} s`);
-      await wait(600); const p = await player(); check('natural cruise: walker at the jetty', Math.hypot(p[0] - cr.x, p[1] - cr.y) < 2, p.map((v) => +v.toFixed(2)));
+      await wait(600); const p = await player(); check('natural cruise: walker at the jetty', Math.hypot(p[0] - cr.x, p[1] - cr.y) < 2, p.map((v) => (typeof v === 'number' ? +v.toFixed(2) : v)));
       check('natural cruise: leave event (done)', await ev('__ev.some((e) => e[0] === "rides:leave" && e[1] === "cruise" && e[2] === "done")'));
     }
   }
