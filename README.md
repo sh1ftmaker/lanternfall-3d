@@ -30,6 +30,28 @@ Choices are remembered in the browser. Until a picture setting has been chosen, 
 frames run slow (resolution, the mirror, effects; never the guests). Choosing Fast, HD or Cinematic gives exactly that
 setting and holds it.
 
+## Things to do
+
+A journal (the pill under the title, or `B`) keeps track of everything below; progress is saved in the browser.
+
+- **The evening.** In Explore and Walk the evening runs by the clock, 17:30 to 23:40, about twenty minutes, and
+  loops: a sunset behind the Spire as the gates open, lamps coming on, the Frost Fair at 19:00, ghost stories in
+  Lantern Row at 21:15 (a storyteller, three stories, three keepsakes), and the lantern fall at 23:00 with its four
+  silent minutes. The journal's "Tonight" jumps to any of them or holds the time. The page opens at the fall, and the
+  Tour always shows it.
+- **Light the park.** Fifty-seven dark lamps for Wick's pole (or a tap, or `E`), counted land by land; and a
+  lamplighter who came before. At the lake rail you can write a wish and send up a lantern of your own.
+- **The Bounty Board** at Brinewatch posts three jobs a night; eight stamp posts fill a passport; the Lost & Found
+  wants eight lost things back; the reward counter pays in lantern colours.
+- **Trials.** The Lake Lap, the Spire Swim and the Meridian Rooftops, against a ghost of your best run.
+- **Rides.** The monorail loop from Meridian's platform, a harbor cruise from the Brinewatch shore to the Spire and
+  back, and a turn on the carousel.
+- **Photographs** (`O`): frame, focus, pick a look, keep the picture.
+- **Curiosities.** Eight things nobody will tell you about. Some need the right weather.
+
+Each is a module in `fx/game/<name>/` on a small shared core (`fx/game/core.js`, contract in `fx/game/API.md`);
+`#no-game` turns them all off, `#no-<name>` one of them.
+
 ## Going inside
 
 The Wanderers' Hall (the Paper Doors, the Signing Tables, the gallery) and the Brine & Barrel taproom on Brinewatch
