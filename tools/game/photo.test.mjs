@@ -27,6 +27,8 @@ async function run(mobile, quality) {
   await ev(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().toLowerCase()==='${quality}'); if(b) b.click();})()`);
   await wait(1500);
   const cam = () => ev('(()=>{const c=__park.camera;return [c.position.x,c.position.y,c.position.z,c.fov]})()');
+  // press the shutter and wait for the picture (a 1280 px picture needs a bigger frame: a pause while the viewer resizes and renders it)
+  const shutter = async () => { await ev('window.__l0 = __park.game.modules.photo.last'); await ev("document.querySelector('#ph-shutter').click()"); await page.waitForFunction('__park.game.modules.photo.last !== window.__l0', { timeout: 60000, polling: 200 }).catch(() => {}); await wait(500); };
   const same = (a, b, t = 0.02) => a && b && a.every((v, i) => Math.abs(v - b[i]) < t);
   const modes = [['tour', 'tour'], ['orbit', 'explore'], ['wick', 'walk as Wick'], ['fp', 'walk first person']];
   let a0 = 0;
@@ -66,17 +68,6 @@ async function run(mobile, quality) {
     const far = await ev('(()=>{const c=__park.game.modules.photo.cam, p=__park.camera.position, g=__park.game.ground(p.x,-p.z,p.y); return {d:c.p.distanceTo(c.home), y:p.y, g}})()');
     check(far.d <= 25.01 && (far.g === null || far.y >= far.g), `${tag}/${m}: bounded (d=${far.d.toFixed(1)}, y=${far.y.toFixed(1)}, ground=${far.g})`);
     await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.copy(c.home);})()"); await wait(300);
-    if (m === 'wick') {          // a wall: find one by ray, then try to be on its far side in one move; the camera must stop short of it
-      const wall = await ev(`(() => { const G = __park.game, T = G.THREE, c = G.modules.photo.cam, home = c.home.clone(), ms = G.ctx.getPark().children.filter((m) => m.isMesh && m.geometry.attributes.aCol && !m.material.transparent && m.geometry.index), rc = new T.Raycaster(); let best = null;
-        for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2, d = new T.Vector3(Math.sin(a), 0, Math.cos(a)); rc.set(home, d); rc.far = 20; const h = rc.intersectObjects(ms, false)[0]; if (h && h.distance > 1.5 && (!best || h.distance < best.d)) best = { d: h.distance, dir: [d.x, d.z], home: home.toArray() }; } return best; })()`);
-      check(!!wall, `${tag}/${m}: a wall within 20 m to test against (${wall && wall.d.toFixed(1)} m)`);
-      if (wall) {
-        await ev(`(() => { const c = __park.game.modules.photo.cam; c.p.set(${wall.home[0] + wall.dir[0] * (wall.d + 4)}, ${wall.home[1]}, ${wall.home[2] + wall.dir[1] * (wall.d + 4)}); })()`); await wait(500);
-        const along = await ev(`(() => { const p = __park.camera.position; return (p.x - ${wall.home[0]}) * ${wall.dir[0]} + (p.z - ${wall.home[2]}) * ${wall.dir[1]}; })()`);
-        check(along < wall.d - 0.1 && along > -1, `${tag}/${m}: the camera stops short of the wall (${along.toFixed(2)} m along, wall at ${wall.d.toFixed(2)} m)`);
-        await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.copy(c.home);})()"); await wait(300);
-      }
-    }
     // aspects
     for (const [a, r] of [['1:1', 1], ['4:5', 0.8], ['16:9', 16 / 9], ['free', 0]]) {
       await ev(`document.querySelector('[data-asp="${a}"]').click()`); await wait(150);
@@ -100,7 +91,7 @@ async function run(mobile, quality) {
     await ev("document.querySelector('[data-asp=\"4:5\"]').click()");
     // shoot
     const dl0 = (await ev('__dl.length')) + (await ev('__shared.length'));
-    await ev("document.querySelector('#ph-shutter').click()"); await wait(1800);
+    await shutter();
     const last = await ev('(()=>{const l=__park.game.modules.photo.last; return l && {w:l.w,h:l.h,size:l.blob.size,name:l.name,type:l.blob.type}})()');
     check(last && last.size > 8000 && last.w >= 1280 && Math.abs(last.w / last.h - 0.8) < 0.01, `${tag}/${m}: picture ${last && last.w}x${last && last.h} ${last && last.size} bytes ${last && last.name}`);
     check(last && /^lanternfall-\d{4}-\d\d-\d\d-\d{6}\.jpg$/.test(last.name), `${tag}/${m}: file name`);
@@ -133,7 +124,7 @@ async function run(mobile, quality) {
     await ev("(()=>{const r=document.querySelector('#ph-blur'); r.value=50; r.dispatchEvent(new Event('input'))})()"); await wait(1500);
     const res = await ev(`(async()=>{const gl=__park.renderer.getContext();const e=gl.getExtension('WEBGL_lose_context');e.loseContext();await new Promise(r=>setTimeout(r,600));e.restoreContext();await new Promise(r=>setTimeout(r,3500));return gl.isContextLost()?'lost':'restored'})()`);
     check(res === 'restored', `${tag}: context loss in photo mode: ${res}`);
-    await ev("document.querySelector('#ph-shutter').click()"); await wait(2000);
+    await shutter();
     const l2 = await ev('(()=>{const l=__park.game.modules.photo.last; return l && l.blob.size})()'); check(l2 > 8000, `${tag}: can still take a picture after the loss`);
     await ev('__park.game.modules.photo.leave()'); await wait(500);
   }
@@ -163,6 +154,34 @@ async function runLandscape() {
   check(errs.length === 0, `${tag}: no console errors ${JSON.stringify(errs)}`);
   await browser.close();
 }
+// the camera and walls: stand inside the tavern, find a wall by ray, ask for a move to its far side in one step; the camera must stop short
+async function runWalls() {
+  console.log('== walls');
+  const browser = await puppeteer.launch({ executablePath: '/usr/bin/chromium', headless: 'new', args: ['--no-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=gl', '--window-size=1280,720'] });
+  const page = await browser.newPage(); const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message.slice(0, 120))); page.on('console', (m) => { if (m.type() === 'error' && !/GPU stall|ReadPixels/.test(m.text())) errs.push(m.text().slice(0, 120)); });
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.goto(URL + '#weather=clear'); await page.waitForFunction('window.__park && window.__park.loaded && __park.game.modules.photo', { timeout: 240000 });
+  const ev = (js) => page.evaluate(js);
+  await ev("__park.setMode('walk',{at:[139,-18],yaw:0})"); await wait(3000);
+  await ev("__park.game.modules.photo.enter()"); await wait(2500);
+  check(await ev('__park.game.modules.photo.walls.ready'), 'walls: the collision window is gathered (' + (await ev('__park.game.modules.photo.walls.count')) + ' triangles)');
+  let tested = 0, bad = [];
+  for (let round = 0; round < 3; round++) {
+    const wall = await ev(`(() => { const G = __park.game, T = G.THREE, c = G.modules.photo.cam, home = c.p.clone(), ms = G.ctx.getPark().children.filter((m) => m.isMesh && m.geometry.attributes.aCol && !m.material.transparent && m.geometry.index), rc = new T.Raycaster(), hits = [];
+      for (let i = 0; i < 48; i++) { const a = i / 48 * Math.PI * 2, d = new T.Vector3(Math.sin(a), 0, Math.cos(a)); rc.set(home, d); rc.far = 9; const h = rc.intersectObjects(ms, false)[0]; if (h && h.distance > 1.2) hits.push({ d: h.distance, dir: [d.x, d.z], home: home.toArray(), pt: h.point.toArray(), n: h.face.normal.toArray() }); }
+      hits.sort((a, b) => a.d - b.d); return hits[${round * 7}] || null; })()`);
+    if (!wall) continue; tested++;
+    await ev(`(() => { const c = __park.game.modules.photo.cam; c.p.set(${wall.home[0] + wall.dir[0] * (wall.d + 3)}, ${wall.home[1]}, ${wall.home[2] + wall.dir[1] * (wall.d + 3)}); })()`); await wait(600);
+    // still on its own side of the wall's plane (the camera slides along a wall it meets at an angle, so the distance along the ray proves nothing)
+    const side = await ev(`(() => { const p = __park.camera.position, n = ${JSON.stringify(wall.n)}, q = ${JSON.stringify(wall.pt)}, h = ${JSON.stringify(wall.home)}; const f = (v) => (v[0] - q[0]) * n[0] + (v[1] - q[1]) * n[1] + (v[2] - q[2]) * n[2]; return [f(h), f([p.x, p.y, p.z])]; })()`);
+    if (!(side[0] * side[1] > 0)) bad.push(`through a wall ${wall.d.toFixed(2)} m away (sides ${side.map((v) => v.toFixed(2))})`);
+    await ev(`(() => { const c = __park.game.modules.photo.cam; c.p.set(${wall.home[0]}, ${wall.home[1]}, ${wall.home[2]}); })()`); await wait(400);
+  }
+  check(tested >= 2 && bad.length === 0, `walls: the camera stops short of the wall in ${tested} tries ${JSON.stringify(bad)}`);
+  check(errs.length === 0, `walls: no console errors ${JSON.stringify(errs)}`);
+  await browser.close();
+}
 // odd saves: missing, null, wrong types, older shapes, a hostile thumbnail; nothing may throw and the modules start from defaults
 async function runSaves() {
   console.log('== saves');
@@ -184,7 +203,7 @@ async function runSaves() {
   check(errs.length === 0, `saves: no console errors ${JSON.stringify(errs)}`);
   await browser.close();
 }
-if (process.env.EXTRA !== 'no' && (!process.env.ONLY || /extra/.test(process.env.ONLY))) { await runLandscape().catch((e) => { fails.push('landscape crashed ' + e.message); console.log(e); }); await runSaves().catch((e) => { fails.push('saves crashed ' + e.message); console.log(e); }); }
+if (process.env.EXTRA !== 'no' && (!process.env.ONLY || /extra/.test(process.env.ONLY))) { await runLandscape().catch((e) => { fails.push('landscape crashed ' + e.message); console.log(e); }); await runWalls().catch((e) => { fails.push('walls crashed ' + e.message); console.log(e); }); await runSaves().catch((e) => { fails.push('saves crashed ' + e.message); console.log(e); }); }
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null;
 for (const [i, [mobile, q]] of [[false, 'cinematic'], [true, 'cinematic'], [false, 'hd'], [true, 'fast']].entries()) if (!ONLY || ONLY.includes(i)) await run(mobile, q).catch((e) => { fails.push('run crashed ' + e.message); console.log(e); });
 console.log(fails.length ? 'FAILED: ' + fails.length + '\n' + fails.join('\n') : 'ALL OK'); process.exit(fails.length ? 1 : 0);

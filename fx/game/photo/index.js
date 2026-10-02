@@ -291,14 +291,14 @@ export function init(game) {
   }
   // Saved pictures are at least MIN_W wide where the device allows: the drawing buffer is at screen resolution (a phone's is a fraction of that),
   // so for the one frame that is kept the viewer's pixel budget is raised (Q.dpr, Q.maxPixels; the page's resize handler applies them) and put back after.
-  const MIN_W = 1280, MAX_PX = 9e6;
+  const MIN_W = 1290, MAX_PX = 10e6;       // a little over 1280: the crop is rounded to whole pixels
   function raise() {
     const r = layoutCrop(), pr = renderer.getPixelRatio(), cw = r.w * pr;
     if (cw >= MIN_W) return null;
     const maxTex = renderer.capabilities.maxTextureSize || 4096, cap = Math.min(4, maxTex / Math.max(r.vw, r.vh) * 0.95, Math.sqrt(MAX_PX / (r.vw * r.vh))), want = Math.min(MIN_W / r.w, cap);
     if (want <= pr * 1.05) return null;
-    const b = { dpr: Q.dpr, mp: Q.maxPixels, to: want };
-    Q.dpr = Math.max(Q.dpr, want); Q.maxPixels = Math.max(Q.maxPixels, want * want * r.vw * r.vh * 1.02); dispatchEvent(new Event('resize'));
+    const b = { dpr: Q.dpr, mp: Q.maxPixels, to: want, mp2: want * want * r.vw * r.vh * 1.02, tries: 0 };
+    Q.dpr = Math.max(Q.dpr, want); Q.maxPixels = Math.max(Q.maxPixels, b.mp2); dispatchEvent(new Event('resize'));
     return b;
   }
   function unboost() {
@@ -311,7 +311,10 @@ export function init(game) {
   }
   let settle = 0;
   function afterRender() {                    // right after composer.render(): the drawing buffer is still readable
-    if (!want) return; if (settle > 0) { settle--; return; } want = false;
+    if (!want) return; if (settle > 0) { settle--; return; }
+    // the viewer's frame-time governor may have lowered the budget again while the big frame was slow: put it back and wait a little
+    if (boost && renderer.getPixelRatio() < boost.to * 0.98 && boost.tries++ < 24) { Q.dpr = Math.max(Q.dpr, boost.to); Q.maxPixels = Math.max(Q.maxPixels, boost.mp2); dispatchEvent(new Event('resize')); settle = 2; return; }
+    want = false;
     const c = renderer.domElement, r = layoutCrop(), sx = Math.round(r.x / r.vw * c.width), sy = Math.round(r.y / r.vh * c.height);
     const sw = Math.min(c.width - sx, Math.round(r.w / r.vw * c.width)), sh = Math.min(c.height - sy, Math.round(r.h / r.vh * c.height));
     const out = document.createElement('canvas'); out.width = sw; out.height = sh; out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
@@ -352,6 +355,6 @@ export function init(game) {
       b.addEventListener('click', () => { lightbox.querySelector('img').src = s.img; lightbox.querySelector('span').textContent = `${s.place} · ${s.t}`; lightbox.hidden = false; }); g.appendChild(b); });
   } });
 
-  const api = { enter, leave, get active() { return active; }, state: st, cam, last: null, shoot, get shots() { return saved().shots; }, get pass() { return passRef; }, cropRect: layoutCrop };
+  const api = { enter, leave, get active() { return active; }, state: st, cam, last: null, shoot, get shots() { return saved().shots; }, get pass() { return passRef; }, cropRect: layoutCrop, walls };
   return api;
 }
