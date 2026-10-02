@@ -6,26 +6,29 @@ import { createCruise } from './cruise.js';
 
 export function init(game) {
   const session = createSession(game);
-  const count = (id) => { game.save.update('rides', (s) => ({ ...s, [id]: (s[id] || 0) + 1 }), {}); game.journal.refresh(); };
+  // a missing, null, non-object or older-shaped save starts from zero; only whole non-negative numbers are kept
+  const IDS = ['monorail', 'cruise', 'carousel'];
+  const counts = (raw) => { const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}; return Object.fromEntries(IDS.map((id) => [id, Number.isFinite(o[id]) && o[id] > 0 ? Math.floor(o[id]) : 0])); };
+  const count = (id) => { game.save.update('rides', (s) => { const c = counts(s); c[id]++; return c; }, {}); game.journal.refresh(); };
   const mods = {};
   const tryInit = (name, fn) => { try { const m = fn(); if (m) mods[name] = m; } catch (e) { console.warn('rides:', name, e); } };
   tryInit('monorail', () => createMonorail(game, session, { count }));
   tryInit('cruise', () => createCruise(game, session, { count }));
   tryInit('carousel', () => createCarousel(game, session, { count }));
   const WHERE = {
-    monorail: 'Board on the Meridian Loop platform, Meridian Rail.',
+    monorail: 'Board on the platform at the Meridian Rail station.',
     cruise: 'The jetty on the Brinewatch shore of Stillwater.',
-    carousel: 'The Pavilion of Wings, Rosewick Gardens.',
+    carousel: 'Rosewick Gardens.',
   };
-  const NAMES = { monorail: 'Monorail', cruise: 'Harbor cruise', carousel: 'Carousel' };
+  const NAMES = { monorail: 'Meridian Loop', cruise: 'Harbor Cruise', carousel: 'Pavilion of Wings' };
   game.journal.section({ id: 'rides', title: 'Rides', order: 60, render(el) {
-    const st = game.save.get('rides', {});
-    for (const id of ['monorail', 'cruise', 'carousel']) {
+    const st = counts(game.save.get('rides', {}));
+    for (const id of IDS) {
       if (id !== 'monorail' && !mods[id]) continue;
-      const n = st[id] || 0, p = document.createElement('p');
+      const n = st[id], p = document.createElement('p');
       p.innerHTML = `<b>${NAMES[id]}</b>: ${WHERE[id]} ${n ? `Ridden ${n} time${n === 1 ? '' : 's'}.` : 'Not ridden yet.'}`;
       el.appendChild(p);
     }
   } });
-  return { session, ...mods };
+  return { session, counts: () => counts(game.save.get('rides', {})), photoOk: () => session.photoOk, carry: (out) => session.carry(out), ...mods };
 }

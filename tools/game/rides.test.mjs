@@ -1,14 +1,16 @@
 // End-to-end test of fx/game/rides: the monorail, the harbor cruise and the carousel riders, on desktop and on the 390x844 touch layout.
 //   node rides.test.mjs [url] [--quick] [--mobile-only|--desktop-only]
 // Needs puppeteer-core (resolved from this folder or any parent) and a system Chromium; the viewer served over http (python3 -m http.server).
-// --quick skips the natural ends of the rides (the monorail lap is about 105 s, the cruise about 165 s, the carousel 60 s).
+// --quick (under 3 minutes, for every merge): desktop Wick and phone Wick only (no first-person pass), no natural ends of the rides
+// (the monorail lap is about 105 s, the cruise about 165 s, the carousel 60 s), the waiting train is moved to 5 s from the platform
+// (the test sets the lead car's own offset `userData.s`; nothing in the module), and the movement samples are shorter.
 // Screenshots go to $OUT (default /tmp/rides-test); look at them: the view from the train should show the park ahead.
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 
 const args = process.argv.slice(2), URL = args.find((a) => a.startsWith('http')) || 'http://127.0.0.1:8907/index.html', QUICK = args.includes('--quick');
 const OUT = process.env.OUT || '/tmp/rides-test'; fs.mkdirSync(OUT, { recursive: true });
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const wait = (ms) => new Promise((r) => setTimeout(r, QUICK ? Math.max(250, Math.round(ms * 0.55)) : ms));   // --quick: every fixed pause at about half (polling waits are unchanged)
 const results = []; const errs = new Map();
 const check = (name, pass, detail = '') => { results.push({ name, pass: !!pass, detail }); console.log((pass ? 'ok   ' : 'FAIL ') + name + (detail !== '' ? '  ' + (typeof detail === 'string' ? detail : JSON.stringify(detail)) : '')); };
 
@@ -62,22 +64,23 @@ async function run(mobile, fp) {
   const mono = await ev('(() => { const r = __park.game.modules.rides.monorail; return { x: r.board.x, y: r.board.y, z: r.board.z, yaw: r.faceYaw }; })()');
   await standAt(mono.x, mono.y, mono.z, mono.yaw);
   let pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
-  check(tag + ' monorail prompt', !pr[0] && /Board the monorail/.test(pr[1]), pr[1]);
+  check(tag + ' monorail prompt', !pr[0] && /Board the Meridian Loop/.test(pr[1]), pr[1]);
   const pl = await player(); check(tag + ' standing on the platform', Math.abs(pl[2] - 10) < 0.6, pl[2]);
   await shot('0-platform');
   await use();
   check(tag + ' camera borrowed', await until('__park.game.cameraHeld === "rides"', 4000, tag + ' board'));
   await wait(1200);
-  const t1 = await trackText(); check(tag + ' waiting text', /next train is \d+ seconds away|train is coming in/.test(t1), t1);
+  const t1 = await trackText(); check(tag + ' tracker names the ride (Meridian Loop)', /Meridian Loop:/.test(t1), t1);
+  check(tag + ' waiting text', /next train is \d+ seconds away|train is coming in/.test(t1), t1);
   const wickHidden = await ev('(() => { const g = __park.platformer && __park.platformer.character && __park.platformer.character.group; return g ? g.visible : "n/a"; })()');
   check(tag + ' Wick hidden while riding', wickHidden === false || wickHidden === 'n/a', wickHidden);
   await shot('1-waiting');
   if (await until('(() => { const r = __park.game.modules.rides.monorail.run; return !!r && r.phase === "ride"; })()', 100000, tag + ' train arrives')) {
     await wait(1500);
     check(tag + ' board event', await ev('__ev.some((e) => e[0] === "rides:board" && e[1] === "monorail")'));
-    const s = []; for (let i = 0; i < 5; i++) { s.push(await ev('(() => { const f = __fwd(), c = __park.camera.position; return [c.x, c.y, c.z, f.x, f.y, f.z]; })()')); await wait(i === 0 ? 1000 : 4500); }
+    const s = []; const STEP = 4500; for (let i = 0; i < 5; i++) { s.push(await ev('(() => { const f = __fwd(), c = __park.camera.position; return [c.x, c.y, c.z, f.x, f.y, f.z]; })()')); await wait(i === 0 ? 1000 : STEP); }
     const dist = Math.hypot(s[4][0] - s[0][0], s[4][2] - s[0][2]);
-    check(tag + ' moving along the track', dist > 60, `${dist.toFixed(0)} m in about 19 s`);
+    check(tag + ' moving along the track', dist > (QUICK ? 30 : 60), `${dist.toFixed(0)} m in about ${QUICK ? 11 : 19} s`);
     check(tag + ' camera height on the train', s.every((p) => p[1] > 11.8 && p[1] < 14.2), s.map((p) => +p[1].toFixed(2)));
     const v = [s[2][0] - s[1][0], s[2][2] - s[1][2]], vl = Math.hypot(...v), al = Math.hypot(s[1][3], s[1][5]);
     check(tag + ' looking forward along the track', (v[0] * s[1][3] + v[1] * s[1][5]) / (vl * al) > 0.85, +((v[0] * s[1][3] + v[1] * s[1][5]) / (vl * al)).toFixed(2));
@@ -104,17 +107,21 @@ async function run(mobile, fp) {
   const cr = await ev('(() => { const r = __park.game.modules.rides.cruise; return r ? { x: r.board.x, y: r.board.y, z: r.board.z, len: r.length } : null; })()');
   check(tag + ' cruise present', !!cr);
   if (cr) {
+    // the lantern punt: for every punt position on its 235 s circuit the planned wait keeps the two boats 6 m apart all the way round, and without a wait some would meet
+    const pp = await ev(`(() => { const c = __park.game.modules.rides.cruise, o = []; for (let s = 0; s < 270; s += 1.35) o.push(c.plan(s)); return { n: o.length, held: o.filter((p) => p.delay > 0).length, minClear: +Math.min(...o.map((p) => p.clear)).toFixed(1), maxDelay: Math.max(...o.map((p) => p.delay)) }; })()`);
+    check(tag + ' cruise plan keeps clear of the lantern punt', pp.minClear >= 6 && pp.held > 0 && pp.maxDelay < 60, pp);
     await standAt(cr.x, cr.y, 0, 0);
     pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
-    check(tag + ' cruise prompt', !pr[0] && /Take the harbor cruise/.test(pr[1]), pr[1]);
+    check(tag + ' cruise prompt', !pr[0] && /Take the Harbor Cruise/.test(pr[1]), pr[1]);
     await shot('5-jetty');
     await use();
     check(tag + ' cruise camera borrowed', await until('__park.game.cameraHeld === "rides"', 4000, tag + ' cruise board'));
     await wait(2500);
     const q = []; for (let i = 0; i < 4; i++) { q.push(await ev('(() => { const c = __park.camera.position; return [c.x, c.y, c.z, Math.hypot(c.x, c.z)]; })()')); await wait(5000); }
-    check(tag + ' boat under way, towards the Spire', q[3][3] < q[0][3] - 8, q.map((p) => +p[3].toFixed(1)));
+    check(tag + ' boat under way, towards the Spire', q[3][3] < q[0][3] - (QUICK ? 3 : 8), q.map((p) => +p[3].toFixed(1)));
     check(tag + ' camera at water level in the boat', q.every((p) => p[1] > 0.2 && p[1] < 2.2), q.map((p) => +p[1].toFixed(2)));
-    check(tag + ' tracker', /Harbor cruise/.test(await trackText()), await trackText());
+    check(tag + ' tracker', /Harbor Cruise/.test(await trackText()), await trackText());
+    check(tag + ' bow lantern glow hidden while riding', await ev('(() => { const c = __park.game.modules.rides.cruise; return !c.glow.sprite.visible; })()'));
     await shot('6-cruise');
     await drag(mobile ? 200 : 280); await wait(300); await shot('7-cruise-look'); await drag(mobile ? -200 : -280);
     await tap('#rides-leave'); await until('!__park.game.cameraHeld', 8000, tag + ' cruise leave'); await wait(500);
@@ -143,12 +150,12 @@ async function run(mobile, fp) {
     await ev('__rel()');
     await standAt(car.x, car.y, 0.7, Math.atan2(cy - car.y, cx - car.x));
     pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
-    check(tag + ' carousel prompt', !pr[0] && /Ride the carousel/.test(pr[1]), pr[1]);
+    check(tag + ' carousel prompt', !pr[0] && /Ride the Pavilion of Wings/.test(pr[1]), pr[1]);
     await use(); check(tag + ' carousel camera borrowed', await until('__park.game.cameraHeld === "rides"', 4000, tag + ' carousel board'));
     await wait(2500);
     const r1 = await ev('(() => { const c = __park.camera.position; return [Math.hypot(c.x + 135.04, c.z - 125.18), c.y, Math.atan2(c.z - 125.18, c.x + 135.04)]; })()'); await wait(2000);
     const r2 = await ev('(() => { const c = __park.camera.position; return [Math.hypot(c.x + 135.04, c.z - 125.18), c.y, Math.atan2(c.z - 125.18, c.x + 135.04)]; })()');
-    check(tag + ' on a horse, going round', Math.abs(r1[0] - 8.15) < 0.6 && Math.abs(r2[2] - r1[2]) > 0.2, `${r1[0].toFixed(2)} m out, ${(r2[2] - r1[2]).toFixed(2)} rad in 2 s`);
+    check(tag + ' on a horse, going round', Math.abs(r1[0] - 8.15) < 0.6 && Math.abs(r2[2] - r1[2]) > (QUICK ? 0.1 : 0.2), `${r1[0].toFixed(2)} m out, ${(r2[2] - r1[2]).toFixed(2)} rad in 2 s`);
     await shot('9-carousel-ride');
     if (!QUICK && !mobile && !fp) {
       check(tag + ' carousel ends by itself', await until('!__park.game.cameraHeld', 75000, tag + ' carousel natural end'));
@@ -190,7 +197,7 @@ async function run(mobile, fp) {
 }
 
 const only = args.includes('--mobile-only') ? 'm' : args.includes('--desktop-only') ? 'd' : '';
-if (only !== 'm') { await run(false, false); await run(false, true); }
+if (only !== 'm') { await run(false, false); if (!QUICK) await run(false, true); }
 if (only !== 'd') await run(true, false);
 const fails = results.filter((r) => !r.pass);
 console.log(JSON.stringify({ checks: results.length, failed: fails.map((f) => f.name), errs: [...errs].map(([k, v]) => v + 'x ' + k) }));
