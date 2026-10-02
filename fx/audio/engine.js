@@ -110,11 +110,21 @@ export function createAudio(opts) {
     N.comp = comp; N.lim = lim;
     // cut stage after the positional buses: a 30 ms dip hides listener teleports (HRTF kernels jumping) like a film cut
     N.cut = g(1); N.music.connect(N.cut); N.fx.connect(N.cut);
-    for (const b of [N.amb, N.cut, N.ui]) b.connect(N.mix);
+    // headphone crossfeed on the positional mix: a little of each side, low-passed and 0.3 ms late, into the other, so
+    // an equal-power source at 90 degrees is not silent in the far ear (HRTF voices already carry their own)
+    const split = ctx.createChannelSplitter(2), merge = ctx.createChannelMerger(2), xf = g(1);
+    N.cut.connect(xf); N.cut.connect(split);
+    for (const [from, to] of [[0, 1], [1, 0]]) {
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; const dl = ctx.createDelay(0.01); dl.delayTime.value = 0.0003; const k = g(0.22);
+      split.connect(lp, from); lp.connect(dl); dl.connect(k); k.connect(merge, 0, to);
+    }
+    merge.connect(xf);
+    for (const b of [N.amb, xf, N.ui]) b.connect(N.mix);
     N.mix.connect(comp); comp.connect(lim); lim.connect(N.out); N.out.connect(ctx.destination);
     // reverb: music + effects feed the send; two generated rooms (one on phones)
     N.cut.connect(N.send);
     N.revS = g(0); N.revL = g(0);
+    for (const r of [N.revS, N.revL]) { r.channelCount = 1; r.channelCountMode = 'explicit'; }    // mono into the rooms: a source hard on one side still fills both
     const cs = ctx.createConvolver(); cs.normalize = false; cs.buffer = S.impulse(ctx, mobile ? 1.2 : 0.9, { bright: 0.85, predelay: 0.006 });
     N.send.connect(N.revS); N.revS.connect(cs); cs.connect(N.mix); N.convS = cs;
     if (!mobile) { const cl = ctx.createConvolver(); cl.normalize = false; cl.buffer = S.impulse(ctx, 2.8, { bright: 0.35, predelay: 0.025 }); N.send.connect(N.revL); N.revL.connect(cl); cl.connect(N.mix); N.convL = cl; }
