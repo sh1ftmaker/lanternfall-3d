@@ -17,7 +17,7 @@ export function init(S) {
   const fig = new THREE.Mesh(geo, mat); fig.visible = false; fig.frustumCulled = false; fig.renderOrder = 6; game.scene.add(fig);
   const spots = []; let rail = null, button = null, cur = null, op = 0, offT = 0, viewT = 0, vanishing = false, ready = false;
   const fwd = new THREE.Vector3(), tmp = new THREE.Vector3();
-  const coat = () => S.state().coat || { seen: [], button: null };
+  const coat = () => { const c = S.state().coat; return c && typeof c === 'object' && Array.isArray(c.seen) ? c : { seen: [], button: (c && c.button) || null }; };
   const saveCoat = (c) => S.put({ coat: c });
 
   // fix the vantage points on the walk grid once the park is in (nearest cell with ground)
