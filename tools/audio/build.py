@@ -132,17 +132,17 @@ def bed_lantern():
 
 
 def bed_rosewick():
-    """Gardens: a fountain (618285), crickets (522299) and a soft distant murmur (546676, low-passed)."""
+    """Gardens: a fountain (618285), a breeze in the leaves and a soft distant murmur (546676, low-passed).
+    (The crickets are a few placed emitters now, crickets_loop: in every bed they never let up.)"""
     L = secs(18)
-    return width(rec(618285, L, lpf=6500, hpf=80, gain_db=-4) + rec(522299, L, lpf=7000, hpf=200, gain_db=-7) +
+    return width(rec(618285, L, lpf=6500, hpf=80, gain_db=-4) + lvl(sfx.leaves(L, 114), -13) +
                  rec(546676, L, lpf=2500, hpf=120, gain_db=-11))
 
 
 def bed_gap():
-    """Green gaps and woods: crickets (522299), a breeze in leaves, wind."""
+    """Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere."""
     L = secs(19)
-    return width(rec(522299, L, lpf=7000, hpf=150, search=(100, 220)) + lvl(sfx.leaves(L, 112), -11) +
-                 lvl(sfx.wind(L, 113, 50, 500, .6), -9))
+    return width(sfx.leaves(L, 112) + lvl(sfx.wind(L, 113, 50, 500, .6), 2))
 
 
 def bed_sky():
@@ -187,6 +187,12 @@ ITEMS['frost_drum']['cat'] = 'emit'
 @item('torch_loop', 'emit')
 def _():
     return mono(rec(483692, secs(9), lpf=7000, search=(200, 400)))
+
+
+@item('crickets_loop', 'emit')
+def _():
+    """Crickets at night (522299), for a few placed spots only."""
+    return mono(rec(522299, secs(13), lpf=7000, hpf=250, search=(100, 220)))
 
 
 @item('fountain_loop', 'emit')

@@ -56,7 +56,8 @@ async function nightShots(hash) {
   await browser.close(); return { out, logs };
 }
 {
-  const H = '#weather=clear&no-guests&no-motes&no-fireworks&nosim&noboat&no-emitters&fp' + (process.env.EXTRA || '');
+  // the other game modules are off: some place sprites with a random phase, which differ from run to run on their own
+  const H = '#weather=clear&no-guests&no-motes&no-fireworks&nosim&noboat&no-emitters&fp&no-lamps&no-bounty&no-secrets&no-trials&no-rides&no-photo' + (process.env.EXTRA || '');
   const A = await nightShots(process.env.NOISE ? H + '&no-daynight' : H), B = await nightShots(H + '&no-daynight');
   const { browser, page } = await open('#no-game');
   let total = 0;
@@ -82,6 +83,7 @@ async function nightShots(hash) {
 {
   const { browser, page, logs, ev } = await open('#weather=clear&fp');
   await ev("__park.setMode('walk',{at:[288,0],yaw:Math.PI})"); await wait(1200);
+  await ev('__park.game.modules.clock && (__park.game.modules.clock.hold = true)');      // the clock module runs the evening: hold it so the time is comparable
   for (const [tid, t] of [['1815', m(18, 15)], ['2300', m(23, 0)]]) {
     await ev(`__park.game.clock.set(${t})`); await wait(2600);
     for (const w of ['rain', 'storm']) { await ev(`__park.weather.set('${w}',{instant:true})`); await wait(2500); await shot(page, `${OUT}/wx_${w}_${tid}.jpg`); }
