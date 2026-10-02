@@ -80,7 +80,7 @@ Lost things:
 | ticket | 35.5 | 114.9 | 0.12 | 0.12 |
 | cap | 107.1 | -32.8 | 0.13 | 0.13 |
 | tag | 39.1 | -153.6 | 0.09 | 0.09 |
-| net | -133.2 | -113.9 | 0.45 | 0.45 |
+| net | -136.5 | -114.0 | 0.45 | 0.45 |
 | postcard | 284 | 6 | 0.12 | 0.12 |
 
 
@@ -112,3 +112,9 @@ Serve the repo, then `node tools/game/bounty.test.mjs http://127.0.0.1:8904/inde
 `puppeteer-core`; desktop and 390x844 touch). It walks to the board, takes and finishes three jobs, rings the bell five
 times, stamps posts (a roof post by the pole swing with `__park.platformer.test.input`, others in first person with `E`),
 returns a lost thing, reloads to check persistence and claims a lantern colour.
+
+## Finishing-wave notes
+- Props are merged: each prop is one mesh (vertex colours, one shared material registered with `game.props.materials` and announced with `game.emit('prop')` when they exist). A stamp post's flag and the net's canopy are separate meshes. Everything is hidden outside Walk and beyond 70 m (posts 90 m, boats 130 m), so at the East Gate bounty draws the postcard and its glow only.
+- A job half done at the day change is carried over (it joins the new three, with what you hold for it) and a toast says so. The day never goes back: an earlier system date leaves the last day seen in place.
+- The tracker shows the most advanced active job (one you hold the item for), then the nearest, with "(+N more)". The candle prop is removed when its night ends.
+- Test hooks: `test.rollDay()` (unforced), `test.candle()`.
