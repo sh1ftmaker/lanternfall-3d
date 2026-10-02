@@ -657,6 +657,17 @@ export function createAudio(opts) {
       return out;
     } catch (e) { st.specFrom = 'placeholder'; st.err = String(e.message || e); return base; }
   }
+  // surface classes for footsteps: data/guestground.bin described in data/guests.json (guests-data; optional)
+  async function loadGround() {
+    if (ground || opts.synth) return;
+    try {
+      const gj = await (await fetch(DATA + 'guests.json')).json(), G = gj && gj.ground; if (!G || !G.file) return;
+      const res = await fetch(DATA + G.file); if (!res.ok) return;
+      let u8 = new Uint8Array(await res.arrayBuffer());
+      if (u8[0] === 0x1f && u8[1] === 0x8b) u8 = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      if (u8.length >= G.w * G.h) ground = { w: G.w, h: G.h, x0: G.x0, y0: G.y0, cell: G.cell, data: u8 };
+    } catch (e) { /* no grid: footsteps guess from the land and the walk height */ }
+  }
   let starting = null;
   async function start() {
     st.loading = true;
@@ -666,6 +677,7 @@ export function createAudio(opts) {
     buildSources();
     st.ready = true; st.loading = false;
     L.first = true; trackOnly();
+    loadGround();
     for (const [n, list] of Object.entries(spec.shots)) for (const a of list) if (/^(ui_click|footstep_|splash|firework|lantern_release)/.test(n)) request(a, n === 'ui_click' ? 0 : 1e5);   // small, after what is audible
   }
   function rampOut(to, t = 0.12) { if (!N) return; const g = N.out.gain, now = ctx.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(to, now + t); }

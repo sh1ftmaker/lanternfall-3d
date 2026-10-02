@@ -89,7 +89,8 @@ export function makeDensity(lands) {
       if (i < 0 || j < 0 || i >= G.w || j >= G.h) continue;
       const d = Math.hypot(i - ci, j - cj) * G.cell; n += grid[j * G.w + i] * Math.exp(-((d / 14) ** 2));
     }
-    return 1 - Math.exp(-n / 28);
+    const pop = typeof crowd.active === 'number' && crowd.active > 0 ? crowd.active : (crowd.count || 2400);
+    return 1 - Math.exp(-(n * 2400 / Math.max(300, pop)) / 28);       // phones draw fewer guests: same busy-ness
   }
   return {
     setCrowd(c) { crowd = c && c.state ? c : null; have = false; },

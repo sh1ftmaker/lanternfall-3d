@@ -16,6 +16,7 @@ import * as FX from './fx/index.js';
 import { createSurface } from './fx/surface.js';
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
+import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
 
 const DATA = 'data/';
@@ -340,6 +341,7 @@ function meshFrom(geometry, m) {
 const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
 let manifest, nav = null, trains = [], lanterns = null, forest = [], fxWater = null;
+let guests = null;                                   // park guests (fx/guests/render.js); '#no-guests' turns them off
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -526,6 +528,20 @@ async function load() {
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
       if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
       if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
+      // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
+      if (!HASH.has('no-guests')) {
+        const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
+        const gWant = [...HASH].map((h) => /^guests=(\d+)$/.exec(h)).find(Boolean);
+        const gCount = gWant ? Math.min(+gWant[1], 4000) : (mobile ? 600 : 2400), gPool = Math.ceil(Math.max(gCount, 400) * 1.7);   // the simulation keeps spare pool entries
+        guests = createGuests({ THREE, scene, crowd: null, standIn: HASH.has('guests-standin'), max: gPool, uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
+        if (PREFS.guests === false) guests.setVisible(false);
+        // the crowd simulation (fx/guests/sim.js, in a Worker) drives the guests; '#guests-standin' keeps the renderer's
+        // built-in random walkers instead, '#guests=N' sets the crowd size
+        if (!HASH.has('guests-standin')) import('./fx/guests/sim.js').then(async (S) => {
+          const r = await fetch(DATA + 'guests.json' + dataTag).catch(() => null); const pois = r && r.ok ? await r.json().catch(() => null) : null;
+          guests.setCrowd(S.createCrowd({ nav, manifest, pois, count: gCount, max: gPool, seed: 1, reduceMotion, fetchBin }), { drive: true });
+        }).catch((e) => { console.warn('guests: no simulation, using the stand-in crowd', e); guests.allowStandIn(); });
+      }
       ready = true; tourClock = 0; perf.n = -600; moonShadow();
       if (mode === 'orbit') { controls.target.set(0, 8, 0); controls.enabled = true; setCaption(places[0]); }
       $('#veil').classList.add('done'); pill.hidden = false; showHint();
@@ -841,16 +857,19 @@ settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQ
     { id: 'fireworks', label: 'Fireworks', on: Q.fx.fireworks },
     { id: 'mist', label: 'Mist on the lake', on: Q.fx.mist },
     { id: 'beams', label: 'Searchlights', on: Q.fx.beams },
+    { id: 'guests', label: 'Guests', on: !HASH.has('no-guests') && PREFS.guests !== false },      // guests hook
     { id: 'reduceMotion', label: 'Reduce motion', on: reduceMotion },
   ],
   onToggle(id, on) {
-    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (on) controls.autoRotate = false; return; }
+    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (guests) guests.setReduceMotion(on); if (on) controls.autoRotate = false; return; }
+    if (id === 'guests') { if (guests) guests.setVisible(on); return; }      // guests hook
     FX.fxSet(Q, id, on);
   } });
 if (quality === 'fast') setHD(false);
 /* ── sound (fx/audio/): nothing audio is fetched before the sound button; the engine follows the camera ── */
 const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mobile, getMode: () => mode, getWalk: () => walk, getTrains: () => trains,
-  fx: () => FX.fxState(), getTour: () => (ready && mode === 'tour' ? tourClock % tourLen : -1), getWater: () => fxWater });
+  fx: () => FX.fxState(), getTour: () => (ready && mode === 'tour' ? tourClock % tourLen : -1), getWater: () => fxWater,
+  getCrowd: () => (guests && guests.crowd && guests.crowd.state ? guests.crowd : null) });     // murmur follows the guests' local density
 /* ── end sound ── */
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
@@ -868,7 +887,7 @@ function adapt(ms) {
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
-  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step);
+  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step);
   // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
   // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
   if (perf.step === 1) {
@@ -928,6 +947,7 @@ function frame() {
   if ((lodTick & 15) === 0) view.want = coveredBand();
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
+  if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
@@ -937,7 +957,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { sound, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { sound, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;
