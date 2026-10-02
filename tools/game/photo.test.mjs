@@ -90,7 +90,7 @@ async function run(mobile, quality) {
     await ev("document.querySelector('#ph-shutter').click()"); await wait(1800);
     const last = await ev('(()=>{const l=__park.game.modules.photo.last; return l && {w:l.w,h:l.h,size:l.blob.size,name:l.name,type:l.blob.type}})()');
     check(last && last.size > 8000 && Math.abs(last.w / last.h - 0.8) < 0.01, `${tag}/${m}: picture ${last && last.w}x${last && last.h} ${last && last.size} bytes ${last && last.name}`);
-    check(last && /^lanternfall-\d{4}-\d\d-\d\d-\d{4}\.jpg$/.test(last.name), `${tag}/${m}: file name`);
+    check(last && /^lanternfall-\d{4}-\d\d-\d\d-\d{6}\.jpg$/.test(last.name), `${tag}/${m}: file name`);
     check((await ev('__dl.length')) + (await ev('__shared.length')) === dl0 + 1, `${tag}/${m}: delivered once (${mobile ? 'share' : 'download'})`);
     await shot(m + '-4-saved');
     // leave and compare
