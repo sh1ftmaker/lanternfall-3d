@@ -19,18 +19,19 @@ export function init(S) {
         float y = vP.y / uTop + 0.5;                                        // 0 at the foot, 1 at the top
         float edge = pow(abs(dot(normalize(vN), vec3(0.0, 0.0, 1.0))), 1.4);   // soft sides
         float reach = smoothstep(uRise + 0.08, uRise - 0.04, y);               // the front climbing the shaft
-        float a = uK * reach * (0.35 + 0.65 * edge) * (1.0 - 0.55 * y);
-        gl_FragColor = vec4(vec3(1.0, 0.78, 0.42) * a * 1.4, a);
+        float a = uK * reach * (0.25 + 0.75 * edge) * (1.0 - 0.45 * y);
+        gl_FragColor = vec4(vec3(1.0, 0.78, 0.42) * a * 2.4, a);
       }`,
   });
-  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 3.4, TOP, 24, 1, true), mat);
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 5.2, TOP, 28, 1, true), mat);
   cyl.frustumCulled = false; cyl.renderOrder = 9; cyl.visible = false; cyl.position.set(SPIRE[0], 0.6 + TOP / 2, -SPIRE[1]); game.scene.add(cyl);
   const top = game.props.glow({ x: SPIRE[0], y: SPIRE[1], z: TOP, color: [1, 0.7, 0.35], size: 18 }); top.sprite.visible = false;
   let tl = -1;
   function answer() {
     tl = 0; cyl.visible = true; top.sprite.visible = true;
-    const snd = game.ctx.sound, play = (tries) => { if (!snd || !snd.enabled) return; if (!snd.play('spire_bell_1', [SPIRE[0], SPIRE[1], 44], { gain: 1.4, rate: 0.5, ref: 80, max: 1200 }) && tries > 0) setTimeout(() => play(tries - 1), 1200); };
-    play(3); setTimeout(() => { if (snd && snd.enabled) snd.play('spire_bell_1', [SPIRE[0], SPIRE[1], 44], { gain: 1.0, rate: 0.38, ref: 80, max: 1200 }); }, 2600);
+    const eng = () => { const e = game.ctx.sound && game.ctx.sound.engine; return e && e.enabled ? e : null; };
+    const deep = (rate, gain, tries) => { const e = eng(); if (e && !e.play('spire_bell', [SPIRE[0], SPIRE[1], 44], { gain, rate, ref: 80, max: 1200 }) && tries > 0) setTimeout(() => deep(rate, gain, tries - 1), 1200); };
+    deep(0.5, 1.4, 3); setTimeout(() => deep(0.38, 1.0, 1), 2600);
     S.found('bell');
   }
   game.on('frame', ({ dt }) => {
@@ -49,7 +50,7 @@ export function init(S) {
   setTimeout(() => {
     if (realSeen) return;
     const gz = game.ground(BELL[0], BELL[1]);
-    own = game.interact({ id: 'secrets-bell', x: BELL[0], y: BELL[1], z: gz ?? 0.3, r: 3.2, label: 'Ring the bell', use() { game.sound('strength_bell_1', [BELL[0], BELL[1], 2.5]); } });
+    own = game.interact({ id: 'secrets-bell', x: BELL[0], y: BELL[1], z: gz ?? 0.3, r: 3.2, label: 'Ring the bell', use() { game.sound('guild_strength_bell', [BELL[0], BELL[1], 2.5]); } });
   }, 10000);
   return { get count() { return count; }, get own() { return own; }, answer, ring: () => { if (++count === RINGS) answer(); }, reset: () => { count = 0; } };
 }

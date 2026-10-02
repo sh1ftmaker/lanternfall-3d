@@ -16,7 +16,7 @@ export function init(S) {
     busy = true; t = 0;
     S.fade(() => {
       lib.goTo(WAKE.x, WAKE.y, WAKE.z, WAKE.yaw);
-      setTimeout(() => game.toast('You wake high above the lake, and somebody has tucked the night in around you.', { ms: 6500 }), 600);
+      setTimeout(() => game.toast("You wake on the Spire's gallery, and the whole lake is quiet below.", { ms: 6500 }), 600);
     }, { color: '#0d0b26', slow: true }).then(() => { busy = false; });
     S.found('nap');
   });
