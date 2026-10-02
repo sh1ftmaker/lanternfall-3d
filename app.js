@@ -103,7 +103,10 @@ function buildComposer() {
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
   const dopt = depthTargetOptions(THREE, renderer, size.x, size.y);
-  if (Q.photo && Q.photo.depth && !dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);   // game hook: photo (focus blur reads depth)
+  if (Q.photo && Q.photo.depth) {             // game hook: photo (focus blur reads depth)
+    if (!dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);
+    dopt.resolveDepthBuffer = true;           // reversed depth turns the resolve off; with MSAA (HD on desktop) the blur then read an empty depth texture
+  }
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...dopt });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
