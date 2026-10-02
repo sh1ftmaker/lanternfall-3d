@@ -40,12 +40,13 @@ export function createGame(ctx) {
   /* ── saved state: one JSON object, one key per module. A write merges this tab's changed keys into what is stored (another
      tab may have saved its own keys meanwhile); a changed key that does not fit keeps its last stored value (and lasts this
      visit only) rather than costing everyone's progress; a blob that will not parse is kept aside under STORE + '.bad' ── */
+  let badRaw = null;
   const read = () => {
     let raw = null; try { raw = localStorage.getItem(STORE); } catch (e) { return {}; }
     if (raw == null) return {};
     try { const o = JSON.parse(raw); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* below */ }
-    try { localStorage.setItem(STORE + '.bad', raw); } catch (e) { /* no room: it is lost */ }
-    console.warn('game: saved progress could not be read; kept aside as', STORE + '.bad'); return {};
+    if (raw !== badRaw) { badRaw = raw; try { localStorage.setItem(STORE + '.bad', raw); } catch (e) { /* no room: it is lost */ } console.warn('game: saved progress could not be read; kept aside as', STORE + '.bad'); }
+    return {};
   };
   let data = read(), dirty = 0; const changed = new Set(), unsaved = new Set();
   function flush() {
