@@ -21,6 +21,8 @@ every land, and at eleven ten thousand paper lanterns come down onto the water.
 | **Explore** (`2`) | Free orbit; the place chips fly you to each land | Drag, scroll, right-drag; arrows or WASD, `+`/`-`, Shift+arrows to pan | Drag, pinch, two-finger pan |
 | **Walk** (`3`) | First person on the ground; the chips drop you at each land | WASD or arrows, drag to look, Shift to run, `Esc` to leave | Left thumb walks, right thumb looks |
 
+Press `H` or the eye button to hide the controls for an unobstructed view; `H`, `Esc` or the faint button in the corner brings them back.
+
 `F` toggles full screen. The settings button (top right) has the picture quality (**Fast**, **HD**, **Cinematic**),
 switches for fireworks, lake mist and searchlights, and **Reduce motion** (also taken from the system setting).
 Cinematic is the default on computers, HD on phones.
