@@ -94,7 +94,7 @@ export function createAudio(opts) {
   const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), pf: new THREE.Vector3(0, 0, -1), w: 0, slowFor: 0, hrtfOk: true, cutUntil: 0, first: true };
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
-  let nyq = 20000, solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
+  let fwRecent = [], nyq = 20000, solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
   const shellSeen = new Float64Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
@@ -512,7 +512,11 @@ export function createAudio(opts) {
         const dl = pad.distanceTo(L.p) / C, db_ = tmp.set(burst.x, burst.y, burst.z).distanceTo(L.p) / C;
         const late = time - (tb - FLIGHT);                     // frames can come late: the launch was this long ago
         if (late < dl + 0.5) play('firework_launch', pad, { delay: dl - late, gain: 0.55 });
-        play('firework_burst', tmp.clone(), { delay: (tb - time) + db_, gain: 0.7 });
+        // a volley is many bursts: each is quieter the more there were in the last 3 s, so a finale stays a finale
+        // and not a wall (1.6 shells/s, the tour's rate, comes out about 4 dB down per burst)
+        fwRecent = fwRecent.filter((q) => time - q < 3); fwRecent.push(time);
+        const k = 1 / Math.sqrt(Math.max(1, fwRecent.length / 2));
+        play('firework_burst', tmp.clone(), { delay: (tb - time) + db_, gain: 0.7 * k, scale: k });
       }
     }
     // lanterns leave the Spire gallery in waves every 12.5 s (fx/lanterns.js: PERIOD 300 s / 24 waves), each over ~5.6 s
