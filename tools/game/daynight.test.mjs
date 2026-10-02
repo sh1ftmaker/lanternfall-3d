@@ -97,7 +97,8 @@ async function nightShots(hash) {
   const before = await ev('__park.game.modules.daynight.state.phase + "|" + __park.game.modules.daynight.time');
   const lost = await ev(`(async()=>{const gl=__park.renderer.getContext();const e=gl.getExtension('WEBGL_lose_context');e.loseContext();await new Promise(r=>setTimeout(r,600));e.restoreContext();await new Promise(r=>setTimeout(r,3500));return gl.isContextLost()?'lost':'restored'})()`);
   const after = await ev('__park.game.modules.daynight.state.phase + "|" + __park.game.modules.daynight.time');
-  check(lost === 'restored' && before === after, `context restore keeps the time of day (${before} -> ${after}, ${lost})`);
+  const [pb, tb] = before.split('|'), [pa, ta] = after.split('|');   // the shown time still eases toward the clock's for a moment after a set: allow a minute
+  check(lost === 'restored' && pb === pa && Math.abs(ta - tb) < 1, `context restore keeps the time of day (${before} -> ${after}, ${lost})`);
   await shot(page, `${OUT}/ctx_restored.jpg`);
   // rough frame cost: frames in 3 s at dusk vs night (other agents share the GPU: only a ballpark)
   const fps = async () => ev('new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++;if(performance.now()-t0>3000)r(+((performance.now()-t0)/n).toFixed(1));else requestAnimationFrame(f)};requestAnimationFrame(f)})');

@@ -46,7 +46,7 @@ async function run(mobile) {
   await load();
   res.loadS = Math.round((Date.now() - t0) / 1000);
   ok('modules', (await ev('Object.keys(__park.game.modules).sort().join()')) === [...MODULES].sort().join(), await ev('Object.keys(__park.game.modules).join()'));
-  ok('fresh save', (await ev("localStorage.getItem('lanternfall.game.v1')")) === null);
+  ok('fresh save', await ev("(()=>{const g=__park.game,M=g.modules;return M.lamps.lit()===0&&M.photo.shots.length===0&&!M.secrets.isFound('doors')})()"));   // (modules may write their own defaults at start)
   ok('tour: no game interface', await ev("document.querySelector('#game-track').hidden && document.querySelector('#game-prompt').hidden && !document.querySelector('#game-toasts').children.length"));
   await shot('0-tour');
   await tap('#m-walk'); await wait(1500);
