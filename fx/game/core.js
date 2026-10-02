@@ -164,22 +164,26 @@ export function createGame(ctx) {
   }
 
   /* ── interactables ── */
-  const inter = new Set(); let near = null;
+  const inter = []; let near = null;          // an array: walked every frame without an iterator
   function interact(o) {
     const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o };
-    it.remove = () => { inter.delete(it); if (near === it) { near = null; promptEl.hidden = true; promptKey.it = null; } };
+    it.remove = () => { const i = inter.indexOf(it); if (i >= 0) inter.splice(i, 1); if (near === it) { near = null; promptEl.hidden = true; promptKey.it = null; } };
     it.move = (x, y, z = it.z) => { it.x = x; it.y = y; it.z = z; };
-    inter.add(it); return it;
+    inter.push(it); return it;
   }
-  const dist = (it) => Math.hypot(it.x - player.x, it.y - player.y, (it.z - player.z) * 0.6);
   const usable = (it) => { if (!it.enabled) return false; if (!it.show) return true; try { return !!it.show(); } catch (e) { fail('interact show ' + it.id, it.show, e); return false; } };
   const labelOf = (it) => { try { return String((typeof it.label === 'function' ? it.label() : it.label) ?? ''); } catch (e) { it.enabled = false; console.warn('game: interact', it.id, 'label failed; switched off', e); return ''; } };
   function findNear(extra = 0, swing = false) {     // swing: only what the pole can use (a swing passes over a swing: false thing)
     let best = null, bd = Infinity;
-    for (const it of inter) { if (swing && !it.swing) continue; const d = dist(it); if (d < it.r + extra && d < bd && usable(it)) { bd = d; best = it; } }   // show() only for those in reach
+    const px = player.x, py = player.y, pz = player.z;
+    for (let i = 0; i < inter.length; i++) {      // squared distances, inline: this runs every frame over every interactable
+      const it = inter[i]; if (swing && !it.swing) continue;
+      const dx = it.x - px, dy = it.y - py, dz = (it.z - pz) * 0.6, d = dx * dx + dy * dy + dz * dz, r = it.r + extra;
+      if (d < r * r && d < bd && usable(it)) { bd = d; best = it; }     // show() only for those in reach
+    }
     return best;
   }
-  function use(it = near) { if (!it || !inter.has(it) || !usable(it)) return false; try { it.use(it); } catch (e) { console.warn('game: use', it.id, e); } emit('use', { id: it.id }); return true; }
+  function use(it = near) { if (!it || !inter.includes(it) || !usable(it)) return false; try { it.use(it); } catch (e) { console.warn('game: use', it.id, e); } emit('use', { id: it.id }); return true; }
   const kbdE = el('kbd'); kbdE.textContent = 'E';
   promptEl.addEventListener('click', () => use());
   addEventListener('keydown', (e) => {
@@ -286,7 +290,7 @@ export function createGame(ctx) {
     save, on, emit, player, v3, ground, lightAt, interact, use, toast, track, journal, props, clock, frame,
     takeCamera, drive, get cameraHeld() { return driver ? driver.name || true : false; },
     sound: (name, pos) => ctx.sound.play(name, pos),
-    setMode: ctx.setMode, teleport, esc, get interactables() { return [...inter]; },
+    setMode: ctx.setMode, teleport, esc, get interactables() { return inter.slice(); },
     modules: {}, get started() { return started; },
     // app.js calls this once the park can be walked: loads the modules, then 'start' fires
     async start() {
