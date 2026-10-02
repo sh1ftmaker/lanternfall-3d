@@ -17,7 +17,7 @@ export function createDepth(THREE, camera, opt = {}) {
   const floor = opt.floor ?? -0.8;                       // nothing in the park is lower than the lake surface
   const grid = new Float32Array(N * N).fill(floor);
   const st = { near: camera.near, far: camera.far, clearance: 0, jitter: 1, on: opt.on !== false,
-    nearMin: opt.nearMin || 0.12, nearMax: opt.nearMax || 90, k: opt.k || 0.5 };
+    nearMin: opt.nearMin || 0.12, nearMax: opt.nearMax || 90, k: opt.k || 0.5, cap: Infinity };
   const ci = (v) => Math.min(N - 1, Math.max(0, Math.floor((v + HALF) / CELL)));
   function mark(x0, x1, z0, z1, h) {                    // raise every cell overlapping [x0,x1] x [z0,z1] to h
     const i0 = ci(x0), i1 = ci(x1), j0 = ci(z0), j1 = ci(z1);
@@ -68,7 +68,9 @@ export function createDepth(THREE, camera, opt = {}) {
     if (!st.on) return;
     const R = st.nearMax / st.k;
     st.clearance = clearance(camera.position, R);
-    const near = Math.min(st.nearMax, Math.max(nearFloor ?? st.nearMin, st.k * st.clearance)) * st.jitter;
+    // st.cap: an upper bound set by moving things the grid does not know about (fx/guests/render.js: half the
+    // distance to the nearest guest), so close figures are not cut by the near plane
+    const near = Math.min(st.nearMax, Math.max(nearFloor ?? st.nearMin, Math.min(st.k * st.clearance, st.cap))) * st.jitter;
     if (Math.abs(near - camera.near) > 1e-6 * near) { camera.near = near; camera.updateProjectionMatrix(); }
     st.near = near;
   }
