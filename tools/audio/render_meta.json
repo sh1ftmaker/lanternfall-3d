@@ -72,7 +72,7 @@
   "true_peak": -3.99
  },
  "bed_brinewatch": {
-  "bytes": 149193,
+  "bytes": 239393,
   "cat": "bed",
   "channels": 2,
   "doc": "Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574).",
@@ -80,16 +80,16 @@
   "group": null,
   "loop": [
    0.5,
-   17.5
+   28.5
   ],
-  "lufs": -24.0,
-  "seconds": 17.0,
+  "lufs": -24.1,
+  "seconds": 28.0,
   "sources": [
    31574,
    843246
   ],
-  "src_wrap": 0.152,
-  "true_peak": -3.35
+  "src_wrap": 0.003,
+  "true_peak": -7.88
  },
  "bed_frostmere": {
   "bytes": 206547,
@@ -132,7 +132,7 @@
   "true_peak": -12.02
  },
  "bed_gate": {
-  "bytes": 156575,
+  "bytes": 238550,
   "cat": "bed",
   "channels": 2,
   "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), a little night air in the trees (37873).",
@@ -140,20 +140,20 @@
   "group": null,
   "loop": [
    0.5,
-   18.5
+   28.5
   ],
-  "lufs": -24.07,
-  "seconds": 18.0,
+  "lufs": -24.09,
+  "seconds": 28.0,
   "sources": [
    37873,
    741283,
    848976
   ],
-  "src_wrap": 0.265,
-  "true_peak": -2.99
+  "src_wrap": 0.363,
+  "true_peak": -7.98
  },
  "bed_guildhollow": {
-  "bytes": 140274,
+  "bytes": 238763,
   "cat": "bed",
   "channels": 2,
   "doc": "Courtyard evening crowd (741283) + torches crackling (483692).",
@@ -161,19 +161,19 @@
   "group": null,
   "loop": [
    0.5,
-   16.5
+   28.5
   ],
   "lufs": -24.0,
-  "seconds": 16.0,
+  "seconds": 28.0,
   "sources": [
    483692,
    741283
   ],
-  "src_wrap": 0.217,
-  "true_peak": -10.1
+  "src_wrap": 0.292,
+  "true_peak": -8.82
  },
  "bed_lake": {
-  "bytes": 148554,
+  "bytes": 239013,
   "cat": "bed",
   "channels": 2,
   "doc": "The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices.",
@@ -181,19 +181,19 @@
   "group": null,
   "loop": [
    0.5,
-   17.5
+   28.5
   ],
-  "lufs": -24.0,
-  "seconds": 17.0,
+  "lufs": -24.03,
+  "seconds": 28.0,
   "sources": [
    352356,
    435206
   ],
-  "src_wrap": 0.106,
-  "true_peak": -4.08
+  "src_wrap": 0.049,
+  "true_peak": -7.9
  },
  "bed_lantern-row": {
-  "bytes": 140686,
+  "bytes": 239680,
   "cat": "bed",
   "channels": 2,
   "doc": "A bustling night market walked through (752436) with chimes tuned to the park's pentatonic.",
@@ -201,18 +201,18 @@
   "group": null,
   "loop": [
    0.5,
-   16.5
+   28.5
   ],
-  "lufs": -24.0,
-  "seconds": 16.0,
+  "lufs": -24.01,
+  "seconds": 28.0,
   "sources": [
    752436
   ],
-  "src_wrap": 0.181,
-  "true_peak": -6.84
+  "src_wrap": 0.133,
+  "true_peak": -7.95
  },
  "bed_meridian": {
-  "bytes": 140289,
+  "bytes": 238723,
   "cat": "bed",
   "channels": 2,
   "doc": "Plaza crowd (848976) and a low electric hum under the neon. The stretch is the one with the fewest stand-out\n    events (the old one had a beep 29 dB over the crowd, heard every 16 s all over the land).",
@@ -220,15 +220,15 @@
   "group": null,
   "loop": [
    0.5,
-   16.5
+   28.5
   ],
-  "lufs": -24.0,
-  "seconds": 16.0,
+  "lufs": -24.03,
+  "seconds": 28.0,
   "sources": [
    848976
   ],
-  "src_wrap": 0.106,
-  "true_peak": -8.25
+  "src_wrap": 0.136,
+  "true_peak": -7.96
  },
  "bed_rosewick": {
   "bytes": 156707,
@@ -483,7 +483,7 @@
   "true_peak": -9.33
  },
  "crowd_murmur": {
-  "bytes": 148637,
+  "bytes": 238978,
   "cat": "bed",
   "channels": 2,
   "doc": null,
@@ -491,15 +491,15 @@
   "group": null,
   "loop": [
    0.5,
-   17.5
+   28.5
   ],
   "lufs": -24.0,
-  "seconds": 17.0,
+  "seconds": 28.0,
   "sources": [
    848976
   ],
-  "src_wrap": 0.127,
-  "true_peak": -7.96
+  "src_wrap": 0.17,
+  "true_peak": -7.87
  },
  "crowd_sparse": {
   "bytes": 132050,

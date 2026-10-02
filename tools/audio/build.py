@@ -95,22 +95,23 @@ def width(x, target=0.35):
 def bed_gate():
     """Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival
     walla (848976), a little night air in the trees (37873)."""
-    L = secs(18)
-    return width(rec(741283, L, lpf=6500, hpf=90, search=(0, 30)) + rec(848976, L, lpf=4000, hpf=100, gain_db=-6) +
+    L = secs(28)
+    return width(rec(741283, L, lpf=6500, hpf=90, search=(0, 34), calm=True) +
+                 rec(848976, L, lpf=4000, hpf=100, gain_db=-6, search=(55, 100), calm=True) +
                  wind_rec(37873, L, hpf=200, lpf=5000, search=(12, 66), gain_db=-14))
 
 
 def bed_lake():
     """The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices."""
-    L = secs(17)
-    return width(rec(352356, L, lpf=5000, hpf=60) + lvl(sfx.lapping(L, 21), -7) +
+    L = secs(28)
+    return width(rec(352356, L, lpf=5000, hpf=60, search=(0, 165), calm=True) + lvl(sfx.lapping(L, 21), -7) +
                  wind_rec(435206, L, hpf=200, lpf=5000, search=(125, 235), gain_db=-12))
 
 
 def bed_guild():
     """Courtyard evening crowd (741283) + torches crackling (483692)."""
-    L = secs(16)
-    return width(rec(741283, L, lpf=5500, hpf=90, search=(35, 70)) + rec(483692, L, lpf=7000, hpf=150, gain_db=-8))
+    L = secs(28)
+    return width(rec(741283, L, lpf=5500, hpf=90, search=(36, 71), calm=True) + rec(483692, L, lpf=7000, hpf=150, gain_db=-8))
 
 
 def bed_frost():
@@ -122,8 +123,8 @@ def bed_frost():
 def bed_meridian():
     """Plaza crowd (848976) and a low electric hum under the neon. The stretch is the one with the fewest stand-out
     events (the old one had a beep 29 dB over the crowd, heard every 16 s all over the land)."""
-    L = secs(16)
-    return width(rec(848976, L, lpf=6500, hpf=100, search=(0, 100), calm=True) + lvl(sfx.hum(L, 51), -17))
+    L = secs(28)
+    return width(rec(848976, L, lpf=6500, hpf=100, search=(0, 55), calm=True) + lvl(sfx.hum(L, 51), -17))
 
 
 def bed_wanderers():
@@ -134,14 +135,14 @@ def bed_wanderers():
 
 def bed_brine():
     """Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574)."""
-    L = secs(17)
-    return width(rec(843246, L, lpf=6000, hpf=110) + rec(31574, L, lpf=4000, hpf=120, gain_db=-7))   # hull slaps: thuds, not rumble
+    L = secs(28)
+    return width(rec(843246, L, lpf=6000, hpf=110, search=(0, 185), calm=True) + rec(31574, L, lpf=4000, hpf=120, gain_db=-7))   # hull slaps: thuds, not rumble
 
 
 def bed_lantern():
     """A bustling night market walked through (752436) with chimes tuned to the park's pentatonic."""
-    L = secs(16)
-    return width(rec(752436, L, lpf=5500, hpf=100) + lvl(sfx.chimes(L, 91, rate=.35), -15))
+    L = secs(28)
+    return width(rec(752436, L, lpf=5500, hpf=100, search=(0, 486), calm=True) + lvl(sfx.chimes(L, 91, rate=.35), -15))
 
 
 def bed_rosewick():
@@ -191,7 +192,7 @@ for nm, fn in [('gate', bed_gate), ('lake', bed_lake), ('guildhollow', bed_guild
                ('meridian', bed_meridian), ('wanderers', bed_wanderers), ('brinewatch', bed_brine),
                ('lantern-row', bed_lantern), ('rosewick', bed_rosewick), ('gap', bed_gap), ('sky', bed_sky)]:
     ITEMS['bed_' + nm] = dict(fn=fn, cat='bed', loop=True)
-for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(848976, 17, lpf=6000, hpf=90, search=(100, 200), calm=True)),
+for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(848976, 28, lpf=6000, hpf=90, search=(100, 200), calm=True)),
                ('dense', crowd(546676, 13, lpf=6500, hpf=100))]:
     ITEMS['crowd_' + nm] = dict(fn=fn, cat='bed', loop=True)
 
@@ -365,7 +366,9 @@ def render_all():
             if it.get('hpf'):                              # sub-bass a phone cannot play and the compressor pumps on
                 x = pfilter(x, chain(hp(it['hpf']), hp(it['hpf'])))
             x = x / 10 ** (aio.lufs(x, True) / 20) * 10 ** (TARGET[cat] / 20)
-            x = aio.limit_periodic(x, -3.0)            # AAC overshoots by up to ~2 dB on peaky material
+            # AAC overshoots by up to ~2 dB on peaky material; a bed is texture: its peaks stay within ~18 dB of its
+            # loudness (water slaps and shouts at 23 dB over the bed pushed the master limiter)
+            x = aio.limit_periodic(x, -8.0 if cat == 'bed' else -3.0)
             m_ = x if x.ndim == 1 else x.mean(1)
             src_wrap = float(abs(m_[0] - m_[-1]) / (np.percentile(np.abs(np.diff(m_)), 99) + 1e-12))
         else:

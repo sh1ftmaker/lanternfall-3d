@@ -122,7 +122,7 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
       if (b && est.enabled) {
         const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
         s.buffer = b; s.playbackRate.value = 0.85 + 0.3 * Math.random();
-        g.gain.value = clamp(700 / L.dist, 0.3, 1.1) * 0.9;
+        g.gain.value = clamp(700 / L.dist, 0.3, 1.1) * 0.55;    // a close strike (350 m) peaks near the limiter, not 3 dB into it
         f.type = 'lowpass'; f.frequency.value = 250 + 3500 * Math.exp(-L.dist / 500);
         s.connect(f); f.connect(g);
         camera.matrixWorld.extractBasis(_r, _d, _d); if (pan) { pan.pan.value = clamp(L.dir.dot(_r), -1, 1) * 0.7; g.connect(pan); pan.connect(bus); } else g.connect(bus);

@@ -27,7 +27,7 @@ import * as S from './synth.js';
 import { makeZoner, reverbFor, groundType, makeDensity, smoothstep } from './space.js';
 
 const C = 343;                                   // speed of sound, m/s
-const MAKEUP = 1.33;                             // +2.5 dB: about -16 LUFS at the default volume (0.8) with content at its README levels
+const MAKEUP = 1.19;                             // +1.5 dB: about -17 LUFS at the default volume (0.8); 1 dB under the first mix, which drove the limiter
 const FLIGHT = 1.5;                              // fx/fireworks.js: seconds from launch to burst
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const db = (g) => (g > 1e-6 ? 20 * Math.log10(g) : -120);
