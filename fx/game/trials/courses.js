@@ -12,4 +12,14 @@ export const COURSES = [
     medals: { gold: 70, silver: 90 },
     stray: 110,
   },
+  {
+    id: 'swim', name: 'The Spire Swim', short: 'Spire Swim', wick: true, pace: 3, fp: 1,
+    blurb: 'From the lake steps out to the Spire\'s island, touch the post on the beach, and swim back. Wick only.',
+    where: 'the quay beside the lake steps, south of the Lake Lap post',
+    post: [100.4, -8, 0.12, Math.PI],
+    cps: [[91, -3, -0.8], [55, 1, -0.8], [18, -4, 0.2, 4, 5], [55, 1, -0.8], [95.5, -2, -0.8]],
+    pole: 2,                      // a post stands at this checkpoint during the race: the one to touch
+    medals: { gold: 50, silver: 70 },
+    stray: 130,
+  },
 ];

@@ -126,6 +126,7 @@ export function init(game) {
     build(); const st = player.wick ? 'w' : 'f'; 
     race = { c, st, phase: 'count', cd: game.reduceMotion ? 0 : 2.4, t: 0, n: 0, splits: [], rec: [], recN: 0, px: player.x, py: player.y, pz: player.z, stray: 0, shown: '', ghost: makeGhost(c, st), mA: marker(), mB: marker(), best: bestOf(c.id, st) };
     place(race.mA, c, 0, true); place(race.mB, c, 1, false);
+    if (c.pole !== undefined) { const q = c.cps[c.pole]; race.pole = [game.props.mesh(new THREE.CylinderGeometry(0.08, 0.12, 3.4, 8).translate(0, 1.7, 0), { x: q[0], y: q[1], z: q[2], color: [0.1, 0.1, 0.11] }), game.props.mesh(new THREE.SphereGeometry(0.2, 8, 6).translate(0, 3.5, 0), { x: q[0], y: q[1], z: q[2], emissive: [0.9, 0.55, 0.2], lit: false })]; }
     game.track('trials', c.short + ' · ready', { order: 5 });
     if (!game.reduceMotion) countEl.innerHTML = '3<small>' + c.short + '</small>', countEl.classList.add('on');
     drawGhost(race.ghost, 0);
@@ -135,6 +136,7 @@ export function init(game) {
     if (!race) return; const r = race; race = null;
     for (const m of [r.mA, r.mB]) { scene.remove(m.grp); m.mat.dispose(); m.bmat.dispose(); m.glow.remove(); }
     for (const s of r.ghost.sp) s.remove();
+    if (r.pole) for (const m of r.pole) m.userData.remove();
     game.track('trials', null); countEl.classList.remove('on');
   }
   function cancel(why, say) { if (!race) return; end(why); if (say) game.toast('Race called off.', { ms: 1800 }); }

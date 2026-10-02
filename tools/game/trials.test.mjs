@@ -44,10 +44,13 @@ const INSTALL = `window.__tr = {
         const r = T.race; if (!r || r.phase !== 'run') return {};
         const cp = (via && via[r.n] && !via[r.n].done ? via[r.n] : c.cps[Math.min(r.n, c.cps.length - 1)]);
         let dx = cp[0] - v.pos.x, dz = -cp[1] - v.pos.z; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
-        if (t - ck.t > 0.8) { if (Math.hypot(v.pos.x - ck.x, v.pos.z - ck.z) < 1.2 && t > 2) { un.until = t + 1.2; un.sign = -un.sign; un.n = (un.n || 0) + 1; } else if (t > un.until) un.n = 0; ck = { t, x: v.pos.x, z: v.pos.z }; }
+        if (t - ck.t > 0.8) { if (Math.hypot(v.pos.x - ck.x, v.pos.z - ck.z) < 1.2 && (v.s.action & 0x1C0) !== 0xC0) { un.until = t + 1.2; un.sign = -un.sign; un.n = (un.n || 0) + 1; } else if (t > un.until) un.n = 0; ck = { t, x: v.pos.x, z: v.pos.z }; }
         let out = { world: [dx, dz] };
         if (t < un.until) { const a = un.sign * Math.min(2.6, 0.8 + 0.5 * (un.n || 1)), c1 = Math.cos(a), s1 = Math.sin(a); out = { world: [dx * c1 - dz * s1, dx * s1 + dz * c1], a: Math.floor(t * 4) % 2 === 0 }; }   // blocked: jump and sidestep
-        if (v.pos.y < -0.6) out.a = Math.floor(t * 3) % 2 === 0;   // in the water: stroke
+        if ((v.s.action & 0x1C0) === 0xC0) {            // swimming: strokes, and the stick only turns him (a forward push would dive)
+          let err = Math.atan2(dx, dz) - v.yaw; err = Math.atan2(Math.sin(err), Math.cos(err));
+          out = { a: (t % 0.5) < 0.15, mx: Math.max(-1, Math.min(1, err * 2)) };
+        }
         return { ...out, ...(plan ? plan(r.t, v, cp, r.n, l) : {}) };
       };
     });
@@ -103,6 +106,30 @@ if (want('lake')) try {
   check('mode change cancels', await page.evaluate(`!${T}.race`));
   await browser.close();
 } catch (e) { check('lake section ran', false, e.message.slice(0, 200)); }
+
+// a Wick-only course: stand at the post, start with the prompt, drive it, check the events and the saved best
+async function wickCourse(id, label, postXY, { via, ms = 420000, shotMid } = {}) {
+  const { browser, page, shot } = await open(false);
+  try {
+    await page.evaluate(INSTALL); await page.evaluate('__tr.hook()');
+    check(`${label}: wick wakes`, (await wake(page, postXY[0] + 3, postXY[1] + 3)) === 'ok');
+    const T = 'window.__park.game.modules.trials';
+    await page.evaluate(`__park.platformer.teleport(${postXY[0] - 1.5}, 0.3, ${-postXY[1]}, 0)`); await sleep(1500);
+    const prompt = await page.evaluate(`(() => { const p = document.getElementById('game-prompt'); return p.hidden ? '' : p.textContent; })()`);
+    check(`${label}: prompt at the post`, /Race: /.test(prompt), prompt); await shot(`${id}_post_prompt`);
+    await page.evaluate('__park.game.use()'); await sleep(3200);
+    let shotDone = false; const iv = setInterval(async () => { if (shotDone || !shotMid) return; const r = await page.evaluate(`${T}.race`).catch(() => null); if (r && r.n >= shotMid) { shotDone = true; await shot(`${id}_midrace`); } }, 700);
+    const why = await page.evaluate(`__tr.drive('${id}', null, ${ms}, ${JSON.stringify(via || null)})`); clearInterval(iv);
+    const info = await page.evaluate(`[${T}.race, __park.platformer.view.pos.toArray()]`);
+    check(`${label}: finishes`, why === 'finish', why + ' ' + JSON.stringify(info));
+    const ev = await page.evaluate('__tr.ev'), n = ev['trials:checkpoint'] ? ev['trials:checkpoint'].length : 0, f = (ev['trials:finish'] || [])[0] || {};
+    check(`${label}: events`, (ev['trials:start'] || []).length === 1 && (ev['trials:finish'] || []).length === 1 && n === (await page.evaluate(`${T}.courses.find(c => c.id === '${id}').cps.length`)), JSON.stringify(f));
+    await sleep(600); await shot(`${id}_finish`);
+    check(`${label}: best saved`, await page.evaluate(`!!${T}.best('${id}')`));
+    await browser.close(); return f;
+  } catch (e) { check(`${label}: ran`, false, e.message.slice(0, 200)); await browser.close(); }
+}
+if (want('swim')) await wickCourse('swim', 'swim', [100.4, -8], { shotMid: 3 });
 
 console.log(results.join('\n'));
 const errl = [...errs].map(([k, v]) => v + 'x ' + k);
