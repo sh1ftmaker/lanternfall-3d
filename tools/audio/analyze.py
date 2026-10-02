@@ -70,8 +70,23 @@ def seam(x, lo, hi):
     # wrap jump: sample before loopEnd -> sample at loopStart, vs typical |step|
     m = x if x.ndim == 1 else x.mean(1)
     jump = abs(m[a] - m[b - 1])
-    typ = np.percentile(np.abs(np.diff(m[a:b])), 99) + 1e-12
-    return err_db, jump / typ
+    loc = np.concatenate([m[b - 2205:b], m[a:a + 2205]])        # +-50 ms around the wrap
+    typ = np.percentile(np.abs(np.diff(loc)), 99) + 1e-12
+    # spectral continuity: 1/3-octave band levels of 93 ms after loopStart vs after loopEnd (identical audio,
+    # different codec frames) -> max |dB| difference over bands with energy
+    n = 4096
+    def bands(seg):
+        S = np.abs(np.fft.rfft(seg * np.hanning(n))) ** 2
+        f = np.fft.rfftfreq(n, 1 / SR)
+        edges = 100 * 2 ** (np.arange(0, 22) / 3)
+        return np.array([S[(f >= lo) & (f < hi)].sum() for lo, hi in zip(edges[:-1], edges[1:])])
+    if x.shape[0] - b > n:
+        A, B = bands(m[a:a + n]), bands(m[b:b + n])
+        ok = (A > A.max() * 1e-4)
+        spec = float(np.max(np.abs(10 * np.log10((A[ok] + 1e-20) / (B[ok] + 1e-20)))))
+    else:
+        spec = None
+    return err_db, jump / typ, spec
 
 
 rows = []
@@ -94,7 +109,7 @@ for name, m in items:
         body = x[int(lo * SR):int(hi * SR)]
         r['lufs'] = round(aio.lufs(body, True), 2)
         s = seam(x, lo, hi)
-        r['seam_db'], r['wrap_jump'] = (round(s[0], 1), round(s[1], 2)) if s else (None, None)
+        r['seam_db'], r['wrap_jump'], r['seam_spec_db'] = (round(s[0], 1), round(s[1], 2), round(s[2], 2) if s[2] is not None else None) if s else (None, None, None)
     else:
         body = x
         r['lufs'] = round(aio.lufs(x), 2)
@@ -182,11 +197,11 @@ for fn in sorted(glob.glob(os.path.join(HERE, 'scores', '*.json'))):
 clean = [{k: v for k, v in r.items() if k != '_x'} for r in rows]
 json.dump(dict(files=clean, scores=score_rows), open(os.path.join(OUT, 'analysis.json'), 'w'), indent=1)
 with open(os.path.join(OUT, 'loudness_table.md'), 'w') as fh:
-    fh.write('| file | cat | s | ch | KB | LUFS | ffmpeg LUFS | true peak | seam dB | wrap jump | >12k dB | 2-5k peak dB | corr | mono loss |\n')
-    fh.write('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n')
+    fh.write('| file | cat | s | ch | KB | LUFS | ffmpeg LUFS | true peak | clip | seam wave dB | seam spec dB | wrap jump | >12k dB | 2-5k peak dB | corr | mono loss |\n')
+    fh.write('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n')
     for r in clean:
         fh.write(f"| {r['name']} | {r['cat']} | {r['sec']} | {r['ch']} | {r['kb']} | {r['lufs']} | {r['lufs_ffmpeg']} | "
-                 f"{r['tp']} | {r.get('seam_db', '')} | {r.get('wrap_jump', '')} | {r['above12k_db']} | "
+                 f"{r['tp']} | {r['clip']} | {r.get('seam_db', '')} | {r.get('seam_spec_db', '')} | {r.get('wrap_jump', '')} | {r['above12k_db']} | "
                  f"{r['tonal_2_5k_db']} | {r.get('corr', '')} | {r.get('mono_loss_db', '')} |\n")
     fh.write('\n')
     for s in score_rows:

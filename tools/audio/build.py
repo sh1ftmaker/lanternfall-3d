@@ -26,7 +26,7 @@ args = ap.parse_args()
 ONLY = set(filter(None, args.only.split(',')))
 
 TARGET = {'music': -20.0, 'bed': -24.0, 'layer': -26.0, 'emit': -24.0}
-KBPS = {'music': 72, 'bed': 80, 'layer': 56, 'emit': 56, 'oneshot': 48}
+KBPS = {'music': 64, 'bed': 64, 'layer': 56, 'emit': 56, 'oneshot': 48}
 
 
 def secs(s):
@@ -35,10 +35,12 @@ def secs(s):
 
 # ------------------------------------------------------------------ recordings -> periodic loops
 _cache = {}
+USED = []          # Freesound ids used by the item being rendered (provenance -> render_meta -> CREDITS.md)
 
 
 def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0.0, search=None):
     key = (fid, mono)
+    USED.append(fid)
     if key not in _cache:
         _cache[key] = aio.load(os.path.join(args.src, f'fs{fid}.mp3'), mono=mono)
     x = _cache[key]
@@ -214,7 +216,7 @@ def _():
 
 @item('taiko_loop', 'emit')
 def _():
-    return sfx.taiko_loop(secs(26.6666667), 72, 73)   # 32 beats @72 = 26.67 s, same grid as the market music
+    return sfx.taiko_loop(secs(13.3333333), 72, 73)   # 16 beats @72 = 13.33 s, same grid as the market music
 
 
 @item('chimes_loop', 'emit')
@@ -240,6 +242,7 @@ def rec_events(fid, picks=None, n=5, hpf=60, lpf=9000, max_len=1.5, thresh=-30, 
     """One-shots cut from a recording of separate hits: events with a typical level, `n` of them spread out."""
     from lib.dsp import filt, fade
     key = (fid, True)
+    USED.append(fid)
     if key not in _cache:
         _cache[key] = aio.load(os.path.join(args.src, f'fs{fid}.mp3'), mono=True)
     ev = aio.events(_cache[key], thresh, max_len=max_len)
@@ -257,6 +260,7 @@ def rec_events(fid, picks=None, n=5, hpf=60, lpf=9000, max_len=1.5, thresh=-30, 
 def rec_oneshots(name, fid, level, **kw):
     cache = {}
     def get(i):
+        USED.append(fid)
         if 'v' not in cache:
             cache['v'] = rec_events(fid, **kw)
         return cache['v'][i]
@@ -270,17 +274,17 @@ rec_oneshots('footstep_snow', 613849, -6, n=5)
 rec_oneshots('footstep_wood', 543685, -6, n=5, picks=[6, 7, 8, 9, 10])
 oneshot('footstep_gravel', lambda i: sfx.footstep('gravel', 340 + i), 5, -7)
 oneshot('firework_launch', lambda i: sfx.firework_launch(400 + i), 3, -4)
-oneshot('firework_burst', lambda i: sfx.firework_burst(410 + i, big=i < 3), 5, -1)
+oneshot('firework_burst', lambda i: sfx.firework_burst(410 + i, big=i < 3), 5, -3)
 oneshot('splash', lambda i: sfx.splash(420 + i, 1 + .3 * i), 4, -6)
 oneshot('lantern_release', lambda i: sfx.lantern_release(430 + i), 3, -6)
 oneshot('ui_click', lambda i: sfx.ui_click(i), 2, -10)
 oneshot('oar', lambda i: sfx.oar(440 + i), 3, -6)
-oneshot('spire_bell', lambda i: sfx.spire_bell(450 + i), 1, -1)
+oneshot('spire_bell', lambda i: sfx.spire_bell(450 + i), 1, -3)
 oneshot('anvil', lambda i: sfx.anvil(460 + i) if i else rec_events(270588, picks=[0], fade_out=.3)[0], 4, -4)
 rec_oneshots('nightingale', 521035, -8, n=6, thresh=-24, max_len=4.0, fade_out=.3, hpf=900, lpf=9500, min_dur=1.2,
              max_dur=3.6)
 oneshot('strength_bell', lambda i: sfx.strength_bell(470 + i), 2, -3)
-oneshot('fanfare', lambda i: music.guild_fanfare()[0], 1, -2)
+oneshot('fanfare', lambda i: music.guild_fanfare()[0], 1, -3)
 oneshot('lamplighter', lambda i: sfx.lamplighter(590 + i), 3, -6)
 oneshot('ship_bell', lambda i: sfx.ship_bell(480 + i), 1, -3)
 oneshot('shrine_bell', lambda i: sfx.shrine_bell(490 + i), 1, -3)
@@ -306,6 +310,7 @@ def render_all():
         if ONLY and name not in ONLY and it.get('group') not in ONLY:
             continue
         t0 = time.time()
+        USED.clear()
         res = it['fn']()
         cat = it['cat']
         if isinstance(res, tuple):          # music: (loop, Piece) -> keep the score for the piano roll / checks
@@ -320,8 +325,11 @@ def render_all():
         if it['loop']:
             x = x - x.mean(0)                              # no DC
             x = x / 10 ** (aio.lufs(x, True) / 20) * 10 ** (TARGET[cat] / 20)
-            x = aio.limit_periodic(x, -1.5)
+            x = aio.limit_periodic(x, -3.0)            # AAC overshoots by up to ~2 dB on peaky material
+            m_ = x if x.ndim == 1 else x.mean(1)
+            src_wrap = float(abs(m_[0] - m_[-1]) / (np.percentile(np.abs(np.diff(m_)), 99) + 1e-12))
         else:
+            src_wrap = None
             x = x - np.mean(x[: secs(.002)], 0) if x.shape[0] > 100 else x
             x = x / (np.max(np.abs(x)) + 1e-12) * 10 ** (it.get('level', -3) / 20)
             if it.get('group', '').startswith('footstep'):   # steps: equal loudness across surfaces, peak <= -3 dBFS
@@ -332,7 +340,9 @@ def render_all():
         meta[name] = dict(file=rel, cat=cat, loop=loop, seconds=round(x.shape[0] / SR, 3),
                           channels=1 if x.ndim == 1 else 2, lufs=round(aio.lufs(x, it['loop']), 2),
                           true_peak=round(aio.true_peak_db(x), 2), bytes=os.path.getsize(os.path.join(OUT, rel)),
-                          group=it.get('group'))
+                          group=it.get('group'), sources=sorted(set(USED)),
+                          src_wrap=None if src_wrap is None else round(src_wrap, 3),
+                          doc=(it['fn'].__doc__ or '').strip().split('\n\n')[0] if it['fn'].__doc__ else None)
         print(f"{name:24s} {cat:8s} {meta[name]['seconds']:6.2f}s ch{meta[name]['channels']} "
               f"{meta[name]['lufs']:6.1f} LUFS tp {meta[name]['true_peak']:5.1f} {meta[name]['bytes'] / 1024:6.1f} KB "
               f"({time.time() - t0:.1f}s)", flush=True)

@@ -286,7 +286,7 @@ def door_phrase(i):
     P.track('x', 1.0, .45)
     for b, d, p in notes:
         P.note('x', fn, b, d, n(p), .7, **kw)
-    return _oneshot(P.mix(t60=3.0, damp=3000, predelay=.03), 4.2), P
+    return _oneshot(P.mix(t60=3.0, damp=3000, predelay=.03), 3.6), P
 
 
 # ------------------------------------------------------------------------------------------------ Brinewatch
