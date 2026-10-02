@@ -10,10 +10,10 @@ export const NOTE = {
   title: 'A note, folded twice',
   body: [
     'To whoever carries the pole next. I lit every lamp in this park once, and the walk stayed bright until the gates closed.',
-    'This last one I hid by the fire, where the tide-clock can hear it. Somebody ought to have to look for a light.',
+    'This last one I hid by the fire, where the embers can hear it. Somebody ought to have to look for a light.',
     'Keep the pole dry. Leave one corner dark for the next of us, and tell no one how long it took.',
   ],
   sign: 'E.M.',
 };
 // where the extra lamp stands, and the old pole leans (Brine & Barrel, Brinewatch): [x, y, z]
-export const HIDDEN = { land: 'brinewatch', at: [140.6, -24.4, 0.7], pole: [141.2, -16.4, 0.7] };
+export const HIDDEN = { land: 'brinewatch', at: [139.75, -16.1, 0.7], pole: [141.2, -16.4, 0.7] };

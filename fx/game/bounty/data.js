@@ -60,14 +60,14 @@ export const DRINK_SECONDS = 180;
 
 // Eight lost things. `build` names the model in art.js; `clue` is the one-liner in the journal while it is missing.
 export const LOST = [
-  { id: 'mitten', name: 'red mitten', where: 'Frostmere', spot: { land: 'frostmere', x: -18, y: -37 }, clue: 'A child lost a mitten near the skating rink in Frostmere.', back: 'Back with a very cold child.' },
-  { id: 'crown', name: 'paper crown', where: 'Rosewick', spot: { land: 'rosewick', x: -48, y: 14.2 }, clue: 'A paper crown, at the heart of the Rose Maze.', back: 'Made for a very serious king.' },
-  { id: 'sword', name: 'toy sword', where: 'Guildhollow', spot: { land: 'guildhollow', x: 3, y: 28 }, clue: "A toy sword, dropped in the castle courtyard in Guildhollow.", back: 'A squire is missing it badly.' },
-  { id: 'ticket', name: 'monorail ticket', where: 'Meridian', spot: { land: 'meridian', x: 0, y: -20 }, clue: 'A monorail ticket, blown about the Meridian Loop station.', back: 'Punched once, never used.' },
-  { id: 'cap', name: "sailor's cap", where: 'Brinewatch', spot: { land: 'brinewatch', x: -5, y: -66 }, clue: "A sailor's cap, on the quay by the Harbour Square.", back: 'It smells of tar and rope.' },
-  { id: 'tag', name: 'wish tag', where: 'Lantern Row', spot: { land: 'lantern-row', x: 8, y: 18 }, clue: 'A wish tag, off its string, near the shrine steps in Lantern Row.', back: 'Someone wished for a quiet night.' },
-  { id: 'net', name: 'butterfly net', where: 'Rosewick', spot: { land: 'rosewick', x: 7, y: 17 }, clue: 'A butterfly net, left by the carousel in Rosewick.', back: 'No butterflies inside. Yet.' },
-  { id: 'postcard', name: 'signed postcard', where: 'East Gate', spot: { wx: 284, wy: 6 }, clue: 'A signed postcard, near the East Gate.', back: 'Signed by someone important. Probably.' },
+  { id: 'mitten', name: 'Red mitten', where: 'Frostmere', spot: { land: 'frostmere', x: -18, y: -37 }, clue: 'A child lost a mitten near the skating rink in Frostmere.', back: 'Back with a very cold child.' },
+  { id: 'crown', name: 'Paper crown', where: 'Rosewick', spot: { land: 'rosewick', x: -48, y: 14.2 }, clue: 'A paper crown, at the heart of the Rose Maze.', back: 'Made for a very serious king.' },
+  { id: 'sword', name: 'Toy sword', where: 'Guildhollow', spot: { land: 'guildhollow', x: 3, y: 28 }, clue: "A toy sword, dropped in the castle courtyard in Guildhollow.", back: 'A squire is missing it badly.' },
+  { id: 'ticket', name: 'Monorail ticket', where: 'Meridian', spot: { land: 'meridian', x: 0, y: -20 }, clue: 'A monorail ticket, blown about the Meridian Loop station.', back: 'Punched once, never used.' },
+  { id: 'cap', name: "Sailor's cap", where: 'Brinewatch', spot: { land: 'brinewatch', x: -5, y: -66 }, clue: "A sailor's cap, on the quay by the Harbor Square.", back: 'It smells of tar and rope.' },
+  { id: 'tag', name: 'Wish tag', where: 'Lantern Row', spot: { land: 'lantern-row', x: 8, y: 18 }, clue: 'A wish tag, off its string, near the shrine steps in Lantern Row.', back: 'Someone wished for a quiet night.' },
+  { id: 'net', name: 'Butterfly net', where: 'Rosewick', spot: { wx: -136.5, wy: -114 }, clue: 'A butterfly net, left by the carousel in Rosewick.', back: 'No butterflies inside. Yet.' },
+  { id: 'postcard', name: 'Signed postcard', where: 'East Gate', spot: { wx: 284, wy: 6 }, clue: 'A signed postcard, near the East Gate.', back: 'Signed by someone important. Probably.' },
 ];
 
 // Lantern colours for Wick: linear-ish rgb the character shader multiplies (the default is 1.0, 0.62, 0.28).

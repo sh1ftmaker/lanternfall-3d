@@ -30,8 +30,8 @@ export function init(game) {
   const lands = game.manifest.lands, landBy = Object.fromEntries(lands.map((l) => [l.id, l]));
   const raw = game.save.get('lamps', null), st = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};   // an old or damaged save must not stop the module
   const arr = (v) => (Array.isArray(v) ? v : []);
-  st.lit = arr(st.lit).filter((x) => typeof x === 'string'); st.read = arr(st.read); st.done = arr(st.done); st.all = !!st.all; st.pole = !!st.pole;
-  st.wishes = arr(st.wishes).filter((w) => w && typeof w.text === 'string' && Number.isFinite(w.t));
+  st.lit = [...new Set(arr(st.lit).filter((x) => typeof x === 'string'))]; st.read = arr(st.read).filter((n) => Number.isFinite(n)); st.done = arr(st.done).filter((x) => typeof x === 'string'); st.all = st.all === true; st.pole = st.pole === true;
+  st.wishes = arr(st.wishes).filter((w) => w && typeof w === 'object' && typeof w.text === 'string' && Number.isFinite(w.t)).map((w) => ({ t: w.t, text: w.text.slice(0, 80) })).slice(0, 12);
   const persist = () => game.save.set('lamps', st);
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
 
@@ -224,13 +224,19 @@ export function init(game) {
   wish.querySelector('.rd').onclick = () => { closeWish(); game.journal.open(); };
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !card.hidden) closeCard(); }, true);
   let rail = [];
-  const railIt = game.interact({ id: 'lamps:wish', x: 0, y: 0, z: 0, r: 3, label: 'Write a wish', swing: false, show: () => !!railAt && wish.hidden && !game.cameraHeld, use: openWish });
+  const railIt = game.interact({ id: 'lamps:wish', x: 0, y: 0, z: 0, r: 3, label: 'Write a wish', swing: false, priority: -1, show: () => !!railAt && wish.hidden && !game.cameraHeld, use: openWish });
   fetch(game.ctx.DATA + 'guests.json').then((r) => r.json()).then((d) => { rail = d.pois.filter((p) => p.land === 'core' && p.type === 'view' && p.rail); }).catch(() => {});
   let railT = 0;
   function updateRail() {
     const p = game.player; railAt = null; let bd = 1e9;
     if (p.mode === 'walk') for (const q of rail) { const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; railAt = q; } }
-    if (railAt && bd > 3.2 * 3.2) railAt = null; if (railAt) railIt.move(railAt.x, railAt.y, railAt.z ?? 0);
+    if (railAt && bd > 3.2 * 3.2) railAt = null;
+    // the rail runs past a jetty, a start post: a fixed thing of another module within 3 m of you or of the rail spot has the prompt
+    if (railAt) for (const o of game.interactables) {
+      if (o === railIt || /^lamps?[:-]/.test(o.id || '') || !o.enabled) continue;
+      if ((o.x - railAt.x) ** 2 + (o.y - railAt.y) ** 2 < 9 || (o.x - p.x) ** 2 + (o.y - p.y) ** 2 < 9) { let on = true; try { on = !o.show || !!o.show(); } catch (e) { on = false; } if (on) { railAt = null; break; } }
+    }
+    if (railAt) railIt.move(railAt.x, railAt.y, railAt.z ?? 0);
     // walking away puts the sheet or the note down (they stayed open, stacked under the next card, anywhere in the park)
     if (!wish.hidden && wishAt && (wishAt.x - p.x) ** 2 + (wishAt.y - p.y) ** 2 > 8 * 8) closeWish();
     if (!card.hidden && (HIDDEN.pole[0] - p.x) ** 2 + (HIDDEN.pole[1] - p.y) ** 2 > 8 * 8) closeCard();
@@ -258,11 +264,16 @@ export function init(game) {
     const p = game.player, up = n.l.z - p.z > 1.1 ? ', up high' : '';
     return `Nearest dark lamp: ${approx(n.d)} ${n.d < 12 ? '' : 'to the ' + dirName(n.l.x - p.x, n.l.y - p.y)}${up}.`.replace('  ', ' ');
   };
+  // the line follows the land you are in once it has held for 3 s, and only where a dark lamp is within reach or you have lit one
+  const HOLD = 3, REACH = 60; let shown = null, cand = null, candAt = 0;
+  const trackLand = () => { const land = landNow(); if (!land) return null; const n = nearestDark(land); return count(land) > 0 || (n && n.d < REACH) ? land : null; };
   let trackKey = '';
   function updateTrack(force) {
-    const land = landNow(); const n = land ? nearestDark(land) : null;
-    const key = land ? land + count(land) + (n && n.d < 45 ? 'n' : '') : ''; if (key === trackKey && !force) return; trackKey = key;
-    game.track('lamps', land ? `${nameOf(land)} lamps ${count(land)} / ${total(land)}` : null, { order: n && n.d < 45 ? 25 : 70 });
+    const c = trackLand(); if (c !== cand) { cand = c; candAt = now(); }
+    if (c !== shown && (force || now() - candAt >= HOLD)) shown = c;
+    const n = shown ? nearestDark(shown) : null;
+    const key = shown ? shown + count(shown) + (n && n.d < 45 ? 'n' : '') : ''; if (key === trackKey && !force) return; trackKey = key;
+    game.track('lamps', shown ? `${nameOf(shown)} lamps ${count(shown)} / ${total(shown)}` : null, { order: n && n.d < 45 ? 25 : 70 });
   }
   game.journal.section({ id: 'lamps', title: 'Lamps', order: 20, render(el) {
     el.className += ' gj-lamps'; const here = landNow();
@@ -292,7 +303,7 @@ export function init(game) {
     if ((glowT -= dt) < 0) { glowT = 0.35; assignGlows(); if (tintTries < 40 && !tinted) { tintTries++; if (retint()) tinted = 1; } updateTrack(); }
     if ((railT -= dt) < 0) { railT = 0.2; updateRail(); }
   });
-  game.on('mode', ({ mode }) => { if (mode !== 'walk') { game.track('lamps', null); trackKey = ''; closeWish(); closeCard(); } });
+  game.on('mode', ({ mode }) => { if (mode !== 'walk') { game.track('lamps', null); trackKey = ''; shown = cand = null; closeWish(); closeCard(); } });
   rebuildDiscs(); assignGlows();
 
   return {
