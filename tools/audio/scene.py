@@ -74,7 +74,7 @@ def write_json(meta, path):
              music=mus('lantern_market', P['lantern_market'], .8, 16, 160)),
         dict(id='rosewick', land='rosewick', bed=bed('bed_rosewick', .85),
              music=mus('rosewick_waltz', P['rose_band'], .72, 16, 160)),
-        dict(id='gap', land='gap', bed=bed('bed_gap', .9)),
+        dict(id='gap', land='gap', bed=bed('bed_gap', .6)),
         dict(id='sky', land='sky', bed=bed('bed_sky', .9)),
     ]
 

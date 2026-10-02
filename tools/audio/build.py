@@ -142,7 +142,7 @@ def bed_rosewick():
 def bed_gap():
     """Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere."""
     L = secs(19)
-    return width(sfx.leaves(L, 112) + lvl(sfx.wind(L, 113, 50, 500, .6), 2))
+    return width(lvl(sfx.leaves(L, 112), 0) + lvl(sfx.wind(L, 113, 200, 900, .4), -10))
 
 
 def bed_sky():

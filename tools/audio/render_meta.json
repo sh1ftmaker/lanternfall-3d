@@ -87,7 +87,7 @@
   "true_peak": -2.99
  },
  "bed_frostmere": {
-  "bytes": 164712,
+  "bytes": 164747,
   "cat": "bed",
   "channels": 2,
   "doc": "Wind over snow with a faint whistle; the crowd heard muffled (low-passed) behind it.",
@@ -102,11 +102,11 @@
   "sources": [
    461060
   ],
-  "src_wrap": 0.097,
-  "true_peak": -9.43
+  "src_wrap": 0.113,
+  "true_peak": -11.71
  },
  "bed_gap": {
-  "bytes": 166060,
+  "bytes": 165425,
   "cat": "bed",
   "channels": 2,
   "doc": "Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere.",
@@ -119,11 +119,11 @@
   "lufs": -24.0,
   "seconds": 19.0,
   "sources": [],
-  "src_wrap": 0.088,
-  "true_peak": -4.76
+  "src_wrap": 0.095,
+  "true_peak": -4.13
  },
  "bed_gate": {
-  "bytes": 156606,
+  "bytes": 156683,
   "cat": "bed",
   "channels": 2,
   "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), soft air.",
@@ -163,7 +163,7 @@
   "true_peak": -9.52
  },
  "bed_lake": {
-  "bytes": 148792,
+  "bytes": 148644,
   "cat": "bed",
   "channels": 2,
   "doc": "The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices.",
@@ -178,8 +178,8 @@
   "sources": [
    352356
   ],
-  "src_wrap": 0.046,
-  "true_peak": -4.08
+  "src_wrap": 0.048,
+  "true_peak": -3.89
  },
  "bed_lantern-row": {
   "bytes": 140686,
@@ -240,7 +240,7 @@
   "true_peak": -13.15
  },
  "bed_sky": {
-  "bytes": 172928,
+  "bytes": 172939,
   "cat": "bed",
   "channels": 2,
   "doc": "From the sky: wind and a distant low-passed blend of the whole park.",
@@ -256,8 +256,8 @@
    461060,
    848976
   ],
-  "src_wrap": 0.222,
-  "true_peak": -10.41
+  "src_wrap": 0.071,
+  "true_peak": -11.78
  },
  "bed_wanderers": {
   "bytes": 156539,
