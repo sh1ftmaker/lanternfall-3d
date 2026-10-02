@@ -1,0 +1,1173 @@
+{
+ "version": 1,
+ "about": "Lanternfall soundscape content. See data/audio/README.md. Positions: Blender frame [x, y, z], m.",
+ "master": {
+  "gain": 1.0,
+  "loudness": {
+   "music": -20,
+   "bed": -24,
+   "emit": -24,
+   "oneshot_peak_dbfs": -3
+  }
+ },
+ "zones": [
+  {
+   "id": "gate",
+   "land": "gate",
+   "bed": {
+    "file": "beds/bed_gate.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     18.5
+    ]
+   },
+   "music": {
+    "file": "music/gate_welcome.m4a",
+    "gain": 0.8,
+    "pos": [
+     232.0,
+     0.0,
+     4.0
+    ],
+    "ref": 18,
+    "max": 160,
+    "loop": [
+     0.5,
+     36.055556
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "lake",
+   "land": "lake",
+   "bed": {
+    "file": "beds/bed_lake.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     17.5
+    ]
+   },
+   "music": {
+    "file": "music/lake_hush.m4a",
+    "gain": 0.7,
+    "pos": [
+     3.5,
+     -0.6,
+     14.0
+    ],
+    "ref": 40,
+    "max": 220,
+    "loop": [
+     0.5,
+     32.5
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "guildhollow",
+   "land": "guildhollow",
+   "bed": {
+    "file": "beds/bed_guildhollow.m4a",
+    "gain": 0.85,
+    "loop": [
+     0.5,
+     16.5
+    ]
+   },
+   "music": {
+    "file": "music/guild_tavern.m4a",
+    "gain": 0.85,
+    "pos": [
+     -178.5,
+     0.0,
+     3.0
+    ],
+    "ref": 14,
+    "max": 150,
+    "loop": [
+     0.5,
+     36.055556
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "frostmere",
+   "land": "frostmere",
+   "bed": {
+    "file": "beds/bed_frostmere.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     19.5
+    ]
+   },
+   "music": {
+    "file": "music/frost_court.m4a",
+    "gain": 0.75,
+    "pos": [
+     -104.0,
+     138.0,
+     4.0
+    ],
+    "ref": 18,
+    "max": 170,
+    "loop": [
+     0.5,
+     27.166667
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "meridian",
+   "land": "meridian",
+   "bed": {
+    "file": "beds/bed_meridian.m4a",
+    "gain": 0.8,
+    "loop": [
+     0.5,
+     16.5
+    ]
+   },
+   "music": {
+    "file": "music/meridian_signal.m4a",
+    "gain": 0.85,
+    "pos": [
+     19.0,
+     146.2,
+     2.0
+    ],
+    "ref": 16,
+    "max": 170,
+    "loop": [
+     0.5,
+     36.055556
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "wanderers",
+   "land": "wanderers",
+   "bed": {
+    "file": "beds/bed_wanderers.m4a",
+    "gain": 0.85,
+    "loop": [
+     0.5,
+     18.5
+    ]
+   },
+   "music": {
+    "file": "music/wanderers_hall.m4a",
+    "gain": 0.75,
+    "pos": [
+     178.0,
+     63.0,
+     7.0
+    ],
+    "ref": 20,
+    "max": 160,
+    "loop": [
+     0.5,
+     27.166667
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "brinewatch",
+   "land": "brinewatch",
+   "bed": {
+    "file": "beds/bed_brinewatch.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     17.5
+    ]
+   },
+   "music": {
+    "file": "music/brine_shanty.m4a",
+    "gain": 0.85,
+    "pos": [
+     123.4,
+     -26.4,
+     2.5
+    ],
+    "ref": 14,
+    "max": 150,
+    "loop": [
+     0.5,
+     27.166667
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "lantern-row",
+   "land": "lantern-row",
+   "bed": {
+    "file": "beds/bed_lantern-row.m4a",
+    "gain": 0.85,
+    "loop": [
+     0.5,
+     16.5
+    ]
+   },
+   "music": {
+    "file": "music/lantern_market.m4a",
+    "gain": 0.8,
+    "pos": [
+     33.5,
+     -159.1,
+     3.0
+    ],
+    "ref": 16,
+    "max": 160,
+    "loop": [
+     0.5,
+     27.166667
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "rosewick",
+   "land": "rosewick",
+   "bed": {
+    "file": "beds/bed_rosewick.m4a",
+    "gain": 0.85,
+    "loop": [
+     0.5,
+     18.5
+    ]
+   },
+   "music": {
+    "file": "music/rosewick_waltz.m4a",
+    "gain": 0.8,
+    "pos": [
+     -96.9,
+     -62.0,
+     2.5
+    ],
+    "ref": 16,
+    "max": 160,
+    "loop": [
+     0.5,
+     27.166667
+    ],
+    "stream": false
+   }
+  },
+  {
+   "id": "gap",
+   "land": "gap",
+   "bed": {
+    "file": "beds/bed_gap.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     19.5
+    ]
+   }
+  },
+  {
+   "id": "sky",
+   "land": "sky",
+   "bed": {
+    "file": "beds/bed_sky.m4a",
+    "gain": 0.9,
+    "loop": [
+     0.5,
+     20.5
+    ]
+   }
+  }
+ ],
+ "emitters": [
+  {
+   "id": "monorail",
+   "file": "fx/train_loop.m4a",
+   "gain": 0.9,
+   "ref": 12,
+   "max": 220,
+   "follow": "train",
+   "loop": [
+    0.5,
+    6.5
+   ],
+   "doppler": true
+  },
+  {
+   "id": "carousel_organ",
+   "file": "music/carousel_organ.m4a",
+   "gain": 0.8,
+   "ref": 12,
+   "max": 130,
+   "follow": "carousel",
+   "loop": [
+    0.5,
+    40.5
+   ]
+  },
+  {
+   "id": "spire_bell",
+   "file": "oneshots/spire_bell_1.m4a",
+   "gain": 1.0,
+   "ref": 60,
+   "max": 600,
+   "pos": [
+    3.5,
+    -0.6,
+    48.0
+   ],
+   "loop": false,
+   "schedule": "quarter"
+  },
+  {
+   "id": "guild_anvil",
+   "file": "oneshots/anvil_1.m4a",
+   "gain": 0.7,
+   "ref": 6,
+   "max": 70,
+   "pos": [
+    -183.0,
+    -44.2,
+    1.5
+   ],
+   "loop": false,
+   "every": [
+    2.5,
+    8
+   ],
+   "files": [
+    "oneshots/anvil_1.m4a",
+    "oneshots/anvil_2.m4a",
+    "oneshots/anvil_3.m4a",
+    "oneshots/anvil_4.m4a"
+   ]
+  },
+  {
+   "id": "guild_strength_bell",
+   "file": "oneshots/strength_bell_1.m4a",
+   "gain": 0.7,
+   "ref": 8,
+   "max": 90,
+   "pos": [
+    -131.2,
+    10.2,
+    2.0
+   ],
+   "loop": false,
+   "every": [
+    14,
+    40
+   ],
+   "files": [
+    "oneshots/strength_bell_1.m4a",
+    "oneshots/strength_bell_2.m4a"
+   ]
+  },
+  {
+   "id": "guild_fanfare",
+   "file": "oneshots/fanfare_1.m4a",
+   "gain": 0.9,
+   "ref": 25,
+   "max": 260,
+   "pos": [
+    -203.0,
+    0.0,
+    16.0
+   ],
+   "loop": false,
+   "every": [
+    70,
+    150
+   ]
+  },
+  {
+   "id": "guild_torches",
+   "file": "fx/torch_loop.m4a",
+   "gain": 0.6,
+   "ref": 4,
+   "max": 35,
+   "pos": [
+    -182.5,
+    34.6,
+    2.0
+   ],
+   "loop": [
+    0.5,
+    9.5
+   ]
+  },
+  {
+   "id": "frost_drum",
+   "file": "fx/frost_drum.m4a",
+   "gain": 0.55,
+   "ref": 10,
+   "max": 110,
+   "pos": [
+    -155.0,
+    90.0,
+    2.0
+   ],
+   "loop": [
+    0.5,
+    13.833333
+   ]
+  },
+  {
+   "id": "frost_kettle",
+   "file": "oneshots/kettle_1.m4a",
+   "gain": 0.5,
+   "ref": 3,
+   "max": 25,
+   "pos": [
+    -120.5,
+    89.9,
+    1.5
+   ],
+   "loop": false,
+   "every": [
+    5,
+    12
+   ],
+   "files": [
+    "oneshots/kettle_1.m4a",
+    "oneshots/kettle_2.m4a"
+   ]
+  },
+  {
+   "id": "frost_skates",
+   "file": "oneshots/skate_1.m4a",
+   "gain": 0.55,
+   "ref": 6,
+   "max": 50,
+   "pos": [
+    -96.8,
+    62.3,
+    0.5
+   ],
+   "loop": false,
+   "every": [
+    1.5,
+    5
+   ],
+   "files": [
+    "oneshots/skate_1.m4a",
+    "oneshots/skate_2.m4a",
+    "oneshots/skate_3.m4a"
+   ],
+   "area": {
+    "r": 12
+   }
+  },
+  {
+   "id": "frost_ice_chimes",
+   "file": "oneshots/ice_chimes_1.m4a",
+   "gain": 0.5,
+   "ref": 10,
+   "max": 80,
+   "pos": [
+    -104.0,
+    138.0,
+    4.0
+   ],
+   "loop": false,
+   "every": [
+    5,
+    14
+   ],
+   "files": [
+    "oneshots/ice_chimes_1.m4a",
+    "oneshots/ice_chimes_2.m4a",
+    "oneshots/ice_chimes_3.m4a"
+   ],
+   "area": {
+    "r": 20
+   }
+  },
+  {
+   "id": "meridian_chime",
+   "file": "oneshots/station_chime_1.m4a",
+   "gain": 0.7,
+   "ref": 12,
+   "max": 140,
+   "pos": [
+    38.0,
+    114.4,
+    10.5
+   ],
+   "loop": false,
+   "every": [
+    45,
+    90
+   ]
+  },
+  {
+   "id": "meridian_announce",
+   "file": "oneshots/announce_1.m4a",
+   "gain": 0.5,
+   "ref": 10,
+   "max": 100,
+   "pos": [
+    38.0,
+    114.4,
+    10.5
+   ],
+   "loop": false,
+   "every": [
+    80,
+    160
+   ]
+  },
+  {
+   "id": "meridian_neon",
+   "file": "fx/neon_hum.m4a",
+   "gain": 0.25,
+   "ref": 3,
+   "max": 25,
+   "pos": [
+    22.5,
+    157.5,
+    8.0
+   ],
+   "loop": [
+    0.5,
+    8.5
+   ]
+  },
+  {
+   "id": "wanderers_fountain",
+   "file": "fx/fountain_loop.m4a",
+   "gain": 0.6,
+   "ref": 5,
+   "max": 45,
+   "pos": [
+    153.4,
+    57.1,
+    1.0
+   ],
+   "loop": [
+    0.5,
+    11.5
+   ]
+  },
+  {
+   "id": "paper_door_01",
+   "file": "oneshots/door_01.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    181.4,
+    78.8,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_02",
+   "file": "oneshots/door_02.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    182.9,
+    77.2,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_03",
+   "file": "oneshots/door_03.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    185.4,
+    75.1,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_04",
+   "file": "oneshots/door_04.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    186.9,
+    73.0,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_05",
+   "file": "oneshots/door_05.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    187.9,
+    71.5,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_06",
+   "file": "oneshots/door_06.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    189.0,
+    68.7,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_07",
+   "file": "oneshots/door_07.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    189.9,
+    66.2,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_08",
+   "file": "oneshots/door_08.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    190.8,
+    63.4,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_09",
+   "file": "oneshots/door_09.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    191.1,
+    60.5,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_10",
+   "file": "oneshots/door_10.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    191.1,
+    57.9,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_11",
+   "file": "oneshots/door_11.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    190.5,
+    55.8,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "paper_door_12",
+   "file": "oneshots/door_12.m4a",
+   "gain": 0.6,
+   "ref": 8,
+   "max": 70,
+   "pos": [
+    190.2,
+    53.0,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    45,
+    140
+   ]
+  },
+  {
+   "id": "brine_ship_bell",
+   "file": "oneshots/ship_bell_1.m4a",
+   "gain": 0.7,
+   "ref": 15,
+   "max": 180,
+   "pos": [
+    52.7,
+    -18.5,
+    5.0
+   ],
+   "loop": false,
+   "every": [
+    40,
+    100
+   ]
+  },
+  {
+   "id": "brine_creak",
+   "file": "fx/creak_loop.m4a",
+   "gain": 0.6,
+   "ref": 6,
+   "max": 50,
+   "pos": [
+    52.7,
+    -18.5,
+    5.0
+   ],
+   "loop": [
+    0.5,
+    13.5
+   ]
+  },
+  {
+   "id": "brine_creaks",
+   "file": "oneshots/creak_1.m4a",
+   "gain": 0.5,
+   "ref": 5,
+   "max": 40,
+   "pos": [
+    108.8,
+    -45.1,
+    0.5
+   ],
+   "loop": false,
+   "every": [
+    3,
+    9
+   ],
+   "files": [
+    "oneshots/creak_1.m4a",
+    "oneshots/creak_2.m4a",
+    "oneshots/creak_3.m4a",
+    "oneshots/creak_4.m4a"
+   ],
+   "area": {
+    "r": 15
+   }
+  },
+  {
+   "id": "brine_dice",
+   "file": "oneshots/dice_1.m4a",
+   "gain": 0.5,
+   "ref": 3,
+   "max": 22,
+   "pos": [
+    129.0,
+    -23.0,
+    1.0
+   ],
+   "loop": false,
+   "every": [
+    6,
+    16
+   ],
+   "files": [
+    "oneshots/dice_1.m4a",
+    "oneshots/dice_2.m4a",
+    "oneshots/dice_3.m4a"
+   ]
+  },
+  {
+   "id": "lantern_shrine_bell",
+   "file": "oneshots/shrine_bell_1.m4a",
+   "gain": 0.7,
+   "ref": 12,
+   "max": 150,
+   "pos": [
+    60.1,
+    -159.5,
+    3.0
+   ],
+   "loop": false,
+   "every": [
+    35,
+    80
+   ]
+  },
+  {
+   "id": "lantern_clappers",
+   "file": "oneshots/clappers_1.m4a",
+   "gain": 0.7,
+   "ref": 10,
+   "max": 110,
+   "pos": [
+    28.5,
+    -178.5,
+    2.5
+   ],
+   "loop": false,
+   "every": [
+    40,
+    90
+   ],
+   "files": [
+    "oneshots/clappers_1.m4a",
+    "oneshots/clappers_2.m4a"
+   ]
+  },
+  {
+   "id": "lantern_taiko",
+   "file": "fx/taiko_loop.m4a",
+   "gain": 0.45,
+   "ref": 20,
+   "max": 200,
+   "pos": [
+    55.0,
+    -175.0,
+    3.0
+   ],
+   "loop": [
+    0.5,
+    27.166667
+   ]
+  },
+  {
+   "id": "lantern_sizzle",
+   "file": "fx/sizzle_loop.m4a",
+   "gain": 0.5,
+   "ref": 3,
+   "max": 25,
+   "pos": [
+    3.6,
+    -161.9,
+    1.5
+   ],
+   "loop": [
+    0.5,
+    7.5
+   ]
+  },
+  {
+   "id": "lantern_chimes",
+   "file": "fx/chimes_loop.m4a",
+   "gain": 0.45,
+   "ref": 5,
+   "max": 40,
+   "pos": [
+    39.5,
+    -127.9,
+    5.0
+   ],
+   "loop": [
+    0.5,
+    13.5
+   ]
+  },
+  {
+   "id": "rose_fountain",
+   "file": "fx/fountain_loop.m4a",
+   "gain": 0.7,
+   "ref": 5,
+   "max": 45,
+   "pos": [
+    -79.3,
+    -73.5,
+    1.5
+   ],
+   "loop": [
+    0.5,
+    11.5
+   ]
+  },
+  {
+   "id": "owl_1",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    159.0,
+    148.0,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  },
+  {
+   "id": "owl_2",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    -57.625,
+    187.5,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  },
+  {
+   "id": "owl_3",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    -225.875,
+    80.625,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  },
+  {
+   "id": "owl_4",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    -225.875,
+    -80.625,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  },
+  {
+   "id": "owl_5",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    -57.625,
+    -187.5,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  },
+  {
+   "id": "owl_6",
+   "file": "oneshots/owl_1.m4a",
+   "gain": 0.5,
+   "ref": 20,
+   "max": 160,
+   "pos": [
+    159.0,
+    -148.0,
+    10.0
+   ],
+   "loop": false,
+   "every": [
+    25,
+    70
+   ],
+   "files": [
+    "oneshots/owl_1.m4a",
+    "oneshots/owl_2.m4a",
+    "oneshots/owl_3.m4a"
+   ],
+   "area": {
+    "r": 40
+   }
+  }
+ ],
+ "oneshots": {
+  "firework_launch": [
+   "oneshots/firework_launch_1.m4a",
+   "oneshots/firework_launch_2.m4a",
+   "oneshots/firework_launch_3.m4a"
+  ],
+  "firework_burst": [
+   "oneshots/firework_burst_1.m4a",
+   "oneshots/firework_burst_2.m4a",
+   "oneshots/firework_burst_3.m4a",
+   "oneshots/firework_burst_4.m4a",
+   "oneshots/firework_burst_5.m4a"
+  ],
+  "lantern_release": [
+   "oneshots/lantern_release_1.m4a",
+   "oneshots/lantern_release_2.m4a",
+   "oneshots/lantern_release_3.m4a"
+  ],
+  "splash": [
+   "oneshots/splash_1.m4a",
+   "oneshots/splash_2.m4a",
+   "oneshots/splash_3.m4a",
+   "oneshots/splash_4.m4a"
+  ],
+  "footstep_stone": [
+   "oneshots/footstep_stone_1.m4a",
+   "oneshots/footstep_stone_2.m4a",
+   "oneshots/footstep_stone_3.m4a",
+   "oneshots/footstep_stone_4.m4a",
+   "oneshots/footstep_stone_5.m4a"
+  ],
+  "footstep_wood": [
+   "oneshots/footstep_wood_1.m4a",
+   "oneshots/footstep_wood_2.m4a",
+   "oneshots/footstep_wood_3.m4a",
+   "oneshots/footstep_wood_4.m4a",
+   "oneshots/footstep_wood_5.m4a"
+  ],
+  "footstep_snow": [
+   "oneshots/footstep_snow_1.m4a",
+   "oneshots/footstep_snow_2.m4a",
+   "oneshots/footstep_snow_3.m4a",
+   "oneshots/footstep_snow_4.m4a",
+   "oneshots/footstep_snow_5.m4a"
+  ],
+  "footstep_grass": [
+   "oneshots/footstep_grass_1.m4a",
+   "oneshots/footstep_grass_2.m4a",
+   "oneshots/footstep_grass_3.m4a",
+   "oneshots/footstep_grass_4.m4a",
+   "oneshots/footstep_grass_5.m4a"
+  ],
+  "ui_click": [
+   "oneshots/ui_click_1.m4a",
+   "oneshots/ui_click_2.m4a"
+  ],
+  "oar": [
+   "oneshots/oar_1.m4a",
+   "oneshots/oar_2.m4a",
+   "oneshots/oar_3.m4a"
+  ]
+ },
+ "oneshot_gains": {
+  "firework_burst": 1.0,
+  "firework_launch": 0.7,
+  "lantern_release": 0.6,
+  "splash": 0.5,
+  "footstep_stone": 0.35,
+  "footstep_wood": 0.35,
+  "footstep_snow": 0.35,
+  "footstep_grass": 0.3,
+  "ui_click": 0.4,
+  "oar": 0.45
+ }
+}
