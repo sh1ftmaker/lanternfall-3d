@@ -130,7 +130,7 @@ export function createGame(ctx) {
     refresh() {
       if (journalEl.hidden) return;
       const list = journalEl.querySelector('.gj-list'); list.textContent = '';
-      for (const s of [...sections.values()].sort((a, b) => a.order - b.order)) {
+      for (const s of [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {   // equal orders: by id, not by which module happened to load first
         const sec = el('div', null, 'gj-sec'), h = el('h3'), body = el('div', null, 'gj-body'); h.textContent = s.title; sec.append(h, body); list.appendChild(sec);
         try { s.render(body); } catch (e) { console.warn('game: journal', s.id, e); }
       }
