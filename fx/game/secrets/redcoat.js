@@ -71,9 +71,10 @@ export function init(S) {
   game.on('frame', ({ dt }) => {
     if (!ready) { if (!tried && game.nav) { tried = true; try { setup(); } catch (e) { console.warn('secrets: redcoat setup', e); } } return; }
     if (api.force) { if (cur !== api.force) show(api.force); op = 1; mat.opacity = 1; return; }          // tests and screenshots
-    const p = game.player, on = p.mode === 'walk' && !game.cameraHeld;
+    const p = game.player, on = p.mode === 'walk';
     if (button) { button.glow.sprite.material.opacity = 0.7 + 0.3 * Math.sin(performance.now() / 700); }
     if (!on) { if (cur) hide(); return; }
+    if (game.cameraHeld) return;              // photo mode or a ride has the camera: hold still (vanishing here would pop out of the picture)
     game.camera.getWorldDirection(fwd); const fl = Math.hypot(fwd.x, fwd.z) || 1;
     const fx = fwd.x / fl, fy = -fwd.z / fl;                      // heading in the Blender frame
     if (!cur) {
