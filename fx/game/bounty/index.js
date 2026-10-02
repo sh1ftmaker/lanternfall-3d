@@ -49,7 +49,10 @@ export function init(game) {
 
   /* ── saved state ── */
   const fresh = () => ({ v: 1, day: '', ids: [], jobs: {}, jobsDone: 0, stamps: {}, rings: 0, carry: [], lost: {}, colors: ['amber'], color: 'amber', claimed: {}, hinted: {}, notified: {}, drinkT0: 0, candle: '' });
-  const S = Object.assign(fresh(), game.save.get(KEY, {}));
+  const saved = game.save.get(KEY, {}), S = Object.assign(fresh(), saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {});
+  { const f = fresh(); for (const k of Object.keys(f)) if (S[k] === null || typeof S[k] !== typeof f[k] || Array.isArray(S[k]) !== Array.isArray(f[k])) S[k] = f[k]; }   // an old or damaged save must not stop the module
+  S.carry = S.carry.filter((c) => typeof c === 'string'); S.colors = S.colors.filter((c) => COLORS.some((x) => x.id === c)); if (!S.colors.includes('amber')) S.colors.unshift('amber'); if (!S.colors.includes(S.color)) S.color = 'amber';
+  if (S.ids.some((id) => !jobById[id])) S.day = ''; for (const k of Object.keys(S.stamps)) if (!STAMPS[k]) delete S.stamps[k]; for (const k of Object.keys(S.lost)) if (!LOST.some((l) => l.id === k)) delete S.lost[k];
   const commit = () => game.save.set(KEY, S);
   function rollDay(force) {
     const k = force || dayKey(); if (S.day === k) return false;
