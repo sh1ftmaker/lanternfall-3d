@@ -41,22 +41,24 @@ export function createHush(game) {
   }
 
   /* ── sound: the engine's own music and ambience buses (fx/audio/engine.js), only once it exists ── */
-  let aT = 0, applied = -1;
+  let aT = 0, applied = -1, seenM = null, seenA = null, seenN = null;
   function audio(k) {
     const e = game.ctx.sound && game.ctx.sound.engine, N = e && e.debug && e.debug.nodes, ctx = e && e.debug && e.debug.ctx; if (!N || !ctx) { applied = -1; return; }
     const st = e.debug.st, now = ctx.currentTime;
     st.hush = k;                                   // the weather's rain ducking (fx/weather/audio.js) keeps the hush
     N.music.gain.setTargetAtTime(st.music ? 1 - 0.97 * k : 0, now, 0.4);
     N.amb.gain.setTargetAtTime(st.ambience ? 1 - 0.92 * k : 0, now, 0.4);
-    applied = k;
+    applied = k; seenM = st.music; seenA = st.ambience; seenN = N;
   }
+  // the sound buttons set their bus back to full (engine setMusic / setAmbience): put the hush back the next frame
+  const toggled = () => { const e = game.ctx.sound && game.ctx.sound.engine, st = e && e.debug && e.debug.st; return !!st && (st.music !== seenM || st.ambience !== seenA || e.debug.nodes !== seenN); };
 
   h.frame = (dt) => {
     const tgt = h.on ? 1 : 0;
     if (h.k !== tgt) { h.k += Math.sign(tgt - h.k) * Math.min(Math.abs(tgt - h.k), dt / 3); }
     if (h.k > 0 && !mesh) build();
     if (mesh) { mat.uniforms.uK.value = h.k; mesh.visible = h.k > 0; }
-    if ((aT -= dt) <= 0) { aT = 0.5; if (h.k !== applied || (h.k > 0 && applied < 0)) audio(h.k); }
+    if ((aT -= dt) <= 0 || (h.k > 0 && toggled())) { aT = 0.5; if (h.k !== applied || (h.k > 0 && (applied < 0 || toggled()))) audio(h.k); }
   };
   return h;
 }

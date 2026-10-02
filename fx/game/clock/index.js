@@ -33,6 +33,9 @@ const CSS = `
 .ck-hold input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--paper);transition:transform .2s}
 .ck-hold input:checked{background:rgba(255,181,71,.55)} .ck-hold input:checked::after{transform:translateX(16px)}
 .ck-note{font:400 12px/1.4 var(--ui);opacity:.6;margin:2px 0 0}
+#ck-close{position:fixed;inset:0;z-index:15;display:grid;place-items:center;align-content:center;gap:6px;background:#04030c;opacity:0;pointer-events:none;padding:24px;text-align:center}
+#ck-close[hidden]{display:none} #ck-close p{margin:0;color:var(--paper);font:400 clamp(18px,4.6vw,26px)/1.4 var(--serif,Georgia,serif);letter-spacing:.01em;opacity:0}
+#ck-close p+p{color:var(--amber);font-size:clamp(15px,3.8vw,20px)}
 `;
 
 export function init(game) {
@@ -41,22 +44,30 @@ export function init(game) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
   const persist = () => save.update('clock', (o) => ({ ...o, hold: st.hold }), {});
 
+  /* ── the evening is saved (every few park minutes and when the page is hidden) and restored unless the address sets a time ── */
+  const parseT = (s) => { const m = /^(\d{1,2}):?(\d{2})$/.exec(s || ''); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+  let closing = null;                                                    // the closing transition (below): { ph: 'out' | 'hold' | 'in', k }
+  let urlT = null; for (const h of game.hash) { const m = /^t(?:ime)?=(.+)$/.exec(h); if (m) urlT = parseT(m[1].replace('%3A', ':')); }
+  const savedT = (() => { const v = (save.get('clock', {}) || {}).t; return typeof v === 'number' && Number.isFinite(v) && v >= START && v < END ? v : null; })();
+  let pendingT = urlT === null ? savedT : null, lastSaved = -1e9;
+  const saveT = () => { const t = clock.t; if (tour || closing || t < START || t >= END) return; lastSaved = t; save.update('clock', (o) => ({ ...(o && typeof o === 'object' ? o : {}), t: Math.round(t * 10) / 10 }), {}); };
+
   /* ── toasts, one at a time so a burst of events (close, gates) can be read ── */
   const queue = []; let qBusy = 0;
   const say = (html) => { if (game.player.mode === 'tour') return; queue.push(html); pump(); };
-  function pump() { if (qBusy || !queue.length) return; game.toast(queue.shift(), { tone: 'good', ms: 4600 }); qBusy = 1; setTimeout(() => { qBusy = 0; pump(); }, 2200); }
+  function pump() { if (qBusy || closing || !queue.length) return; game.toast(queue.shift(), { tone: 'good', ms: 4600 }); qBusy = 1; setTimeout(() => { qBusy = 0; pump(); }, 2200); }
 
   const lanternMesh = () => { const L = game.ctx.getFx && game.ctx.getFx(); return L && L.lanterns && L.lanterns.userData.setFall ? L.lanterns : null; };
   const fireworks = () => { const f = game.ctx.getFx && game.ctx.getFx(); return f && f.fireworks; };
   const now = () => game.uTime.value;
 
   /* ── the lantern fall follows the clock ── */
-  let thinUntil = 0, wrapping = false;
+  let thinUntil = 0;
   function lanterns(t, prev, jump) {
     const L = lanternMesh(); if (!L) return; const S = L.userData.fallState || 'classic';
     const inFall = t >= FALL && t < END;
     if (!inFall) {
-      if (wrapping || (!jump && t >= END)) { if (S === 'classic' || S === 'fall') { L.userData.setFall('thin', now()); thinUntil = now() + 60; } }   // the evening ends: the sky thins out
+      if (!jump && t >= END) { if (S === 'classic' || S === 'fall') { L.userData.setFall('thin', now()); thinUntil = now() + 60; } }   // the evening ends: the sky thins out
       else if (S !== 'none' && !(S === 'thin' && !jump)) { L.userData.setFall('none', now()); thinUntil = 0; }                                        // a jump away from the fall
     } else if (jump) {                                           // a jump into the fall: to its start = released afresh, later = already full
       const into = t - FALL;
@@ -71,13 +82,14 @@ export function init(game) {
   function fire(e, jump) {
     if (announced.has(e.id)) return; announced.add(e.id);
     game.emit('clock:event', { id: e.id, t: clock.t });
-    say(e.toast);
+    if (e.id !== 'close') say(e.toast);                             // closing time has its own line, on the fade
     if (e.id === 'hush') hush.start();
-    if (e.id === 'fall' || e.id === 'close') { if (e.id === 'close') hush.stop(); }
+    if (e.id === 'close') hush.stop();
     if (journalOpen()) game.journal.refresh();
   }
   const journalOpen = () => game.journal.isOpen;
   game.on('clock', ({ t, prev, jump }) => {
+    if (jump && closing && closing.ph === 'out' && t < END) { closing.ph = 'in'; closing.k = 1 - closing.k; }                       // someone jumped away from closing time: fade back
     if (jump && t < prev) for (const e of EVENTS) if (e.t >= t) announced.delete(e.id);
     if (jump && hush.on && !(t >= FALL && t < HUSH_END)) hush.stop();
     for (const e of EVENTS) if (jump ? t >= e.t && t < e.t + 1 : prev < e.t && t >= e.t) fire(e, jump);
@@ -88,21 +100,46 @@ export function init(game) {
 
   /* ── running ── */
   let lastMin = -1, lastCur = '', tour = game.player.mode === 'tour';
-  function applyRun() { clock.running = !st.hold && !tour; }
+  function applyRun() { clock.running = !st.hold && !tour && !closing; }
   game.on('mode', ({ mode }) => {
     const was = tour; tour = mode === 'tour';
-    if (tour && !was) { hush.stop();  if (!(clock.t === FALL || (clock.t >= HUSH_END && clock.t < END))) { wrapping = false; clock.set(FALL + 10); } }
+    if (tour && !was) { cancelClosing(); hush.stop(); if (!(clock.t === FALL || (clock.t >= HUSH_END && clock.t < END))) clock.set(FALL + 10); }
+    if (!tour && was && pendingT !== null) { const p = pendingT; pendingT = null; if (clock.t >= FALL && clock.t < END) clock.set(p); }   // the saved evening, once the visitor leaves the opening tour
     applyRun(); track(true); if (game.journal.isOpen) game.journal.refresh();
   });
   game.on('frame', ({ dt }) => {
     clock.rate = rateAt(clock.t);
-    if (clock.t >= END) { wrapping = true; clock.set(START); wrapping = false; }
+    if (clock.t >= END && !closing && !tour) startClosing();
+    else if (clock.t >= END && tour) clock.set(FALL + 10);
+    closeFrame(dt);
+    if (!tour && !closing && Math.abs(clock.t - lastSaved) >= 3) saveT();
     if (thinUntil && now() > thinUntil) { thinUntil = 0; const L = lanternMesh(); if (L && L.userData.fallState === 'thin') L.userData.setFall('none', now()); }
     if (hush.on && (clock.t >= HUSH_END || clock.t < FALL)) hush.stop();
     hush.frame(dt);
     story.frame(dt);
     track(false);
   });
+
+  /* ── closing time: a fade through dark, the evening starts again behind it (the Tour never gets here: it holds the fall) ── */
+  let veil = null, veilP = null;
+  const OUT = 1.4, HOLD = 3, IN = 1.8, ease = (k) => k * k * (3 - 2 * k);
+  function startClosing() {
+    if (closing) return;
+    if (!veil) { veil = document.createElement('div'); veil.id = 'ck-close'; veil.hidden = true; veil.setAttribute('role', 'status'); veil.innerHTML = '<p>The park closes.</p><p>A new evening begins.</p>'; document.body.appendChild(veil); veilP = veil.querySelectorAll('p'); }
+    closing = { ph: 'out', k: 0 }; veil.hidden = false; applyRun();
+  }
+  function cancelClosing() { if (!closing) return; closing = null; if (veil) { veil.style.opacity = '0'; veil.hidden = true; } applyRun(); pump(); }
+  function closeFrame(dt) {
+    if (!closing) return; const c = closing, d = Math.min(dt, 0.1);
+    c.k += d / (c.ph === 'out' ? OUT : c.ph === 'hold' ? HOLD : IN);
+    if (c.ph === 'out' && c.k >= 1) { c.ph = 'hold'; c.k = 0; clock.set(START); if (game.journal.isOpen) game.journal.refresh(); }     // fully dark: the next evening
+    else if (c.ph === 'hold' && c.k >= 1) { c.ph = 'in'; c.k = 0; }
+    else if (c.ph === 'in' && c.k >= 1) { cancelClosing(); return; }
+    const a = c.ph === 'out' ? ease(c.k) : c.ph === 'hold' ? 1 : 1 - ease(c.k);
+    veil.style.opacity = String(a);
+    const line = (i, from, to) => { veilP[i].style.opacity = String(c.ph === 'out' ? 0 : c.ph === 'in' ? 1 - ease(c.k) : ease(Math.min(1, Math.max(0, (c.k * HOLD - from) / (to - from))))); };
+    line(0, 0.1, 0.8); line(1, 0.8, 1.5);
+  }
 
   /* ── tracker ── */
   function current(t = clock.t) { let c = null; for (const e of EVENTS) if (e.id !== 'hush' && t >= e.t) c = e; return c; }
@@ -111,9 +148,10 @@ export function init(game) {
     const t = clock.t, min = Math.floor(t);
     if (!force && min === lastMin) return; lastMin = min;
     if (tour) { game.track('clock', null); return; }
-    const n = next(t), c = current(t);
-    game.track('clock', `<b style="color:inherit;font-size:inherit;letter-spacing:0;text-transform:none">${clock.fmt()}</b> · ` + (n ? `${n.short} at ${game.clock.fmt(n.t)}` : c ? c.short : ''), { order: 90 });
-    const cur = (c ? c.id : '') + (hush.on ? 'h' : ''); if (cur !== lastCur) { lastCur = cur; if (game.journal.isOpen) game.journal.refresh(); }
+    const n = next(t), c = current(t), air = t >= FALL && t < END;      // from 23:00 the lanterns are in the air, until the park closes
+    const what = air ? (t < HUSH_END ? 'Lanterns in the air · silent until ' + game.clock.fmt(HUSH_END) : 'Lanterns in the air · closing at ' + game.clock.fmt(END)) : n ? `${n.short} at ${game.clock.fmt(n.t)}` : c ? c.short : '';
+    game.track('clock', `<b style="color:inherit;font-size:inherit;letter-spacing:0;text-transform:none">${clock.fmt()}</b> · ` + what, { order: 90 });
+    const cur = (c ? c.id : '') + (hush.on ? 'h' : '') + (air ? 'a' : ''); if (cur !== lastCur) { lastCur = cur; if (game.journal.isOpen) game.journal.refresh(); }
   }
 
   /* ── the journal: tonight ── */
@@ -138,6 +176,9 @@ export function init(game) {
     story.journal(el);
   } });
 
+  addEventListener('pagehide', saveT); document.addEventListener('visibilitychange', () => { if (document.hidden) saveT(); });
+  if (urlT !== null) clock.set(urlT);
+  else if (pendingT !== null && !tour) { const p = pendingT; pendingT = null; clock.set(p); }
   clock.running = false; applyRun(); track(true);
-  return { EVENTS, rateAt, get hold() { return st.hold; }, set hold(v) { st.hold = !!v; persist(); applyRun(); }, hush, story, say, announced, lanterns: () => lanternMesh() && lanternMesh().userData.fallState };
+  return { EVENTS, rateAt, get hold() { return st.hold; }, set hold(v) { st.hold = !!v; persist(); applyRun(); }, hush, story, say, announced, get closing() { return closing && closing.ph; }, startClosing, lanterns: () => lanternMesh() && lanternMesh().userData.fallState };
 }

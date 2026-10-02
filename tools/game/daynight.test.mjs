@@ -109,6 +109,35 @@ async function nightShots(hash) {
   await browser.close();
 }
 
+// ── 3b. the sun's shadow map is freed at night and built again at dusk; run-time props are lit at dusk ──
+{
+  const { browser, page, logs, ev } = await open('#weather=clear&fp');
+  await ev("__park.setMode('walk',{at:[285,0],yaw:Math.PI})"); await ev('__park.game.modules.clock && (__park.game.modules.clock.hold = true)');
+  const rt = () => ev('(()=>{const s=__park.game.ctx.surface;return {rt:!!s.sunShadow.rt,on:s.uniforms.uShadowOnS.value,tex:!!s.uniforms.tShadowS.value}})()');
+  await ev(`__park.game.modules.daynight.snap(${m(18, 0)})`); await wait(3500);
+  const d1 = await rt(); check(d1.rt && d1.on === 1 && d1.tex, 'sun shadow map exists at dusk ' + JSON.stringify(d1));
+  // props: the contract is game.props.materials + 'prop'; stand in for it when the core does not have it yet
+  const real = await ev('!!__park.game.props.materials');
+  await ev(`(()=>{const g=__park.game,T=g.THREE;if(!g.props.materials)g.props.materials=new Set();window.__pm=[];
+    for(let i=0;i<2;i++){const o=g.props.mesh(new T.BoxGeometry(1,1.2,1),{x:280-i*2,y:0,z:(g.ground(280-i*2,0)??0)+0.6,color:[0.5,0.3,0.2]});window.__pm.push(o.material);if(!real)g.emit('prop',{material:o.material,kind:'mesh'});}
+    window.__gl=g.props.glow({x:278,y:0,z:2,color:[1.5,0.9,0.4],size:2});if(!real)g.emit('prop',{material:window.__gl.sprite.material,kind:'glow'});})()`.replace('!real', real ? 'false' : 'true'));
+  await ev(`(()=>{const g=__park.game; for (const m of window.__pm) g.props.materials.add(m); g.props.materials.add(window.__gl.sprite.material);})()`);
+  await ev(`__park.game.modules.daynight.snap(${m(17, 45)})`); await wait(3500);
+  const p1 = await ev('__park.game.modules.daynight.props'), op1 = await ev('window.__gl.sprite.material.opacity');
+  check(p1.gain[0] > 1.5 && p1.gain[0] > p1.gain[2], 'lit props are brighter and warmer at 17:45 ' + JSON.stringify(p1));
+  check(op1 < 0.9, 'glow props dim while the lamps are not up: opacity ' + op1);
+  await shot(page, `${OUT}/props_dusk.jpg`);
+  await ev(`__park.game.modules.daynight.snap(${m(23, 0)})`); await wait(3500);
+  const p2 = await ev('__park.game.modules.daynight.props'), op2 = await ev('window.__gl.sprite.material.opacity'), d2 = await rt();
+  check(p2.gain.every((v) => v === 1) && p2.emit === 1 && op2 === 1, 'props are untouched at night ' + JSON.stringify(p2) + ' ' + op2);
+  check(!d2.rt && d2.on === 0 && !d2.tex, 'sun shadow map freed at night ' + JSON.stringify(d2));
+  await shot(page, `${OUT}/props_night.jpg`);
+  await ev(`__park.game.modules.daynight.snap(${m(18, 30)})`); await wait(3500);
+  const d3 = await rt(); check(d3.rt && d3.on === 1, 'sun shadow map built again at the next dusk ' + JSON.stringify(d3));
+  check(logs.filter((l) => !/GPU stall|Context/i.test(l)).length === 0, 'console clean (shadow, props): ' + JSON.stringify(logs.slice(0, 4)));
+  await browser.close();
+}
+
 // ── 4. phone layout ──
 {
   const { browser, page, logs, ev } = await open('#weather=clear', { mobile: true });
