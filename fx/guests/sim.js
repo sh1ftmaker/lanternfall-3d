@@ -42,7 +42,7 @@ export const PARAMS = {
   lane: 1.6,                         // m, max lane offset to the right of a route (keep right)
   lookahead: 3,                      // coarse cells along the flow field
   groupMix: [0.36, 0.36, 0.17, 0.11],// share of parties of 1, 2, 3, 4
-  railShare: 0.3, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.03,
+  railShare: 0.38, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.03,
   arrivalEvery: 3.5,                 // s between parties arriving at the gate (a party far from the camera leaves for each)
   reach: 45,                         // m: sites this far away are picked e^-1 as often as next-door ones
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
@@ -74,7 +74,7 @@ function remoteCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduc
   const CAP = capOf(count, max);
   const state = new Float32Array(CAP * 8);
   for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
-  const debug = { remote: true, ready: false, error: null, times: {}, mainMs: 0, mainMean: 0, frameMean: 0, frameMax: 0, lodK: 1, thinkers: 0, counts: {}, steps: 0, dropped: 0 };
+  const debug = { remote: true, version: 0, ready: false, error: null, times: {}, mainMs: 0, mainMean: 0, frameMean: 0, frameMax: 0, lodK: 1, thinkers: 0, counts: {}, steps: 0, dropped: 0 };
   const crowd = { count: CAP, state, active: 0, want: Math.min(count, CAP), params: { ...PARAMS }, debug, ready: false };
   let worker = new Worker(new URL('./sim-worker.js', import.meta.url), { type: 'module' });
   let inFlight = 0, acc = 0, disposed = false, local = null;
@@ -91,7 +91,7 @@ function remoteCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduc
       const t0 = now(); inFlight--;
       if (m.buf.length === state.length) state.set(m.buf);
       worker.postMessage({ type: 'buf', buf: m.buf }, [m.buf.buffer]);           // the buffer goes back for the next step
-      crowd.active = m.active; if (m.stats) Object.assign(debug, m.stats);
+      crowd.active = m.active; if (m.stats) Object.assign(debug, m.stats); debug.version++;
       debug.mainMs += now() - t0;
     } else if (m.type === 'ready') { crowd.ready = debug.ready = !!m.ready; debug.times = m.times; if (m.error) debug.error = m.error; if (onReady) onReady(crowd); }
     else if (m.type === 'error') fail(m.error);
@@ -319,10 +319,18 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
 
   // ── goals ──
   const cand = new Int32Array(64), candW = new Float32Array(64);
-  function rhythm() {             // a slow drift toward the lake: stronger every ~2.5 minutes, and before the tour's Spire shot
+  // a slow drift toward the lake. In the tour (a 158 s loop) the rail should be lined for the Spire shot (32-49 s):
+  // walking there takes a minute or two, so guests start heading for the lake from ~90 s and those who arrive from
+  // ~130 s stay long. Elsewhere a gentle 150 s swell.
+  function rhythm() {              // wish to go to the lake
     const t = focus.tour;
-    if (t >= 0 && t < 160) return t > 18 && t < 50 ? 1 : 0.25;
+    if (t >= 0) return t > 85 || t < 25 ? 1 : 0.25;
     return 0.5 + 0.5 * Math.sin(simTime * TAU / 150);
+  }
+  function rhythmStay() {          // how long to stay at the rail
+    const t = focus.tour;
+    if (t >= 0) return t > 120 || t < 45 ? 1 : 0.3;
+    return 0.5 + 0.5 * Math.sin(simTime * TAU / 150 + 1);
   }
   function pickGoal(L, avoidSite, minDist = 0) {
     debug.ev.goal++;
@@ -332,7 +340,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     if (LEAVING[L] || crowd.active > crowd.want + 2) { want = 'gate'; LEAVING[L] = 1; }
     else {
       const lv = params.leaveShare * (0.3 + 8 * Math.exp(-Math.hypot(X[L] - P.gate.x, Y[L] - P.gate.y) / 80));   // mostly those near the gate go home
-      const rr = params.railShare * (0.75 + 0.6 * rhythm()), r = rnd() * (rr + params.siteShare + params.walkShare + lv);
+      const rr = params.railShare * (0.5 + 1.5 * rhythm()), r = rnd() * (rr + params.siteShare + params.walkShare + lv);
       want = r < rr ? 'rail' : r < rr + params.siteShare ? 'site' : r < rr + params.siteShare + params.walkShare ? 'walk' : 'gate';
       if (want === 'gate') LEAVING[L] = 1;
     }
@@ -401,7 +409,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
   function dwell(kind) {
     switch (kind) {
       case 'sit': return 45 + rnd() * 100;
-      case 'rail': return (45 + rnd() * 100) * (0.7 + 0.6 * rhythm());
+      case 'rail': return (45 + rnd() * 100) * (0.6 + 0.9 * rhythmStay());
       case 'stage': return 40 + rnd() * 80;
       case 'queue': return 8 + rnd() * 9;          // service time at the front
       case 'look': return 10 + rnd() * 18;
