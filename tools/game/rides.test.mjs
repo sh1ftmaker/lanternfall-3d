@@ -157,6 +157,15 @@ async function run(mobile, fp) {
     const r2 = await ev('(() => { const c = __park.camera.position; return [Math.hypot(c.x + 135.04, c.z - 125.18), c.y, Math.atan2(c.z - 125.18, c.x + 135.04)]; })()');
     check(tag + ' on a horse, going round', Math.abs(r1[0] - 8.15) < 0.6 && Math.abs(r2[2] - r1[2]) > (QUICK ? 0.1 : 0.2), `${r1[0].toFixed(2)} m out, ${(r2[2] - r1[2]).toFixed(2)} rad in 2 s`);
     await shot('9-carousel-ride');
+    if (await ev('!!__park.game.modules.photo')) {        // photo mode borrows the camera from the ride and gives it back; the ride goes on meanwhile
+      const ang = () => ev('(() => { const c = __park.camera.position; return Math.atan2(c.z - 125.18, c.x + 135.04); })()');
+      const en = await ev('__park.game.modules.photo.enter()'); await wait(1200); const a0 = await ang(); await wait(1800); const a1 = await ang();
+      check(tag + ' photo mode borrows the camera on a ride', en && (await held()) === 'photo' && (await ev('__park.game.modules.rides.session.paused')) && (await ev('document.querySelector("#rides-leave").hidden')), await held());
+      check(tag + ' the photographer travels with the carousel', Math.abs(a1 - a0) > 0.1, +(a1 - a0).toFixed(2));
+      await shot('9b-carousel-photo');
+      await ev('__park.game.modules.photo.leave()'); await wait(1800);
+      check(tag + ' the ride takes the camera back', (await held()) === 'rides' && !(await ev('__park.game.modules.rides.session.paused')) && !(await ev('document.querySelector("#rides-leave").hidden')), await held());
+    }
     if (!QUICK && !mobile && !fp) {
       check(tag + ' carousel ends by itself', await until('!__park.game.cameraHeld', 75000, tag + ' carousel natural end'));
       await wait(500); check(tag + ' leave event (done)', await ev('__ev.some((e) => e[0] === "rides:leave" && e[1] === "carousel" && e[2] === "done")'));

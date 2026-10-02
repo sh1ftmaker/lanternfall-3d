@@ -37,7 +37,9 @@ async function run(mobile, quality) {
     else if (m === 'orbit') await ev("__park.setMode('orbit')");
     else { await ev(`document.querySelector('#btn-pf').getAttribute('aria-pressed')`); await ev(`(()=>{const w=${m === 'wick'}; if (w !== !!__park.platformer?.active) { try{ localStorage.setItem('lanternfall-walk', w?'wick':'fp'); }catch(e){} } })()`);
       await ev("__park.setMode('walk',{at:[288,0],yaw:Math.PI})"); await wait(2500);
-      const now = await ev('!!__park.platformer?.active'); if (now !== (m === 'wick')) { await ev("document.querySelector('#btn-pf').click()"); await wait(2500); } }
+      const now = await ev('!!__park.platformer?.active'); if (now !== (m === 'wick')) { await ev("document.querySelector('#btn-pf').click()"); await wait(2500); }
+      // Wick loads in the background and may still be on his way: wait until the game sees him standing in the park (the Pose button depends on it)
+      if (m === 'wick') await page.waitForFunction('!!(__park.platformer && __park.platformer.active && __park.game.player.wick && __park.game.player.mode === "walk")', { timeout: 150000, polling: 250 }).catch(() => add('Wick never loaded')); }
     await wait(1500);
     const mode0 = await ev('__park.mode'), cam0 = await cam(), clean0 = await ev("document.body.classList.contains('clean')");
     const wick0 = m === 'wick' ? await ev('(()=>{const v=__park.platformer.view.pos;return [v.x,v.y,v.z]})()') : null;
@@ -63,7 +65,18 @@ async function run(mobile, quality) {
     for (let i = 0; i < 6; i++) await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.x += 200; c.p.y -= 500;})()"); await wait(300);
     const far = await ev('(()=>{const c=__park.game.modules.photo.cam, p=__park.camera.position, g=__park.game.ground(p.x,-p.z,p.y); return {d:c.p.distanceTo(c.home), y:p.y, g}})()');
     check(far.d <= 25.01 && (far.g === null || far.y >= far.g), `${tag}/${m}: bounded (d=${far.d.toFixed(1)}, y=${far.y.toFixed(1)}, ground=${far.g})`);
-    await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.copy(c.home);})()");
+    await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.copy(c.home);})()"); await wait(300);
+    if (m === 'wick') {          // a wall: find one by ray, then try to be on its far side in one move; the camera must stop short of it
+      const wall = await ev(`(() => { const G = __park.game, T = G.THREE, c = G.modules.photo.cam, home = c.home.clone(), ms = G.ctx.getPark().children.filter((m) => m.isMesh && m.geometry.attributes.aCol && !m.material.transparent && m.geometry.index), rc = new T.Raycaster(); let best = null;
+        for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2, d = new T.Vector3(Math.sin(a), 0, Math.cos(a)); rc.set(home, d); rc.far = 20; const h = rc.intersectObjects(ms, false)[0]; if (h && h.distance > 1.5 && (!best || h.distance < best.d)) best = { d: h.distance, dir: [d.x, d.z], home: home.toArray() }; } return best; })()`);
+      check(!!wall, `${tag}/${m}: a wall within 20 m to test against (${wall && wall.d.toFixed(1)} m)`);
+      if (wall) {
+        await ev(`(() => { const c = __park.game.modules.photo.cam; c.p.set(${wall.home[0] + wall.dir[0] * (wall.d + 4)}, ${wall.home[1]}, ${wall.home[2] + wall.dir[1] * (wall.d + 4)}); })()`); await wait(500);
+        const along = await ev(`(() => { const p = __park.camera.position; return (p.x - ${wall.home[0]}) * ${wall.dir[0]} + (p.z - ${wall.home[2]}) * ${wall.dir[1]}; })()`);
+        check(along < wall.d - 0.1 && along > -1, `${tag}/${m}: the camera stops short of the wall (${along.toFixed(2)} m along, wall at ${wall.d.toFixed(2)} m)`);
+        await ev("(()=>{const c=__park.game.modules.photo.cam; c.p.copy(c.home);})()"); await wait(300);
+      }
+    }
     // aspects
     for (const [a, r] of [['1:1', 1], ['4:5', 0.8], ['16:9', 16 / 9], ['free', 0]]) {
       await ev(`document.querySelector('[data-asp="${a}"]').click()`); await wait(150);
@@ -89,7 +102,7 @@ async function run(mobile, quality) {
     const dl0 = (await ev('__dl.length')) + (await ev('__shared.length'));
     await ev("document.querySelector('#ph-shutter').click()"); await wait(1800);
     const last = await ev('(()=>{const l=__park.game.modules.photo.last; return l && {w:l.w,h:l.h,size:l.blob.size,name:l.name,type:l.blob.type}})()');
-    check(last && last.size > 8000 && Math.abs(last.w / last.h - 0.8) < 0.01, `${tag}/${m}: picture ${last && last.w}x${last && last.h} ${last && last.size} bytes ${last && last.name}`);
+    check(last && last.size > 8000 && last.w >= 1280 && Math.abs(last.w / last.h - 0.8) < 0.01, `${tag}/${m}: picture ${last && last.w}x${last && last.h} ${last && last.size} bytes ${last && last.name}`);
     check(last && /^lanternfall-\d{4}-\d\d-\d\d-\d{6}\.jpg$/.test(last.name), `${tag}/${m}: file name`);
     check((await ev('__dl.length')) + (await ev('__shared.length')) === dl0 + 1, `${tag}/${m}: delivered once (${mobile ? 'share' : 'download'})`);
     await shot(m + '-4-saved');
@@ -111,7 +124,7 @@ async function run(mobile, quality) {
   await wait(800); await page.reload(); await page.waitForFunction('window.__park && window.__park.loaded && __park.game.modules.photo', { timeout: 240000 });
   const n1 = await ev('__park.game.modules.photo.shots.length'); check(n1 === n0, `${tag}: thumbnails survive a reload (${n1})`);
   await ev('__park.game.journal.open()'); await wait(500); await shot('journal');
-  const th = await ev("(()=>{const i=document.querySelector('.ph-sheet img'); return i && i.naturalWidth})()"); check(th > 100 && th < 260, `${tag}: contact sheet shows thumbnails (${th} px)`);
+  const th = await ev("(()=>{const i=document.querySelector('.ph-sheet img'); return i && i.naturalWidth})()"); check(th >= 300 && th <= 340, `${tag}: contact sheet shows thumbnails (${th} px)`);
   await ev("document.querySelector('.ph-sheet button').click()"); await wait(300); check(await ev("!document.querySelector('#ph-lightbox').hidden"), `${tag}: tapping a thumbnail shows it larger`); await shot('lightbox');
   await ev("document.querySelector('#ph-lightbox').click()");
   // context loss while in photo mode
@@ -127,6 +140,51 @@ async function run(mobile, quality) {
   const errList = [...errs].map(([k, v]) => v + 'x ' + k); check(errList.length === 0, `${tag}: no console errors ${JSON.stringify(errList)}`);
   await browser.close();
 }
+async function runLandscape() {
+  const W = 844, H = 390, tag = 'landscape'; console.log('== ' + tag);
+  const browser = await puppeteer.launch({ executablePath: '/usr/bin/chromium', headless: 'new', args: ['--no-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=gl', `--window-size=${W},${H}`] });
+  const page = await browser.newPage(); const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message.slice(0, 120))); page.on('console', (m) => { if (m.type() === 'error' && !/GPU stall|ReadPixels/.test(m.text())) errs.push(m.text().slice(0, 120)); });
+  await page.setViewport({ width: W, height: H, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await page.goto(URL + '#weather=clear'); await page.waitForFunction('window.__park && window.__park.loaded && __park.game.modules.photo', { timeout: 240000 });
+  const ev = (js) => page.evaluate(js);
+  await ev("__park.setMode('walk',{at:[288,0],yaw:Math.PI})"); await wait(2500);
+  await ev("__park.game.modules.photo.enter()"); await wait(900);
+  const g = await ev(`(() => { const b = document.querySelector('#ph-bar').getBoundingClientRect(), c = __park.game.modules.photo.cropRect(); return { bar: [b.left, b.top, b.width, b.height], crop: [c.x, c.y, c.w, c.h] }; })()`);
+  check(g.bar[2] < W * 0.2 && g.bar[3] <= H - 8, `${tag}: the strip is a narrow column (${g.bar.map((v) => Math.round(v))})`);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${tag}-1-strip.png` });
+  await ev("document.querySelector('[data-tab=look]').click()"); await ev("document.querySelector('[data-asp=\"16:9\"]').click()"); await wait(500);
+  const g2 = await ev(`(() => { const b = document.querySelector('#ph-bar').getBoundingClientRect(), c = __park.game.modules.photo.cropRect(), s = document.querySelector('#ph-shutter').getBoundingClientRect(); return { bar: [b.left, b.top, b.width, b.height], crop: [c.x, c.y, c.w, c.h], shutter: [s.left, s.top, s.right, s.bottom] }; })()`);
+  check(g2.bar[2] < W * 0.5 && g2.crop[0] + g2.crop[2] <= g2.bar[0] + 1 && g2.crop[2] > 200 && g2.shutter[3] <= H, `${tag}: with a panel open the picture and the controls do not overlap (bar ${g2.bar.map((v) => Math.round(v))}, picture ${g2.crop.map((v) => Math.round(v))})`);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${tag}-2-panel.png` });
+  await ev("document.querySelector('#ph-shutter').click()"); await wait(2500);
+  const last = await ev('(()=>{const l=__park.game.modules.photo.last; return l && {w:l.w,h:l.h}})()'); check(last && last.w >= 1280, `${tag}: picture ${last && last.w}x${last && last.h}`);
+  await ev("document.querySelector('#ph-done').click()"); await wait(500);
+  check(errs.length === 0, `${tag}: no console errors ${JSON.stringify(errs)}`);
+  await browser.close();
+}
+// odd saves: missing, null, wrong types, older shapes, a hostile thumbnail; nothing may throw and the modules start from defaults
+async function runSaves() {
+  console.log('== saves');
+  const browser = await puppeteer.launch({ executablePath: '/usr/bin/chromium', headless: 'new', args: ['--no-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=gl', '--window-size=1280,720'] });
+  const page = await browser.newPage(); const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message.slice(0, 120))); page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !/GPU stall|ReadPixels/.test(m.text())) errs.push(m.text().slice(0, 120)); });
+  await page.setViewport({ width: 1280, height: 720 });
+  const variants = [{ photo: null, rides: null }, { photo: { shots: 'x', prefs: 5 }, rides: 'abc' }, { photo: [1, 2], rides: [3] },
+    { photo: { shots: [{ img: 'x"onerror=alert(1)' }, null, 5, { img: 'data:image/jpeg;base64,/9j/4AAQ', place: 7 }], prefs: { aspect: 'bad', thirds: 'no', look: 3 } }, rides: { monorail: 'a', cruise: -3, carousel: 2.7 } }];
+  await page.goto(URL + '#weather=clear'); await page.waitForFunction('window.__park && window.__park.loaded', { timeout: 240000 });
+  for (const [i, v] of variants.entries()) {
+    await page.evaluate((o) => { localStorage.setItem('lanternfall.game.v1', JSON.stringify(o)); }, v);
+    await page.reload(); await page.waitForFunction('window.__park && window.__park.loaded && __park.game.modules.photo && __park.game.modules.rides', { timeout: 240000 });
+    await page.evaluate("__park.game.journal.open()"); await wait(500);
+    const r = await page.evaluate(`(() => { const p = __park.game.modules.photo, c = __park.game.modules.rides.counts(); return { shots: p.shots.length, c, journal: document.querySelectorAll('.ph-sheet button').length, onerr: !!document.querySelector('.ph-sheet img[onerror]') }; })()`);
+    check(r.c.monorail >= 0 && r.c.cruise === 0 && !r.onerr && r.shots <= 1 && Object.values(r.c).every((n) => Number.isInteger(n) && n >= 0), `saves ${i}: loads from defaults (${JSON.stringify(r)})`);
+    await page.evaluate("__park.game.journal.close()"); await page.evaluate("__park.game.modules.photo.enter() && __park.game.modules.photo.leave()");
+  }
+  check(errs.length === 0, `saves: no console errors ${JSON.stringify(errs)}`);
+  await browser.close();
+}
+if (process.env.EXTRA !== 'no' && (!process.env.ONLY || /extra/.test(process.env.ONLY))) { await runLandscape().catch((e) => { fails.push('landscape crashed ' + e.message); console.log(e); }); await runSaves().catch((e) => { fails.push('saves crashed ' + e.message); console.log(e); }); }
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null;
 for (const [i, [mobile, q]] of [[false, 'cinematic'], [true, 'cinematic'], [false, 'hd'], [true, 'fast']].entries()) if (!ONLY || ONLY.includes(i)) await run(mobile, q).catch((e) => { fails.push('run crashed ' + e.message); console.log(e); });
 console.log(fails.length ? 'FAILED: ' + fails.length + '\n' + fails.join('\n') : 'ALL OK'); process.exit(fails.length ? 1 : 0);
