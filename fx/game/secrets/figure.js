@@ -2,7 +2,8 @@
 // Proportions follow the park's guests (fx/guests/assets.js: a 1.72 m adult, hips 0.95 m, shoulders 1.40 m, head centre 1.58 m),
 // flat-shaded: every face has its own vertices and one colour. Three.js axes, y up, front = +z, feet at y = 0.
 // pal: { coat, hat (or null), skin, trousers, shoes, long } linear rgb; the colour is baked into vertex colours.
-export function buildFigure(THREE, pal) {
+// A flat-shaded part builder: add(geometry, rgb, x, y, z, {rx, ry, rz, sx, sy, sz}) bakes a face colour into vertex colours; finish() gives one geometry.
+export function partsBuilder(THREE) {
   const pos = [], col = [], LIGHT = new THREE.Vector3(0.35, 0.8, 0.5).normalize();
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const add = (geo, rgb, x, y, z, { rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1 } = {}) => {
@@ -16,6 +17,11 @@ export function buildFigure(THREE, pal) {
     }
     geo.dispose();
   };
+  const finish = () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return g; };
+  return { add, finish };
+}
+export function buildFigure(THREE, pal) {
+  const { add, finish } = partsBuilder(THREE);
   const cyl = (rt, rb, h, sides) => new THREE.CylinderGeometry(rt, rb, h, sides, 1, false);
   const long = pal.long !== false;
   for (const sx of [-1, 1]) {
@@ -37,9 +43,7 @@ export function buildFigure(THREE, pal) {
     add(cyl(0.095, 0.125, 0.15, 8), pal.hat, 0, 1.75, 0);                                                        // crown
     add(cyl(0.128, 0.128, 0.03, 8), pal.coat, 0, 1.69, 0);                                                       // band
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return g;
+  return finish();
 }
 export const RED_COAT = { coat: [0.6, 0.025, 0.035], hat: [0.4, 0.02, 0.03], skin: [0.45, 0.3, 0.23], trousers: [0.05, 0.04, 0.05], shoes: [0.03, 0.02, 0.02], long: true };
 export const SHADOW = { coat: [0.008, 0.008, 0.012], hat: null, skin: [0.01, 0.01, 0.014], trousers: [0.008, 0.008, 0.012], shoes: [0.008, 0.008, 0.012], long: true };
