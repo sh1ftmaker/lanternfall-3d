@@ -56,9 +56,8 @@ export function init(game) {
     const L = lanternMesh(); if (!L) return; const S = L.userData.fallState || 'classic';
     const inFall = t >= FALL && t < END;
     if (!inFall) {
-      if (wrapping && S !== 'none') { L.userData.setFall('thin', now()); thinUntil = now() + 60; }
-      else if (S !== 'none' && !(S === 'thin' && !jump)) { L.userData.setFall('none', now()); thinUntil = 0; }
-      else if (S === 'thin' && jump && !wrapping) { L.userData.setFall('none', now()); thinUntil = 0; }
+      if (wrapping || (!jump && t >= END)) { if (S === 'classic' || S === 'fall') { L.userData.setFall('thin', now()); thinUntil = now() + 60; } }   // the evening ends: the sky thins out
+      else if (S !== 'none' && !(S === 'thin' && !jump)) { L.userData.setFall('none', now()); thinUntil = 0; }                                        // a jump away from the fall
     } else if (jump) {                                           // a jump into the fall: to its start = released afresh, later = already full
       const into = t - FALL;
       if (into < 4) L.userData.setFall('fall', now() - into / FALL_RATE); else if (S !== 'classic') L.userData.setFall('classic', now());
