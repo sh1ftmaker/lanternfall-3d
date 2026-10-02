@@ -2,7 +2,7 @@
 // rendering, for many simulated minutes and measures how the crowd behaves.
 //
 //   node tools/guests-sim/harness.mjs [--sim <path to sim.js>] [--data <data dir>] [--out <dir>] [--tag name]
-//        [--minutes 20] [--warm 2] [--count 2400] [--scen ordinary,frostfair,stories,prefall,fall] [--fps 60]
+//        [--minutes 20] [--seed 1] [--adapt] [--warm 2] [--count 2400] [--scen ordinary,frostfair,stories,prefall,fall] [--fps 60]
 //        [--focus x,y,z,mode] [--crop x,y,r[,name]]...
 //
 // Scenarios set the clock module's crowd bias (fx/game/clock/crowd.js BIASES) and, for 'fall', the silent four minutes
@@ -16,6 +16,7 @@
 //              until they part beyond 0.5 m); ghost = the sim's own pass-through mode activations per minute
 //   density    guests per 2 m square over occupied squares (median, p95, max), share of guests in squares with >= 5
 //              (crowd, > 1.25 / m2), walkers only too
+//   close      pairs of different parties closer than 0.6 m in 2 m squares next to the lake rail slots, and at the arrival spot (x > 322), mean per sample
 //   poi        per site kind: slot utilisation (time-mean occupied slots / slots), share of sites never used, share of
 //              sites full >= 50 % of the time, Gini of use per site
 //   regions    entries per minute and mean occupancy for interiors and cut-off areas (the tavern, the castle courtyard,
@@ -64,6 +65,7 @@ const REG = [
   ['tavern', (x, y) => x > 124 && x < 146 && y > -31 && y < -11],
   ['courtyard', (x, y) => Math.hypot(x + 212, y - 1) < 9],
   ['maze', (x, y) => Math.abs(x + 92) + Math.abs(y + 150.7) < 21],          // the Rose Maze: a diamond centred (-92, -150.7) in the walk grid, about 23 m to a corner
+  ['arrival', (x, y) => x > 322 && Math.abs(y) < 10],          // the East Gate's arrival spot (336, +-7)
   ['mazecore', (x, y) => Math.hypot(x + 92, y + 150.7) < 6],
   ['frostmere', (x, y) => landOf(x, y) === 'frostmere'],
   ['lantern-row', (x, y) => landOf(x, y) === 'lantern-row'],
@@ -93,7 +95,7 @@ const ramp = (t) => { t = Math.max(0, Math.min(1, t)) * (RAMP.length - 1); const
 // ── one scenario ──
 const GC = 2, GW = Math.ceil(W * NV.cell / GC), GH = Math.ceil(H * NV.cell / GC);
 function run(scen) {
-  const crowd = createCrowd({ nav, manifest, pois, count: COUNT, max: Math.ceil(Math.max(COUNT, 400) * 1.7), seed: 1, sync: true, manualLocal: true, ground });
+  const crowd = createCrowd({ nav, manifest, pois, count: COUNT, max: Math.ceil(Math.max(COUNT, 400) * 1.7), seed: +opt('seed', 1), sync: true, manualLocal: true, ground });
   if (!crowd.ready) throw new Error('not ready: ' + crowd.debug.error);
   crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: args.includes('--adapt') ? 2.0 : 1e9, ...(process.env.PARAMS ? JSON.parse(process.env.PARAMS) : {}) });     // the Worker's budget (sim-worker.js)
   const dbg = crowd.debug, A = dbg.arrays, ST = dbg.ST, CAP = crowd.count, D = dbg.D, sites = D.P.sites, S = D.P.slots;
@@ -106,6 +108,8 @@ function run(scen) {
   const acc = { stuck5: 0, stuck20: 0, wantN: 0, over: 0, overParty: 0, dens: [], crowdShare: 0, crowdWalk: 0, walkN: 0, act: 0 };
   const heat = new Float32Array(GW * GH), cnt = new Uint16Array(GW * GH);
   const siteOcc = new Float32Array(sites.length), siteFull = new Float32Array(sites.length), siteUsed = new Uint8Array(sites.length);
+  const railCell = new Uint8Array(GW * GH); for (const s of sites) if (s.kind === 'rail') for (const k of s.slots) { const gx = ((S.x[k] - NV.x0) / GC) | 0, gy = ((S.y[k] - NV.y0) / GC) | 0; for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) railCell[(gy + oy) * GW + gx + ox] = 1; }
+  let closeRail = 0, closeGate = 0;
   const inReg = new Uint8Array(CAP * REG.length), regEnt = new Float64Array(REG.length), regOcc = new Float64Array(REG.length);
   // trips (leaders)
   const tSite = new Int32Array(CAP).fill(-2), tX = new Float32Array(CAP), tY = new Float32Array(CAP), tT = new Float32Array(CAP), tLen = new Float32Array(CAP), lX = new Float32Array(CAP), lY = new Float32Array(CAP), tGX = new Float32Array(CAP), tGY = new Float32Array(CAP);
@@ -198,7 +202,9 @@ function run(scen) {
         const xx = gx + ox, yy = gy + oy; if (xx < 0 || yy < 0 || xx >= GW || yy >= GH) continue;
         for (let j = PG[yy * GW + xx]; j >= 0; j = PN[j]) {
           if (j <= i || (ANI[i] === 4 && ANI[j] === 4) || Math.abs(Z[j] - Z[i]) > 1) continue;
-          if ((X[j] - X[i]) ** 2 + (Y[j] - Y[i]) ** 2 < 0.1225) { if (party(i) === party(j)) ovp++; else ov++; }
+          const d2 = (X[j] - X[i]) ** 2 + (Y[j] - Y[i]) ** 2;
+          if (d2 < 0.36 && party(i) !== party(j)) { if (railCell[gy * GW + gx]) closeRail++; if (X[i] > 322 && Math.abs(Y[i]) < 10) closeGate++; }
+          if (d2 < 0.1225) { if (party(i) === party(j)) ovp++; else ov++; }
         }
       }
     }
@@ -226,7 +232,7 @@ function run(scen) {
   const res = {
     tag: TAG, scen, minutes: MIN, warm: WARM, count: COUNT, active: Math.round(acc.act / n), focus,
     stuck5: +(acc.stuck5 / n).toFixed(4), stuck20: +(acc.stuck20 / n).toFixed(4), wantWalk: Math.round(acc.wantN / n),
-    overlapsOther: +(acc.over / n).toFixed(1), overlapsParty: +(acc.overParty / n).toFixed(1),
+    overlapsOther: +(acc.over / n).toFixed(1), overlapsParty: +(acc.overParty / n).toFixed(1), closeRail: +(closeRail / n).toFixed(2), closeGate: +(closeGate / n).toFixed(2),
     passesPerMin: +(passes / mins).toFixed(1), passWhy: Object.fromEntries(Object.entries(passWhy).map(([k, v]) => [k, +(v / mins).toFixed(1)])), ghostPerMin: +((dbg.ev.ghost - ghost0) / mins).toFixed(1), giveUpPerMin: +(((dbg.ev.repick || 0) - repick0) / mins).toFixed(1),
     density: { median: q(dM, 0.5), p95: q(d95, 0.5), maxMedian: q(dMax, 0.5), maxMax: Math.max(...dMax), crowdShare: +(acc.crowdShare / n).toFixed(3), crowdShareWalkers: +(acc.crowdWalk / n).toFixed(3) },
     poi, regions,
@@ -267,5 +273,5 @@ for (const c of crops) {
 }
 if (+opt('minutes', 20) > 0) for (const s of SCEN) {
   const T = Date.now(), r = run(s);
-  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn}/${r.regions.mazecore.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms cpu ${r.cost.cpuMean}/${r.cost.cpuP50} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
+  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn}/${r.regions.mazecore.meanIn} gate ${r.regions.arrival.meanIn} close<0.6 rail ${r.closeRail} gate ${r.closeGate} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms cpu ${r.cost.cpuMean}/${r.cost.cpuP50} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
 }

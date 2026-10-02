@@ -296,12 +296,28 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       } else spawnArrival(size);
     }
   }
+  // squared distance to the nearest guest within 2 m of (x, y) (4 when none), from the hash grid of the last frame
+  function nearestAgent2(x, y) {
+    const head = HG.head, next = HG.next, gx = Math.floor((x - D.N.x0) / 2), gy = Math.floor((y - D.N.y0) / 2); let best = 16;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) for (let j = head[hb(gx + ox, gy + oy)]; j >= 0; j = next[j]) { const d = (X[j] - x) * (X[j] - x) + (Y[j] - y) * (Y[j] - y); if (d < best) best = d; }
+    return Math.sqrt(best);
+  }
   function spawnArrival(size, atGate = false) {
     debug.ev.spawn++;
     // arrivals: at the gate when the camera is not there (they walk in), else somewhere far from the camera
     const g = D.P.gate, fd = hyp(focus.x - g.x, focus.y - g.y);
     let x, y;
-    if (atGate || fd > 60 || rnd() < 0.15) { const S = D.P.slots, k = g.slots[(rnd() * g.slots.length) | 0]; x = S.x[k] + (rnd() - 0.5); y = S.y[k] + (rnd() - 0.5); }
+    if (atGate || fd > 60 || rnd() < 0.15) {
+      // spread over the width of the avenue: the best of a few spots (the one with nobody near), not one of nine fixed ones
+      const S = D.P.slots; let bd = -1;
+      for (let t = 0; t < 5; t++) {
+        const k = g.slots[(rnd() * g.slots.length) | 0], cx = S.x[k] + (rnd() - 0.5) * 3, cy = S.y[k] + (rnd() - 0.5) * 2.2;
+        if (clearance(D.N, cx, cy) < 0.5) continue;
+        const nd = nearestAgent2(cx, cy);
+        if (nd > bd) { bd = nd; x = cx; y = cy; }
+      }
+      if (bd < 0) { const k = g.slots[(rnd() * g.slots.length) | 0]; x = S.x[k]; y = S.y[k]; }
+    }
     else { let c = randomSpawnCell(); for (let t = 0; t < 12; t++) { const cx = cellX(D.N, c), cy = cellY(D.N, c); if (hyp(cx - focus.x, cy - focus.y) > 90) break; c = randomSpawnCell(); } x = cellX(D.N, c); y = cellY(D.N, c); }
     if (clearance(D.N, x, y) < 0.4) { const c = nearestCell(D.N, x, y, 4); if (c < 0) return -1; x = cellX(D.N, c); y = cellY(D.N, c); }
     const L = spawnParty(x, y, Math.PI, size); if (L < 0) return -1;
