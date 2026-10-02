@@ -93,6 +93,7 @@ export function buildFireworks({ uTime, scale = 1 }) {
   pts.userData.update = (now, dt, ctx) => {
     let rate = 0;
     if (ctx.tour >= 0) { const t = ctx.tour; if ((t > 34 && t < 49) || (t > 146.5 && t < 158)) rate = 1.6; }
+    else if (pts.userData.finale) rate = 1.3;                    // game hook: clock: the closing volleys of the evening (23:34 on)
     else if (ctx.always) { quiet -= dt; if (quiet < 0) { volley = 4 + Math.floor(r1() * 5); quiet = 45 + r1() * 40; } if (volley > 0) rate = 1.3; }
     if (!rate) { acc = 0; return; }
     acc += dt * rate;
