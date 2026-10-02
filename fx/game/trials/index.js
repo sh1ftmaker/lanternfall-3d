@@ -38,8 +38,9 @@ export function init(game) {
   const { THREE, scene, player } = game;
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
   const countEl = document.createElement('div'); countEl.id = 'trials-count'; countEl.setAttribute('aria-hidden', 'true'); document.body.appendChild(countEl);
-  const store = () => game.save.get(KEY, { c: {} });
-  const bestOf = (id, st) => store().c[id + '.' + st] || null;
+  // saved state may be old, partial or hand-edited: never let it throw (a best needs a time; a bad ghost falls back to the pace lantern)
+  const store = () => { const s = game.save.get(KEY, null); return s && typeof s === 'object' && s.c && typeof s.c === 'object' ? s : { c: {} }; };
+  const bestOf = (id, st) => { const e = store().c[id + '.' + st]; return e && typeof e === 'object' && Number.isFinite(e.t) ? e : null; };
   const bits = {};                 // shared geometry, built once
   let race = null;
   for (const c of COURSES) c.pts = c.cps;
@@ -92,8 +93,8 @@ export function init(game) {
   const gcol = [[0.35, 0.65, 1.4], [0.3, 0.55, 1.1], [0.26, 0.46, 0.9], [0.2, 0.36, 0.7], [0.15, 0.28, 0.5], [0.1, 0.2, 0.35], [0.06, 0.12, 0.2]];
   function makeGhost(c, st) {
     const best = bestOf(c.id, st); let a, dur, kind = 'best';
-    if (best && best.g) { a = decode(best.g); dur = (a.length / 3 - 1) * DT; }
-    else {                                   // first run: a pace lantern along the course at a modest fixed speed
+    if (best && best.g) { try { a = decode(best.g); if (a.length < 6 || !a.every(Number.isFinite)) a = null; } catch (e) { a = null; } if (a) dur = (a.length / 3 - 1) * DT; }
+    if (!a) {                                   // first run: a pace lantern along the course at a modest fixed speed
       kind = 'pace'; const sp = c.pace * (st === 'f' ? 0.6 : 1), path = [c.post.slice(0, 3), ...c.pts]; let L = 0; for (let i = 1; i < path.length; i++) L += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
       dur = L / sp; const n = Math.ceil(dur / DT) + 1; a = new Float32Array(n * 3); let seg = 1, acc = 0, segL = Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]);
       for (let i = 0; i < n; i++) {
@@ -150,7 +151,8 @@ export function init(game) {
     const r = race, c = r.c, t = +r.t.toFixed(2), prev = r.best, nb = !prev || t < prev.t;
     const medal = medalOf(c, t, r.st), key = c.id + '.' + r.st;
     game.save.update(KEY, (s) => {
-      const e = s.c[key] || { runs: 0 }; e.runs++;
+      if (!s || typeof s !== 'object' || !s.c || typeof s.c !== 'object') s = { c: {} };
+      const e = s.c[key] && typeof s.c[key] === 'object' ? s.c[key] : { runs: 0 }; e.runs = (e.runs | 0) + 1;
       if (nb) { e.t = t; e.sp = r.splits.map((v) => +v.toFixed(1)); e.g = encode(Float32Array.from(r.rec)); e.m = medal; }
       s.c[key] = e; return s;
     }, { c: {} });
@@ -170,6 +172,9 @@ export function init(game) {
       if (r.cd > 0) { if (!game.reduceMotion && n >= 1 && countEl.firstChild.nodeValue !== String(n)) countEl.firstChild.nodeValue = String(n); r.px = player.x; r.py = player.y; return; }
       go();
     }
+    // a jump of tens of metres in one frame is a teleport (the journal's "Take me there", a paper door, a long nap), not running:
+    // the path from the old spot to the new one must not pass a ring, and the race is off
+    if (Math.hypot(player.x - r.px, player.y - r.py) > 20) { cancel('teleport'); return; }
     r.t += dt;
     while (r.recN * DT <= r.t) { r.rec.push(player.x, player.y, player.z); r.recN++; }
     const cp = c.pts[r.n], hr = cp[3] || 5, hz = cp[4] || 7;
@@ -200,7 +205,7 @@ export function init(game) {
     render(el) {
       for (const c of COURSES) {
         const w = bestOf(c.id, 'w'), f = bestOf(c.id, 'f'), row = document.createElement('div'); row.className = 'tr-row';
-        const line = (b, tag) => `<span class="tr-t">${fmt(b.t)}</span> · ${MEDALS[b.m ?? medalOf(c, b.t, tag)]}${tag === 'f' ? ' (first person)' : ''}`;
+        const line = (b, tag) => `<span class="tr-t">${fmt(b.t)}</span> · ${MEDALS[b.m] || MEDALS[medalOf(c, b.t, tag)]}${tag === 'f' ? ' (first person)' : ''}`;
         row.innerHTML = `<b>${c.name}</b>${c.wick ? ' <span class="tr-sub">Wick only</span>' : ''}<br>` + (w ? line(w, 'w') + (f ? '<br>' + line(f, 'f') : '') : f ? line(f, 'f') : '<span class="tr-sub">No time yet. Bronze for finishing, silver ' + fmt(c.medals.silver) + ', gold ' + fmt(c.medals.gold) + '.</span>') +
           `<div class="tr-sub">${c.blurb} Start post: ${c.where}.</div>`;
         const b = document.createElement('button'); b.type = 'button'; b.className = 'tr-go'; b.textContent = 'Take me there';
