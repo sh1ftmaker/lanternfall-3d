@@ -46,7 +46,82 @@ Benches, chairs, bleacher tiers.
 | `yaw` | direction a sitter faces (away from the backrest; for backless benches the side with knee room / walkable ground) |
 | `cap` | number of seats: seat `k` (0..cap-1) sits at `(x, y) + r * ((k + 0.5) / cap - 0.5) * len`, where `r = (sin yaw, -cos yaw)` (the sitter's right) |
 | `len` | usable length along the bench (m) |
-| `ax`, `ay` | approach point: walkable spot in front of the seat where a guest stands before sitting down (feet at the walk-grid height there) |
+| `ax`, `ay` | approach point: walkable spot in front of the seat where a guest stands before sitting down (feet at the walk-grid height there). For upper bleacher tiers (seat more than 0.8 m above the ground: Meridian's bleachers, Guildhollow's Training Yard) the tier is not on the walk grid; `ax, ay` is then the nearest walkable cell (within 3 m) and the guest has to be moved onto the seat (fade / short hop). The feet of a sitter rest at about `z - 0.45`. |
+
+Seat heights: `z` minus the walk height at `(ax, ay)` is 0.42-0.62 m for ordinary benches and chairs; Meridian's
+plaza benches are modelled only 0.10 m above the paving (their `z` is honest; sit low or skip them, they are the
+benches with `land: "meridian"` and `z < 0.3`).
+
+### `stall`
+
+| key | meaning |
+|---|---|
+| `x`, `y`, `z` | where the first customer stands (walkable, 0.35-1.2 m in front of the counter edge) |
+| `yaw` | facing the counter |
+| `cap` | number of queue places (0.7 m apart) that fit in a straight walkable line behind the first customer, 1..8 |
+| `qyaw` | direction the queue extends from the first customer (away from the counter; = `yaw + PI`) |
+| `qlen` | length of that line in m (`(cap - 1) * 0.7`); queue place `k` is at `(x, y) + k * 0.7 * (cos qyaw, sin qyaw)` |
+| `name` | e.g. "Night Market stall", "Cider stand", "Guild Fair Midway stall", "Snack kiosk", "Arcade cabinet" |
+
+Includes vending walls, ticket machines and Meridian's arcade cabinets (short queues). There is no separate `queue`
+type: the queue is described by `qyaw`/`qlen`.
+
+### `view`
+
+A standing spot and the direction of the thing worth looking at; `cap` 2.
+
+- The lake: 333 spots along Stillwater's edge every ~1.5 m (`land: "core"`, name "Stillwater: the Spire and the
+  lantern fall"), the closest walkable spot to the water, facing the Spire (0, 0). `rail: 1` when a balustrade is in
+  front of the spot at 0.6-1.3 m (lean on it: `anim 5`); spots without `rail` are at openings and steps.
+- Landmarks and attractions (keeps, the Crystal Court, the Gyre, the Paper Doors, the Bounty Board, the wish
+  plaques, the fountain, the carousel pavilion, the pond bridge, overlooks...): spots chosen on walkable ground at
+  a sensible distance from the object's footprint with a clear line of sight from eye height (1.6 m).
+
+### `photo`
+
+Like `view`, for a guest taking a picture (signs, gateways, arches, the galleon, the torii); `cap` 1. `yaw` points
+at the subject; the phone should be held up towards it.
+
+### `stage`
+
+One POI per audience position (`cap` 1, or 2 around arenas/dance floors), facing the stage; all positions of one stage
+share `tag` (an id) and `name` ("Ghost stories", "The bandstand", "Shanty Corner", "The judges' dais", "The Training
+Yard", "Signal Plaza dance floor", "Meridian training arena"). Positions are in 1-2 arcs ~1.1 m apart, or around
+the edge of an arena/floor.
+
+### `table`
+
+| key | meaning |
+|---|---|
+| `x`, `y`, `z` | table centre, `z` = table top |
+| `r` | radius of the ring where guests stand/sit around it |
+| `cap` | how many ring positions (of 8) are walkable, max 4 |
+
+## `guestground.bin` (`"ground"` in guests.json)
+
+gzip of a `w * h` uint8 grid on exactly the nav grid (`w` 1240, `h` 900, `cell` 0.5, same `x0`, `y0`, row-major,
+y increasing): surface class of the walkable surface (level A) in each cell, index into `classes`:
+`0 none` (not walkable), `1 paved`, `2 lawn`, `3 bed` (flower/rose beds, hedges: keep off), `4 gravel` (gravel,
+sand, Lantern Row's earth lanes), `5 wood` (wharf, boardwalks, decks), `6 snow`, `7 ice` (the rink), `8 floor`
+(indoor floors, carpets, platforms, the dance floor), `9 stairs`, `10 bridge`, `11 pier`, `12 water` (walkable
+shallow water surfaces: keep off). Suggested walking costs: paved/wood/floor/bridge/pier 1, gravel 1.15, snow 1.3,
+stairs 1.3, lawn 3-4 (guests cut across lawns rarely), ice 2, bed and water: avoid.
+
+## `paths` in guests.json
+
+Coarse waypoint network, Blender xy, metres:
+
+```js
+{ "name": "Shore Promenade", "closed": true, "w": 6.2, "pts": [[x, y], ...] }   // a ring (closed polyline)
+{ "name": "Lantern Row main lane", "land": "lantern-row", "closed": false, "w": 4.1, "pts": [...] }
+```
+
+- `Shore Promenade` (ring by the lake, 240 points) and `Ring Promenade` (under the monorail, 240 points, 10 m wide).
+- `The Lamplighters' Walk`: East Gate (338, 0) to the Shore Promenade, along y = 0.
+- One "main lane" per land and one path per green gap, each from the Shore Promenade outwards (to the outer part of
+  the land, or to the Ring Promenade for gaps): the cheapest walk on the nav grid preferring paved cells.
+- `w` = median width of the hard-surfaced band along the polyline (approximate; 1.5 = narrow or unpaved).
+  Points lie on walkable cells (the ring polylines are analytic and may touch a pylon or planter: snap to the grid).
 
 ## `guestlight.bin`
 

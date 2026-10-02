@@ -5,9 +5,12 @@ from scipy import ndimage
 import common as C
 
 # what counts as seating, per part: object-name regex (prefix stripped) and material regex
-NAME_RX = r"bench|bleacher|audience_chair|exedra"
+NAME_RX = r"bench|bleacher|audience_chair"
 NAME_NOT = r"(^|_)(src|SRC|proto)(_|$)|bench_src|SRC_|_led"
 MAT_RX = {"core": r"^core_benchwood$", "meridian": r"^meridian_seat_violet$"}
+CURVED = False   # no curved benches in the park at the moment (the split code below is kept for them)
+# seats inside joined meshes: (object regex, material regex)
+OBJMAT = {"guildhollow": [(r"gate_plaza|lakeside", r"stone_pale"), (r"training_yard", r"wood_light")]}
 
 def candidates(geo):
     """Triangle ids grouped by (part, oid) for seating objects/materials."""
@@ -17,7 +20,11 @@ def candidates(geo):
         on = np.array([bool(re.search(NAME_RX, C.strip(n, part))) and not re.search(NAME_NOT, n) for n in names])
         om = np.array([bool(re.search(MAT_RX.get(part, r"^$"), m)) for m in mats])
         idx = np.nonzero(geo.part == k)[0]
-        sel = idx[on[geo.oid[idx]] | om[geo.mi[idx]]]
+        hit = on[geo.oid[idx]] | om[geo.mi[idx]]
+        for orx, mrx in OBJMAT.get(part, []):
+            oo = np.array([bool(re.search(orx, n)) for n in names]); mm = np.array([bool(re.search(mrx, m)) for m in mats])
+            hit |= oo[geo.oid[idx]] & mm[geo.mi[idx]]
+        sel = idx[hit]
         for o in np.unique(geo.oid[sel]):
             ids = sel[geo.oid[sel] == o]
             # material-selected tris of a joined object are only the seat material; name-selected objects keep all
@@ -56,7 +63,7 @@ def floor_near(geo, ids, pad=0.8):
     if ring.sum() < 10: return float(lo[2])
     return float(np.percentile(pts[ring, 2], 20))
 
-def seat_of(geo, nav, ids):
+def seat_of(geo, nav, ids, split=False, seat_pts=None):
     """Fit the seat surface of one seating piece. Returns dict or None."""
     P = geo.P[ids]; n = geo.n[ids]; a = geo.area[ids]; zc = P[:, :, 2].mean(1)
     g = floor_near(geo, ids)
@@ -73,7 +80,7 @@ def seat_of(geo, nav, ids):
     lsel = min(l for l in good if hz[l] >= 0.35 * best)       # the lowest substantial level: the seat (backrest tops are small)
     zs = lsel * 0.02
     st = ids[up][np.abs(zc[up] - zs) < 0.03]
-    pts, _ = geo.points(st, 0.04)
+    pts = seat_pts if seat_pts is not None else geo.points(st, 0.04)[0]
     xy = pts[:, :2]; m = xy.mean(0)
     cov = np.cov((xy - m).T); w, v = np.linalg.eigh(cov)
     u = v[:, 1]; vn = np.array([-u[1], u[0]])
@@ -82,6 +89,20 @@ def seat_of(geo, nav, ids):
     cu = float((np.percentile(pu, 99.5) + np.percentile(pu, 0.5)) / 2); cv = float((np.percentile(pv, 99.5) + np.percentile(pv, 0.5)) / 2)
     c = m + u * cu + vn * cv
     zs = float(pts[:, 2].max())
+    fill = len(np.unique(np.floor(xy / 0.1).astype(np.int64) @ np.array([1, 100000]))) * 0.01 / max(1e-6, L * D)
+    if fill < 0.5 and not CURVED: return None          # not a solid seat surface (an L of fence rails, rose clusters)
+    if L > 2.6 and fill < 0.55 and not split:
+        # a curved bench (Rosewick's exedra): cut it into ~2 m straight pieces
+        from scipy.cluster.vq import kmeans2
+        k = int(math.ceil(L / 2.0))
+        _, lab = kmeans2(xy.astype(np.float64), k, seed=1, minit="++")
+        out = []
+        for q in range(k):
+            sel_pts = pts[lab == q]
+            if len(sel_pts) < 20: continue
+            r = seat_of(geo, nav, ids, split=True, seat_pts=sel_pts)
+            if r: out.append(r)
+        return out
     own, _ = geo.points(ids, 0.04)
     dx = own[:, 0] - c[0]; dy = own[:, 1] - c[1]
     ownl = np.stack([dx * u[0] + dy * u[1], dx * vn[0] + dy * vn[1], own[:, 2]], 1)
@@ -113,10 +134,23 @@ def facing(geo, nav, s):
         ov = s["own"][:, 1] * sg; ou = np.abs(s["own"][:, 0]) < L / 2 * 0.85
         ob = ou & (ov > D / 2 - 0.15) & (ov < D / 2 + 0.45) & (s["own"][:, 2] > zs + 0.12) & (s["own"][:, 2] < zs + 1.0)
         own = len(np.unique(np.floor(s["own"][ob, 0] / 0.1))) / max(1, L * 0.85 / 0.1)
-        res[sg] = dict(own=min(1.0, own), back=cover, knee=kb, walk=walk, support=min(1.0, sb), feet=hz)
+        # profile walking away from the seat edge: does the surface first step down by a seat height (front) or rise (back)?
+        band = uin & (v > D / 2 + 0.02) & (v < D / 2 + 1.4)
+        step = 0.0
+        if band.any():
+            vb = np.floor((v[band] - D / 2) / 0.1).astype(np.int64); zb = loc[band, 2]
+            prof = np.full(15, -99.0); np.maximum.at(prof, vb, zb)
+            for pz in prof:
+                if pz == -99.0: continue
+                if pz > zs + 0.15: break
+                if zs - 0.75 <= pz <= zs - 0.3: step = 1.0; break
+                if pz < zs - 0.75: break
+        res_step = step
+        res[sg] = dict(step=res_step, own=min(1.0, own), back=cover, knee=kb, walk=walk, support=min(1.0, sb), feet=hz)
     a, b = res[1]["own"], res[-1]["own"]
     if max(a, b) >= 0.5 and min(a, b) < 0.25: return (1 if b > a else -1), res
-    def score(r): return -2.0 * r["back"] - 1.5 * r["knee"] + 1.0 * r["walk"] + 0.5 * r["support"]
+    high = s["z"] - s["ground"] > 0.8      # a bleacher tier: the feet rest on the tier in front
+    def score(r): return -2.0 * r["back"] - 1.5 * r["knee"] + 1.0 * r["walk"] + (2.5 if high else 0.5) * r["support"] + (3.0 if high else 0.0) * r["step"]
     sg = 1 if score(res[1]) >= score(res[-1]) else -1
     return sg, res
 
@@ -152,10 +186,12 @@ def extract(geo, nav, log=print):
     pois = []; dropped = []
     for (part, name), ids in candidates(geo).items():
         for comp in components(geo, ids):
-            s = seat_of(geo, nav, comp)
+          ss = seat_of(geo, nav, comp)
+          for s in (ss if isinstance(ss, list) else [ss]):
             if s is None: continue
             if s["L"] < 0.35 or s["D"] < 0.2: continue
             sg, res = facing(geo, nav, s)
+            if s["z"] - s["ground"] > 0.8 and res[sg]["support"] < 0.5 and res[sg]["step"] < 1: continue      # high ledge with nothing to put the feet on
             ok, fx, fy = approach(nav, s, sg)
             yaw = math.atan2(s["v"][1] * sg, s["v"][0] * sg)
             if ok.any():
