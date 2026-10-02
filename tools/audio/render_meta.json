@@ -299,7 +299,7 @@
   "true_peak": -6.03
  },
  "carousel_organ": {
-  "bytes": 344238,
+  "bytes": 343657,
   "cat": "music",
   "channels": 1,
   "doc": "Pavilion of Wings: a band-organ waltz (q = 144) on the full theme: pipe melody doubled by glockenspiel,\n    oom-pah-pah bass and chord pipes, bass drum on 1 and a light snare. 32 bars = 40 s.",
@@ -312,8 +312,8 @@
   "lufs": -20.0,
   "seconds": 40.0,
   "sources": [],
-  "src_wrap": 0.011,
-  "true_peak": -6.34
+  "src_wrap": 0.009,
+  "true_peak": -6.35
  },
  "chimes_loop": {
   "bytes": 44327,
@@ -1628,32 +1628,39 @@
   "sources": [
    465697
   ],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "owl_2": {
-  "bytes": 20939,
+  "bytes": 6133,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/owl_2.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -16.4,
-  "seconds": 3.2,
-  "sources": [],
+  "lufs": -15.63,
+  "seconds": 0.833,
+  "sources": [
+   745208
+  ],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "owl_3": {
-  "bytes": 20907,
+  "bytes": 19342,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/owl_3.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -16.36,
-  "seconds": 3.2,
-  "sources": [],
+  "lufs": -14.63,
+  "seconds": 2.953,
+  "sources": [
+   745208
+  ],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "rosewick_waltz": {

@@ -382,7 +382,7 @@ def carousel_organ():
     mel, ch = compound(THEME)
     for s, d, m in mel:
         P.note('pipe', inst.reed, s, d * .9, m + 12, .7, kind='bandorgan')
-        P.note('glk', inst.glock, s, d, m + 24, .45, decay=.9)
+        P.note('glk', inst.glock, s, d, m + 12, .45, decay=.9)
     prev = None
     for s, d, c in ch:
         v = voicing(c, 57, 69, prev); prev = v

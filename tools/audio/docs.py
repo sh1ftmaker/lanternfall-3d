@@ -29,7 +29,7 @@ GROUP_DOC = {
     'clappers': 'Synthesised hyoshigi (wooden clappers) struck before a ghost story.',
     'station_chime': 'Synthesised station chime: A5-F#5-D5 on soft tines + celesta.',
     'announce': 'Synthesised calm announcement: attention tone, then wordless formant syllables (no words).',
-    'owl': 'Owl hoots: variant 1 a CC0 recording, 2-3 synthesised tawny-like hoots.',
+    'owl': 'Owl hoots cut from two CC0 recordings (a hooting owl; a tawny owl, band-limited to the hoot).',
     'dice': 'Dice on a wooden table: variant 1 a CC0 recording, 2-3 synthesised clacks.',
     'kettle': 'Synthesised simmering kettle (bubbles + soft steam, deliberately no whistle).',
     'skate': 'Skate blades carving ice, cut from a CC0 recording.',

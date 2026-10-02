@@ -2,7 +2,7 @@
  "version": 1,
  "about": "Lanternfall soundscape content. See data/audio/README.md. Positions: Blender frame [x, y, z], m.",
  "master": {
-  "gain": 1.0,
+  "gain": 0.8,
   "loudness": {
    "music": -20,
    "bed": -24,

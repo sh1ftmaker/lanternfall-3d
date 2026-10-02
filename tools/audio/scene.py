@@ -149,7 +149,7 @@ def write_json(meta, path):
     doc = {
         'version': 1,
         'about': 'Lanternfall soundscape content. See data/audio/README.md. Positions: Blender frame [x, y, z], m.',
-        'master': {'gain': 1.0, 'loudness': {'music': -20, 'bed': -24, 'emit': -24, 'oneshot_peak_dbfs': -3}},
+        'master': {'gain': 0.8, 'loudness': {'music': -20, 'bed': -24, 'emit': -24, 'oneshot_peak_dbfs': -3}},
         'zones': zones,
         'emitters': emitters,
         'oneshots': oneshots,

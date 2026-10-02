@@ -291,7 +291,18 @@ oneshot('shrine_bell', lambda i: sfx.shrine_bell(490 + i), 1, -3)
 oneshot('clappers', lambda i: sfx.clappers(500 + i), 2, -3)
 oneshot('station_chime', lambda i: sfx.station_chime(510 + i), 1, -3)
 oneshot('announce', lambda i: sfx.announce(520 + i), 1, -5)
-oneshot('owl', lambda i: sfx.owl(530 + i) if i else rec_events(465697, picks=[0], max_len=3, hpf=200, lpf=4000, fade_out=.3)[0], 3, -4)
+def _owl(i):
+    if i == 0:
+        return rec_events(465697, picks=[0], max_len=3, hpf=200, lpf=4000, fade_out=.3)[0]
+    # tawny owl (745208): band-limit to the hoot (250-1200 Hz) to lose the phone's noise floor, then cut the hoots
+    from lib.dsp import filt, fade
+    USED.append(745208)
+    x = aio.load(os.path.join(args.src, 'fs745208.mp3'), mono=True)
+    ev = aio.events(filt(x, chain(hp(250), lp(1200), lp(1400))), -16, max_len=4, tail_db=-25, min_gap=.3)
+    return fade(ev[i - 1], .03, .3)
+
+
+oneshot('owl', _owl, 3, -4)
 oneshot('dice', lambda i: sfx.dice(540 + i) if i else rec_events(629982, picks=[0], fade_out=.1)[0], 3, -6)
 oneshot('kettle', lambda i: sfx.kettle(550 + i), 2, -6)
 rec_oneshots('skate', 593623, -6, picks=[0, 1, 2, 3], max_len=1.5, fade_out=.1, lpf=8000)
