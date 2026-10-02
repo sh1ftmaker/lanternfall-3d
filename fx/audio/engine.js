@@ -289,7 +289,7 @@ export function createAudio(opts) {
     if (!st.enabled || !ctx || (ctx.state !== 'running' && !opts.offline)) return false;
     if (solo && !o.force && !solo.test(name)) return false;
     const a = o.a || pick(name); if (!a) return false;
-    if (a.state !== 'ready') { request(a, 0); pump(); return false; }
+    if (a.state !== 'ready') { request(a, name === 'ui_click' ? 0 : 1e5); return false; }
     const now = ctx.currentTime, p = toThree(pos, _sp);
     const [ref, max] = [o.ref ?? ONESHOT_RANGE[name]?.[0] ?? 8, o.max ?? ONESHOT_RANGE[name]?.[1] ?? 120];
     const sg = spec.oneshot_gains && !o.a ? spec.oneshot_gains[name] : undefined;
@@ -450,7 +450,7 @@ export function createAudio(opts) {
     for (const s of cand) {
       if (n >= MAX) break;
       const a = s.asset;
-      if (!a.stream && a.state !== 'ready') { request(a, -s.target); continue; }
+      if (!a.stream && a.state !== 'ready') { if (!mobile || s.target > 0.03) request(a, -s.target); continue; }   // phones: no downloads for what is barely audible
       n++;
       s.chosen = true;
       if (s.positional) { s.hrtfWant = L.hrtfOk && (posRank < HRTF_N || (!!(s.ch && s.ch.hrtf) && posRank < HRTF_N + 2)); posRank++; }   // hysteresis: rarely swapped
@@ -569,17 +569,25 @@ export function createAudio(opts) {
     let c = false; for (let i = 0, j = lakePoly.length - 1; i < lakePoly.length; j = i++) { const [xi, yi] = lakePoly[i], [xj, yj] = lakePoly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; }
     return c;
   }
-  // phones: free decoded buffers nobody has needed for a while (they are reloaded when the listener comes back)
+  // decoded PCM is large (a 20 s stereo bed is ~7 MB): keep under a budget by freeing the farthest silent buffers
+  // nobody has needed for a while (they are fetched again, from the HTTP cache, when the listener comes back)
+  const BUDGET = (mobile ? 64 : 160) * 1048576;          // MB of decoded PCM before far, silent buffers are dropped
   function releaseMemory() {
-    for (const s of sources) {
-      const a = s.asset; if (!a || s.playing || a.state !== 'ready' || a.stream) continue;
-      if (time - a.used > 45 && s.target < 1e-4 && (!s.positional || s.d > s.max * 1.5)) { st.decoded -= a.buffer.length * a.buffer.numberOfChannels * 4; a.buffer = null; a.state = 'idle'; }
+    if (st.decoded > BUDGET * 0.85) {
+      const cand = [];
+      for (const s of sources) for (const a of s.asset ? [s.asset] : s.shots || []) {
+        if (s.playing || a.state !== 'ready' || a.stream || time - a.used < 20 || s.target > 1e-4) continue;
+        if (s.positional && s.d < s.max * 1.2) continue;
+        cand.push([s.positional || s.shots ? s.d / s.max : 2 - (D.zone[s.zone] || 0), a]);
+      }
+      cand.sort((p, q) => q[0] - p[0]);
+      for (const [, a] of cand) { if (st.decoded < BUDGET * 0.7) break; if (a.state !== 'ready') continue; st.decoded -= a.buffer.length * a.buffer.numberOfChannels * 4; a.buffer = null; a.state = 'idle'; st.freed = (st.freed || 0) + 1; }
     }
     for (const s of sources) if (s.el && !s.playing && s.el.getAttribute('src') && time - s.asset.used > 45) { s.el.removeAttribute('src'); s.el.load(); }
   }
   // desktop: once what is audible is in, fetch the rest nearest-first in the background
   function background() {
-    if (queue.size || inflight) return;
+    if (queue.size || inflight || st.decoded > BUDGET * 0.6) return;
     let best = null, bd = 1e9;
     for (const s of sources) for (const a of s.asset ? [s.asset] : s.shots || []) {
       if (a.state !== 'idle' || a.stream) continue;
@@ -601,7 +609,7 @@ export function createAudio(opts) {
     events(dt, now, mode);
     pump();
     if ((memTimer -= dt) < 0) {
-      memTimer = 2; if (mobile) releaseMemory(); background();
+      memTimer = 2; releaseMemory(); background();
       // late wiring: the guests' crowd state and ground grid, when the app provides getters for them
       if (opts.getCrowd) { const c = opts.getCrowd(); if (c && c.state && !density.live) density.setCrowd(c); }
       if (opts.getGround && !ground) { const g = opts.getGround(); if (g && g.data) ground = g; }
@@ -642,7 +650,7 @@ export function createAudio(opts) {
     buildSources();
     st.ready = true; st.loading = false;
     L.first = true; trackOnly();
-    for (const list of Object.values(spec.shots)) for (const a of list) request(a, 50);      // small: footsteps, splashes, fireworks
+    for (const [n, list] of Object.entries(spec.shots)) for (const a of list) if (/^(ui_click|footstep_|splash|firework|lantern_release)/.test(n)) request(a, n === 'ui_click' ? 0 : 1e5);   // small, after what is audible
   }
   function rampOut(to, t = 0.12) { if (!N) return; const g = N.out.gain, now = ctx.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(to, now + t); }
   function enable() {

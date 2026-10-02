@@ -38,7 +38,9 @@ export function createSound(opts) {
   function unlock() {
     if (ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    ctx = new AC({ latencyHint: 'playback' });
+    // decoded buffers are stored at the context's rate: the content's 44.1 kHz on computers (no upsampling), 32 kHz on
+    // phones (a quarter less memory; night ambience has little above 16 kHz)
+    try { ctx = new AC({ latencyHint: 'playback', sampleRate: opts.mobile ? 32000 : 44100 }); } catch (e) { ctx = new AC(); }
     const r = ctx.resume && ctx.resume(); if (r && r.catch) r.catch(() => {});
     const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0);
     const url = silentWavUrl();
