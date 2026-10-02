@@ -142,7 +142,9 @@ export function createAudio(opts) {
   /* ───────── content ───────── */
   function asset(def, role) {
     const key = def.file ? 'f:' + def.file : 's:' + def.synth + ':' + (def.seed || 1);
-    if (!assets.has(key)) assets.set(key, { key, file: def.file, synth: def.synth || null, seed: def.seed || 1, role, state: 'idle', buffer: null, bytes: 0, used: 0, prio: 1e9, stream: role === 'music' && def.file && def.stream !== false && opts.stream !== false });
+    // long music streams through a media element unless it asks to be decoded or has loop points (pre/post-roll)
+    const stream = role === 'music' && !!def.file && opts.stream !== false && (def.stream === true || (def.stream !== false && !Array.isArray(def.loop)));
+    if (!assets.has(key)) assets.set(key, { key, file: def.file, synth: def.synth || null, seed: def.seed || 1, role, state: 'idle', buffer: null, bytes: 0, used: 0, prio: 1e9, stream });
     return assets.get(key);
   }
   function fallbackSynth(a) {           // the role's placeholder, when a file is missing or cannot be decoded
@@ -184,8 +186,12 @@ export function createAudio(opts) {
       hasPrev: false, target: 0, level: 0, ch: null, node: null, el: null, playing: false, stopAt: 0, rate: def.rate || 1, hrtfWant: false, hrtfSince: 0, swapUntil: 0,
       loop: def.loop, every: def.every, nextAt: 0, d: 1e9, id: def.id || (zone + ':' + kind), ...extra };
     if (def.pos) s.pos.fromArray(blend3(def.pos));
-    if (!def.every && !def.schedule) s.asset = asset(def, kind === 'layer' ? 'bed' : kind);
-    else { s.shots = [asset(def, 'oneshot')]; s.shots[0].name = (def.synth || '').replace('one:', ''); }
+    const variants = Array.isArray(def.files) && def.files.length ? def.files : null;   // several recordings of one thing
+    if (!def.every && !def.schedule) s.asset = asset(variants ? { ...def, file: variants[Math.floor(Math.random() * variants.length)] } : def, kind === 'layer' ? 'bed' : kind);
+    else {
+      s.shots = (variants || [null]).map((f) => asset(f ? { ...def, file: f } : def, 'oneshot'));
+      for (const a of s.shots) a.name = def.synth ? def.synth.replace('one:', '') : (def.id || 'shot');
+    }
     sources.push(s); return s;
   }
   function buildSources() {
@@ -207,7 +213,7 @@ export function createAudio(opts) {
     for (const c of spec.crowd || []) addSource('crowd', c, 'crowd', { range: c.density || [0, 1] });
     spec.shots = {};
     for (const [name, list] of Object.entries(spec.oneshots || {})) spec.shots[name] = (Array.isArray(list) ? list : [list]).map((f) => { const a = asset(typeof f === 'string' ? { file: f } : f, 'oneshot'); a.name = name; return a; });
-    for (const s of sources) if (s.shots) { const a = s.shots[0]; if (a.name && !spec.shots[a.name]) spec.shots[a.name] = [a]; }   // play('owl') etc.
+    for (const s of sources) if (s.shots) { const n = s.shots[0].name; if (n && !spec.shots[n]) spec.shots[n] = s.shots; }   // play('owl_1') etc.
     for (const name of ['firework_launch', 'firework_burst', 'lantern_release', 'splash', 'footstep_stone', 'footstep_wood', 'footstep_snow', 'footstep_grass', 'footstep_gravel', 'ui_click'])
       if (!spec.shots[name]) { const a = asset({ synth: 'one:' + name }, 'oneshot'); a.name = name; spec.shots[name] = [a]; }
   }
@@ -286,7 +292,8 @@ export function createAudio(opts) {
     if (a.state !== 'ready') { request(a, 0); pump(); return false; }
     const now = ctx.currentTime, p = toThree(pos, _sp);
     const [ref, max] = [o.ref ?? ONESHOT_RANGE[name]?.[0] ?? 8, o.max ?? ONESHOT_RANGE[name]?.[1] ?? 120];
-    let g = (o.gain ?? 0.7) * Math.pow(10, (Math.random() - 0.5) * 0.2), d = 0;
+    const sg = spec.oneshot_gains && !o.a ? spec.oneshot_gains[name] : undefined;
+    let g = (sg !== undefined ? sg * (o.scale ?? 1) : (o.gain ?? 0.7)) * Math.pow(10, (Math.random() - 0.5) * 0.2), d = 0;
     if (p) { d = p.distanceTo(L.p); g *= distGain(d, ref, max); if (g < 2e-4) return false; }
     let ch = null, oldest = null;
     for (const c of oneshotPool) { if (c.busy < now) { ch = c; break; } if (!oldest || c.busy < oldest.busy) oldest = c; }
@@ -516,7 +523,7 @@ export function createAudio(opts) {
     const wtr = getWater();
     if (wtr && wtr.sim && wtr.sim.events) for (const e of wtr.sim.events) {
       if (e.cont || splashSeen.has(e)) continue; splashSeen.add(e);
-      play('splash', tmp.set(e.x, -0.8, e.z).clone(), { gain: clamp(Math.abs(e.amp) * 5, 0.2, 0.9) });
+      { const k = clamp(Math.abs(e.amp) * 5, 0.2, 0.9); play('splash', tmp.set(e.x, -0.8, e.z).clone(), { gain: k, scale: k / 0.7 }); }
     }
     // footsteps in Walk mode, on the low point of the walk bob (app.js: camera y += sin(walk.bob) * 0.035)
     const wk = getWalk();
@@ -548,10 +555,10 @@ export function createAudio(opts) {
   }
   let footSide = 1;
   function shoot(s) {
-    const a = s.shots[0], def = s.def;
+    const a = s.shots[Math.floor(Math.random() * s.shots.length)], def = s.def;
     if (solo && !solo.test(s.id)) return;
     if (s.pos.distanceTo(L.p) > (def.max ?? 150) + (def.area ? def.area.r : 0)) return;
-    if (a.state !== 'ready') { request(a, 5); return; }
+    if (a.state !== 'ready') { for (const b of s.shots) request(b, 5); return; }
     const p = s.pos.clone();
     if (def.area) { const r = def.area.r * Math.sqrt(Math.random()), t = Math.random() * Math.PI * 2; p.x += r * Math.cos(t); p.z += r * Math.sin(t); }
     play(a.name, p, { a, force: true, gain: def.gain ?? 0.6, ref: def.ref, max: def.max, rate: def.rate || 1, delay: s.pos.distanceTo(L.p) / C });
@@ -574,10 +581,10 @@ export function createAudio(opts) {
   function background() {
     if (queue.size || inflight) return;
     let best = null, bd = 1e9;
-    for (const s of sources) {
-      const a = s.asset; if (!a || a.state !== 'idle' || a.stream) continue;
-      const d = s.positional ? s.d : (s.kind === 'bed' ? 1 - (D.zone[s.zone] || 0) : 0.5) * 300;
-      if (mobile && (s.positional ? d > s.max * 1.3 : d > 250)) continue;
+    for (const s of sources) for (const a of s.asset ? [s.asset] : s.shots || []) {
+      if (a.state !== 'idle' || a.stream) continue;
+      const d = s.positional || s.shots ? s.d : (s.kind === 'bed' ? 1 - (D.zone[s.zone] || 0) : 0.5) * 300;
+      if (mobile && (s.positional || s.shots ? d > s.max * 1.3 : d > 250)) continue;
       if (d < bd) { bd = d; best = a; }
     }
     if (best) request(best, 1e6 + bd);
