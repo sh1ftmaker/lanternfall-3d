@@ -254,7 +254,7 @@ export function createGame(ctx) {
 
   /* ── moving the visitor: teleport(x, y, yaw) stands the walker on the walk grid near (x, y), on its lowest level and never
      on the Spire island (as before). With { z }, the spot is taken as given: the walk-grid level nearest z when there is
-     one within 1.5 m (an upper deck, a platform, the island), else, for Wick only, (x, y, z) itself (a roof, a ledge, the
+     one within 1.5 m (an upper deck, a platform), else, for Wick only, (x, y, z) itself (a roof, a ledge, the Spire island, the
      lake bed); the first-person walker, which lives on the grid, then gets the nearest grid spot as before. Returns the
      height used, or null if Walk could not start (the park still loading). Wick spawns from the walker's spot (app.js) ── */
   function teleport(x, y, yaw, { z } = {}) {
