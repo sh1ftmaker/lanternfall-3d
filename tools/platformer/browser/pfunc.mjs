@@ -60,10 +60,10 @@ const run = async (mobile) => {
   // WebGL context loss while active
   out.ctx = await ev(`(async()=>{const gl=__park.renderer.getContext();const e=gl.getExtension('WEBGL_lose_context');if(!e)return 'no ext';e.loseContext();await new Promise(r=>setTimeout(r,600));e.restoreContext();await new Promise(r=>setTimeout(r,2500));return (gl.isContextLost()?'still lost':'restored')+' active:'+__park.platformer.active+' ticks:'+__park.platformer.S.latest})()`);
   await wait(500);
-  // P / button back to Walk, then Tab back in; then Explore leaves it
+  // P / button back to Walk, then P back in; then Explore leaves it
   if (mobile) { await page.tap('#btn-pf'); } else { await page.keyboard.press('KeyP'); }
   await wait(600); out.backToWalk = await ev('__park.mode + ":" + __park.platformer.active');
-  if (mobile) { await page.tap('#btn-pf'); } else { await page.keyboard.press('Tab'); }
+  if (mobile) { await page.tap('#btn-pf'); } else { await page.keyboard.press('KeyP'); }
   await wait(2000); out.backIn = await ev('__park.platformer.active');
   await ev("document.querySelector('#m-orbit').click()"); await wait(1500); out.explore = await ev('__park.mode + ":" + __park.platformer.active + ":" + __park.platformer.character.group.visible');
   await ev("document.querySelector('#m-tour').click()"); await wait(1500); out.tour = await ev('__park.mode');

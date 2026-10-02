@@ -11,7 +11,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
     if (!st.on || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     if (e.code === 'Escape') { e.stopPropagation(); e.preventDefault(); onExit && onExit(); return; }
-    if (e.code === 'KeyP' || e.code === 'Tab') { e.stopPropagation(); e.preventDefault(); if (!e.repeat) onSwitch && onSwitch(); return; }
+    if (e.code === 'KeyP') { e.stopPropagation(); e.preventDefault(); if (!e.repeat) onSwitch && onSwitch(); return; }
     if (KEYMAP[e.code]) {
       keys.add(e.code); st.lastDevice = 'keyboard'; e.stopPropagation(); e.preventDefault();
       // a tap shorter than a 30 Hz tick must still count: presses are latched until the next tick takes them
@@ -40,13 +40,15 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
     b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
     b.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+  // the stick shows at rest in the lower left so it can be found; it re-centres under the thumb wherever the left side is touched
+  const rest = () => { stickEl.classList.add('rest'); stickEl.style.left = stickEl.style.top = ''; knob.style.transform = ''; };
   const onDown = (e) => {
     if (!st.on || e.target !== canvas) return;
     e.stopPropagation(); e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (er) { /* fine */ }
     if (e.pointerType === 'touch' && e.clientX < innerWidth * 0.42 && st.stick.id === -1) {
       Object.assign(st.stick, { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: 0, y: 0 });
-      stickEl.hidden = false; stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; knob.style.transform = ''; st.lastDevice = 'touch';
+      stickEl.classList.remove('rest'); stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; knob.style.transform = ''; st.lastDevice = 'touch';
     } else if (st.orbit.id === -1) { Object.assign(st.orbit, { id: e.pointerId, x: e.clientX, y: e.clientY }); if (e.pointerType !== 'touch') st.lastDevice = 'keyboard'; }
   };
   const onMove = (e) => {
@@ -62,7 +64,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
     }
   };
   const onUp = (e) => {
-    if (e.pointerId === st.stick.id) { st.stick.id = -1; st.stick.x = st.stick.y = 0; stickEl.hidden = true; }
+    if (e.pointerId === st.stick.id) { st.stick.id = -1; st.stick.x = st.stick.y = 0; rest(); }
     if (e.pointerId === st.orbit.id) st.orbit.id = -1;
   };
   addEventListener('pointerdown', onDown, true); addEventListener('pointermove', onMove, true);
@@ -104,7 +106,7 @@ export function createInput({ canvas, coarse, onExit, onSwitch }) {
   function setActive(on) {
     st.on = on; keys.clear(); st.btn.a = st.btn.b = st.btn.z = false;
     ui.hidden = !(on && (coarse || st.lastDevice === 'touch'));
-    if (!on) { st.stick.id = -1; stickEl.hidden = true; st.orbit.id = -1; }
+    st.stick.id = -1; st.stick.x = st.stick.y = 0; st.orbit.id = -1; stickEl.hidden = !on; rest();
   }
   // the tick takes the latched presses: held OR pressed since the last tick
   function take(inp) { const o = { a: inp.a || st.latch.a, b: inp.b || st.latch.b, z: inp.z || st.latch.z }; st.latch.a = st.latch.b = st.latch.z = false; return o; }

@@ -2,7 +2,7 @@
 // (decompiled SM64 player physics, built without any game data: see CREDITS.md), in a Worker, on the park's own
 // collision streamed around them; drawn and animated by this project's own character, rig and clips.
 //
-// app.js loads this module the first time the visitor switches (Walk mode control, or P / Tab) and calls
+// app.js loads this module the first time the visitor switches (Walk mode control, or P) and calls
 //   const pf = await createPlatformer(ctx);  pf.enter() / pf.exit();  pf.update(dt) in Walk mode;  pf.frame(dt, mode) every frame.
 // Nothing here costs anything before that.
 import { createCollision, UNITS } from './collision.js';
@@ -19,6 +19,7 @@ const CSS = `
 .pf-touch[hidden]{display:none}
 .pf-stick{position:fixed;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;border:1px solid rgba(245,236,220,.22);background:rgba(13,11,38,.35)}
 .pf-stick[hidden]{display:none}
+.pf-stick.rest{left:92px;bottom:calc(env(safe-area-inset-bottom,0px) + 158px);opacity:.6}
 .pf-stick i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(255,181,71,.85)}
 .pf-btns{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 128px);width:176px;height:176px;pointer-events:none}
 .pf-b{position:absolute;pointer-events:auto;appearance:none;border:1px solid rgba(245,236,220,.3);background:rgba(13,11,38,.55);color:#f5ecdc;border-radius:50%;

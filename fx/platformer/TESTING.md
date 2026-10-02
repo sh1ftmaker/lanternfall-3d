@@ -5,13 +5,13 @@ The Platformer needs no game data: everything below runs from this repository.
 ## 1. Try it (two minutes)
 
 1. Open the park, wait for it to load, choose **Walk** (or press `3`).
-2. Press **P** (or Tab), or the lantern-pole button that appears in the top bar in Walk mode. The first time, the
+2. Press **P**, or the lantern-pole button that appears in the top bar in Walk mode. The first time, the
    status pill says "Waking the lamplighter…" and "Mapping the park for the lamplighter… N %" (about half a second
    of preparation, a few milliseconds per frame). Wick appears where the walker stood, seen from behind.
 3. Controls:
    - Keyboard: **WASD / arrows** move (relative to the camera), **Space** jump, **Shift** or **C** (or Z) crouch,
      **E** or **F** swing the lantern pole (dive when running), **Q** turns the view, mouse **drag** orbits, wheel zooms,
-     **P / Tab / Esc** back to Walk at the same spot. `1` `2` `3` still switch modes.
+     **P / Esc** back to Walk at the same spot. `1` `2` `3` still switch modes.
    - Gamepad: left stick moves, right stick orbits, **A** jump, **X / B** swing, triggers or bumpers crouch.
    - Touch: drag on the left of the screen for a stick, **Jump / Crouch / Swing** buttons on the right, drag
      anywhere else to orbit; the lantern-pole button in the top bar goes back to Walk.
@@ -37,7 +37,7 @@ it when reporting a problem.
 | Movement in Node | `node tools/platformer/sim-lab.mjs` | the real library on a synthetic level (`testworld.mjs`): every move below on known geometry |
 | Collision export | `node tools/platformer/validate-collision.mjs --shots` (needs puppeteer-core) | per window: triangle counts by kind, coordinate range, facing, gather and library load time, and agreement of the library's floor with the walk grid at 600 random walkable cells |
 | Park moves | `tools/platformer/browser/moves.mjs` (see the header of that file) | the real library in the park, scripted inputs, action traces (table below) |
-| Functional / console | `tools/platformer/browser/pfunc.mjs` | desktop and 390x844 touch: lazy loading, button / P / Tab / Esc, keys and touch stick + buttons, orbit, Fast / HD / Cinematic, Reduce motion, WebGL context loss, leaving to Explore / Tour; console errors |
+| Functional / console | `tools/platformer/browser/pfunc.mjs` | desktop and 390x844 touch: lazy loading, button / P / Esc, keys and touch stick + buttons, orbit, Fast / HD / Cinematic, Reduce motion, WebGL context loss, leaving to Explore / Tour; console errors |
 | Cost | `tools/platformer/browser/pfperf.mjs W H DSF` | GPU (character on vs off) and main-thread cost while running through reloads |
 
 ### Moves measured in the park (real library, real park collision, 30 Hz ticks; heights are the feet above the start)
