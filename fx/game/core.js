@@ -23,6 +23,12 @@ const CSS = `
 .game-toast.good{border-color:rgba(255,181,71,.7)} .game-toast b{color:var(--amber)} .game-toast.out{opacity:0;transition:opacity .5s ease}
 @keyframes game-toast-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 #game-journal{left:max(16px,env(safe-area-inset-left,0px));right:auto;width:min(360px,calc(100vw - 32px));box-sizing:border-box}
+#game-journal{max-height:calc(100dvh - 64px - 104px - env(safe-area-inset-top,0px))}   /* desktop: ends above the mode buttons and the places row */
+#game-journal .gj-chips{position:sticky;top:-14px;z-index:1;display:flex;gap:6px;overflow-x:auto;margin:0 -16px 2px;padding:7px 16px;background:rgba(13,11,38,.97);scrollbar-width:none;border-bottom:1px solid var(--line)}
+#game-journal .gj-chips::-webkit-scrollbar{display:none} #game-journal .gj-chips[hidden]{display:none}
+#game-journal .gj-chips button{flex:none;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:600 11px var(--ui);letter-spacing:.06em;padding:5px 11px;cursor:pointer;white-space:nowrap;touch-action:manipulation}
+#game-journal .gj-chips button:hover,#game-journal .gj-chips button:focus-visible{border-color:rgba(255,181,71,.7);color:var(--amber)}
+#game-journal .gj-sec{scroll-margin-top:44px}
 #game-journal .gj-sec{border-top:1px solid var(--line);padding:10px 0 8px} #game-journal .gj-sec:first-of-type{border-top:0}
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
@@ -93,7 +99,7 @@ export function createGame(ctx) {
   const promptEl = el('button', 'game-prompt'); promptEl.type = 'button'; promptEl.hidden = true;
   const toastsEl = el('div', 'game-toasts'); toastsEl.setAttribute('aria-live', 'polite');
   const journalEl = el('div', 'game-journal', 'sheet'); journalEl.hidden = true; journalEl.setAttribute('role', 'dialog'); journalEl.setAttribute('aria-label', 'Journal');
-  journalEl.innerHTML = '<div class="sheet-head"><h2>Journal</h2><button type="button" class="sheet-close" aria-label="Close the journal">&times;</button></div><div class="gj-list"></div><button type="button" class="gj-reset">Start over</button>';
+  journalEl.innerHTML = '<div class="sheet-head"><h2>Journal</h2><button type="button" class="sheet-close" aria-label="Close the journal">&times;</button></div><div class="gj-chips" role="group" aria-label="Sections" hidden></div><div class="gj-list"></div><button type="button" class="gj-reset">Start over</button>';
   if (!off) document.body.append(trackEl, promptEl, toastsEl, journalEl);
   // anything typed by the visitor or read back from storage goes in with esc(), as text: { text } or a Node
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -115,35 +121,69 @@ export function createGame(ctx) {
     if (w.gone) return; w.gone = true; w.t.classList.add('out');
     setTimeout(() => { w.t.remove(); const i = shown.indexOf(w); if (i >= 0) shown.splice(i, 1); pump(); }, 600);
   }
-  // tracker: up to three short lines, lowest `order` first; a line is { text, order }
-  const lines = new Map();
-  function track(id, text, { order = 50 } = {}) {
-    if (text == null || text === '') lines.delete(id); else lines.set(id, { text, order });
-    const list = [...lines.values()].sort((a, b) => a.order - b.order).slice(0, 3);
-    trackEl.innerHTML = '<b>Journal</b>'; for (const l of list) { const sp = el('span'); fill(sp, l.text); trackEl.appendChild(sp); }
+  // tracker: up to three short lines, lowest `order` first. A line shows at least 2 s before it can go (several modules
+  // changing their lines at once used to make the pill flicker), and a line whose text has not changed is left alone
+  const lines = new Map(), spans = new Map(), MIN_SHOW = 2000;
+  const keyOf = (v) => (v && typeof v === 'object' && 'text' in v ? 't:' + v.text : typeof v === 'string' ? 's:' + v : v);
+  const head = el('b'); head.textContent = 'Journal'; trackEl.appendChild(head);
+  function drawTrack() {
+    const list = [...lines.entries()].sort((a, b) => a[1].order - b[1].order).slice(0, 3), want = new Set();
+    for (const [id, l] of list) {
+      want.add(id); let sp = spans.get(id);
+      if (!sp) { sp = el('span'); spans.set(id, sp); sp.k = undefined; }
+      if (sp.k !== l.k) { fill(sp, l.v); sp.k = l.k; }
+    }
+    for (const [id, sp] of spans) if (!want.has(id)) { sp.remove(); spans.delete(id); }
+    let prev = head; for (const [id] of list) { const sp = spans.get(id); if (sp.previousSibling !== prev) prev.after(sp); prev = sp; }
     trackEl.hidden = !started || (!list.length && (!sections.size || player.mode === 'tour'));   // Tour keeps today's first look: no empty pill
   }
+  function track(id, text, { order = 50 } = {}) {
+    const now = performance.now(), l = lines.get(id);
+    if (text == null || text === '') {
+      if (!l) return drawTrack();
+      const wait = l.at + MIN_SHOW - now;
+      if (wait > 0) { if (!l.gone) { l.gone = true; l.timer = setTimeout(() => { if (lines.get(id) === l && l.gone) { lines.delete(id); drawTrack(); } }, wait); } return; }
+      clearTimeout(l.timer); lines.delete(id); return drawTrack();
+    }
+    if (l) { l.gone = false; clearTimeout(l.timer); l.v = text; l.k = keyOf(text); l.order = order; }
+    else lines.set(id, { v: text, k: keyOf(text), order, at: now, gone: false, timer: 0 });
+    drawTrack();
+  }
   // journal: modules add sections; render(el) is called whenever the journal opens or journal.refresh() runs
-  const sections = new Map();
+  const sections = new Map(); let lastScroll = 0;      // the sheet's scroll position, kept while it is closed
   const journal = {
     section(s) { sections.set(s.id, { order: 50, ...s }); track('', null); if (!journalEl.hidden) journal.refresh(); },
     refresh() {
       if (journalEl.hidden) return;
-      const list = journalEl.querySelector('.gj-list'); list.textContent = '';
+      const list = journalEl.querySelector('.gj-list'), chips = journalEl.querySelector('.gj-chips'), keep = journalEl.scrollTop; list.textContent = ''; chips.textContent = '';
       for (const s of [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {   // equal orders: by id, not by which module happened to load first
         const sec = el('div', null, 'gj-sec'), h = el('h3'), body = el('div', null, 'gj-body'); h.textContent = s.title; sec.append(h, body); list.appendChild(sec);
+        const chip = el('button'); chip.type = 'button'; chip.textContent = String(s.title); chip.addEventListener('click', () => sec.scrollIntoView({ block: 'start', behavior: ctx.reduceMotion && ctx.reduceMotion() ? 'auto' : 'smooth' })); chips.appendChild(chip);
         try { s.render(body); } catch (e) { console.warn('game: journal', s.id, e); }
       }
       if (!sections.size) list.innerHTML = '<p class="gj-empty">Nothing yet. Walk the park.</p>';
+      chips.hidden = sections.size < 2; journalEl.scrollTop = keep;     // a refresh keeps the place in the sheet
     },
-    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
-    close() { journalEl.hidden = true; emit('journal', { open: false }); },
+    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journalEl.scrollTop = lastScroll; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
+    close() { if (!journalEl.hidden) lastScroll = journalEl.scrollTop; journalEl.hidden = true; emit('journal', { open: false }); },
     get isOpen() { return !journalEl.hidden; },
   };
   trackEl.addEventListener('click', () => (journal.isOpen ? journal.close() : journal.open()));
   const setBtn = document.getElementById('btn-set'); if (setBtn) setBtn.addEventListener('click', () => { if (journal.isOpen) journal.close(); }, true);
+  const modesEl = document.querySelector('.modes'); if (modesEl) modesEl.addEventListener('click', () => { if (journal.isOpen && matchMedia('(max-width:640px)').matches) journal.close(); }, true);   // on a phone the sheet covers the buttons
   journalEl.querySelector('.sheet-close').addEventListener('click', journal.close);
   journalEl.querySelector('.gj-reset').addEventListener('click', () => { if (journalEl.querySelector('.gj-reset').dataset.sure) { save.reset(); location.reload(); } else { const b = journalEl.querySelector('.gj-reset'); b.dataset.sure = '1'; b.textContent = 'Erase all progress? Tap again'; } });
+
+  /* ── the first walk: one toast that says there are things to do (once, saved) ── */
+  let hello = 0;
+  on('mode', ({ mode }) => {
+    clearTimeout(hello); const c = save.get('core'); if (mode !== 'walk' || (c && typeof c === 'object' && c.welcomed === true)) return;
+    hello = setTimeout(() => {
+      if (player.mode !== 'walk' || journal.isOpen) return; const c2 = save.get('core');
+      save.set('core', { ...(c2 && typeof c2 === 'object' ? c2 : {}), welcomed: true });
+      toast(ctx.coarse ? 'There are things to do in the park. Tap <b>Journal</b>, top left, to see them.' : 'There are things to do in the park. Press <b>B</b> to open the journal.', { ms: 7000 });
+    }, 2500);
+  });
 
   /* ── the player, read once per frame ── */
   const player = { x: 0, y: 0, z: 0, yaw: 0, mode: 'tour', wick: false, action: '', speed: 0, land: null, three: new THREE.Vector3() };
