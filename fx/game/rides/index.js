@@ -2,6 +2,7 @@
 import { createSession } from './session.js';
 import { createMonorail } from './monorail.js';
 import { createCarousel } from './carousel.js';
+import { createCruise } from './cruise.js';
 
 export function init(game) {
   const session = createSession(game);
@@ -9,6 +10,7 @@ export function init(game) {
   const mods = {};
   const tryInit = (name, fn) => { try { const m = fn(); if (m) mods[name] = m; } catch (e) { console.warn('rides:', name, e); } };
   tryInit('monorail', () => createMonorail(game, session, { count }));
+  tryInit('cruise', () => createCruise(game, session, { count }));
   tryInit('carousel', () => createCarousel(game, session, { count }));
   const WHERE = {
     monorail: 'Board on the Meridian Loop platform, Meridian Rail.',
