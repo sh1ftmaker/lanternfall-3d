@@ -331,7 +331,7 @@ export function createStandInCrowd({ nav, count = 1200, seed = 7, reduceMotion =
       state[o + 4] = sp; state[o + 5] = 0; state[o + 6] += sp * dt / 1.4;
     }
   }
-  return { count: N, state, update, setCount(n) { active = Math.max(0, Math.min(N, n)); }, setReduceMotion(b) { motion = !b; }, debug: { standIn: true } };
+  return { count: N, state, update, want: N, setCount(n) { active = Math.max(0, Math.min(N, n)); }, setReduceMotion(b) { motion = !b; }, debug: { standIn: true } };
 }
 
 // ── the renderer ──
@@ -513,7 +513,7 @@ export function createGuests(opts) {
     }
     const tr0 = performance.now();
     const n = Math.min(crowd.count, MAXG), S = crowd.state;
-    const lim = Math.floor(n * st.density);
+    const lim = crowd.setCount ? n : Math.floor(n * st.density);      // a crowd with setCount() thins itself out
     pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm, THREE.WebGLCoordinateSystem, camera.reversedDepth);
     for (let k = 0; k < 6; k++) { const pl = frustum.planes[k]; PL[k * 4] = pl.normal.x; PL[k * 4 + 1] = pl.normal.y; PL[k * 4 + 2] = pl.normal.z; PL[k * 4 + 3] = pl.constant; }
     const inFrustum = (x, y, z, r) => { for (let k = 0; k < 24; k += 4) if (PL[k] * x + PL[k + 1] * y + PL[k + 2] * z + PL[k + 3] < -r) return false; return true; };
@@ -582,7 +582,12 @@ export function createGuests(opts) {
   }
 
   function setVisible(b) { st.visible = !!b; group.visible = st.visible; if (!b) { for (const k in M) M[k].visible = false; if (opts.depth) opts.depth.cap = Infinity; } }
-  function setDensity(f) { st.density = Math.max(0, Math.min(1, f)); cfg.density = st.density; }
+  // density 0..1 of the crowd's size at the time of the first call: the simulation drops / adds guests itself
+  let baseCount = -1;
+  function setDensity(f) {
+    st.density = Math.max(0, Math.min(1, f)); cfg.density = st.density;
+    if (crowd && crowd.setCount) { if (baseCount < 0) baseCount = crowd.want ?? crowd.count; crowd.setCount(Math.round(baseCount * st.density)); }
+  }
   function setReduceMotion(b) { st.reduceMotion = !!b; U.uMotion.value = b ? 0 : 1; if (crowd && crowd.setReduceMotion) crowd.setReduceMotion(b); }
   // app.js adapt() ladder: coarser LOD, then fewer guests, then none
   function degrade(step) {
@@ -605,7 +610,7 @@ export function createGuests(opts) {
     out.frames = fr.length; return out;
   }
   return { update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
-    get crowd() { return crowd; }, setCrowd(c, o = {}) { crowd = c; ownCrowd = !!o.drive; stats.standIn = false; seedOf.fill(-1); cur.fill(255); if (c && c.setReduceMotion) c.setReduceMotion(st.reduceMotion); },
+    get crowd() { return crowd; }, setCrowd(c, o = {}) { crowd = c; ownCrowd = !!o.drive; baseCount = -1; if (st.density < 1) setDensity(st.density); stats.standIn = false; seedOf.fill(-1); cur.fill(255); if (c && c.setReduceMotion) c.setReduceMotion(st.reduceMotion); },
     get visible() { return st.visible; } };
 }
 
