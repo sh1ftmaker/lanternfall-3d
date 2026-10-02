@@ -52,7 +52,7 @@ export function createMonorail(game, session, { count }) {
     const def = {
       id: 'monorail', name: 'the monorail', leave: 'Get off at the next stop', look: { yaw: 1.75, pitch: 0.8 }, sway: 1, blendIn: 0.9, blendOut: 1.0,
       frame, exit,
-      onEnd(why) { game.track('rides', null); run = null; },
+      onEnd(why) { game.track('rides', null); if (run) run.lead.visible = true; run = null; },
     };
     if (!session.start(def)) { run = null; return; }
     game.track('rides', 'The monorail: waiting on the platform', { order: 1 });
@@ -74,7 +74,8 @@ export function createMonorail(game, session, { count }) {
       if (r.first) { r.yaw = wantYaw; r.pitch = wantPitch; r.first = false; }
       else { const k = Math.min(1, dt * 3); r.yaw += angDiff(wantYaw, r.yaw) * k; r.pitch += (wantPitch - r.pitch) * k; }
       pose.pos.copy(eye); pose.yaw = r.yaw; pose.pitch = r.pitch;
-      if (d < 2.2) { r.phase = 'ride'; r.left = false; pose.blend = 0.8; count('monorail'); game.emit('rides:board', { ride: 'monorail' }); session.setLeave('Get off at the next stop'); }
+      if (d < 2.2) { r.phase = 'ride'; r.left = false; g.visible = false;   // the car's own nose is opaque seen from inside (0.6 m ahead of the seat): the lead car is hidden for the rider, who sees the park ahead
+       pose.blend = 0.8; count('monorail'); game.emit('rides:board', { ride: 'monorail' }); session.setLeave('Get off at the next stop'); }
       return;
     }
     // riding: the front seat of the lead car, looking along the track

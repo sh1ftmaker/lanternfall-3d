@@ -6,7 +6,7 @@ const PHI = (-38 * Math.PI) / 180;       // bearing of the jetty from the lake's
 const SPEED = 2.7;                       // m/s
 const R0 = 27, R1 = 31;                  // the circuit round the Spire (the lantern punt keeps further out, 34 m and more)
 const WATER = -0.8;
-const SEAT = [0.35, 1.5, 0];             // boat-local eye position (x forward, y up)
+const SEAT = [0.35, 1.55, 0.45];             // boat-local eye position (x forward, y up)
 const mod = (a, n) => ((a % n) + n) % n;
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
