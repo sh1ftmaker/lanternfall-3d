@@ -72,7 +72,7 @@
   "true_peak": -3.99
  },
  "bed_brinewatch": {
-  "bytes": 239393,
+  "bytes": 180956,
   "cat": "bed",
   "channels": 2,
   "doc": "Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574).",
@@ -92,7 +92,7 @@
   "true_peak": -7.88
  },
  "bed_frostmere": {
-  "bytes": 206547,
+  "bytes": 155758,
   "cat": "bed",
   "channels": 2,
   "doc": "Cold winter wind in conifers (575245); the crowd heard muffled (low-passed) behind it.",
@@ -112,7 +112,7 @@
   "true_peak": -11.3
  },
  "bed_gap": {
-  "bytes": 239476,
+  "bytes": 180768,
   "cat": "bed",
   "channels": 2,
   "doc": "Green gaps and woods: wind in the trees at night (37873) over a breeze through oak leaves (435206).\n    No crickets: this bed is heard a little everywhere.",
@@ -132,7 +132,7 @@
   "true_peak": -12.02
  },
  "bed_gate": {
-  "bytes": 238550,
+  "bytes": 180399,
   "cat": "bed",
   "channels": 2,
   "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), a little night air in the trees (37873).",
@@ -153,7 +153,7 @@
   "true_peak": -7.98
  },
  "bed_guildhollow": {
-  "bytes": 238763,
+  "bytes": 180376,
   "cat": "bed",
   "channels": 2,
   "doc": "Courtyard evening crowd (741283) + torches crackling (483692).",
@@ -173,7 +173,7 @@
   "true_peak": -8.82
  },
  "bed_lake": {
-  "bytes": 239013,
+  "bytes": 180622,
   "cat": "bed",
   "channels": 2,
   "doc": "The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices.",
@@ -193,7 +193,7 @@
   "true_peak": -7.9
  },
  "bed_lantern-row": {
-  "bytes": 239680,
+  "bytes": 180421,
   "cat": "bed",
   "channels": 2,
   "doc": "A bustling night market walked through (752436) with chimes tuned to the park's pentatonic.",
@@ -212,7 +212,7 @@
   "true_peak": -7.95
  },
  "bed_meridian": {
-  "bytes": 238723,
+  "bytes": 180522,
   "cat": "bed",
   "channels": 2,
   "doc": "Plaza crowd (848976) and a low electric hum under the neon. The stretch is the one with the fewest stand-out\n    events (the old one had a beep 29 dB over the crowd, heard every 16 s all over the land).",
@@ -231,7 +231,7 @@
   "true_peak": -7.96
  },
  "bed_rosewick": {
-  "bytes": 156707,
+  "bytes": 118592,
   "cat": "bed",
   "channels": 2,
   "doc": "Gardens: a fountain (618285), a breeze in the leaves and a soft distant murmur (546676, low-passed).\n    (The crickets are a few placed emitters now, crickets_loop: in every bed they never let up.)",
@@ -251,7 +251,7 @@
   "true_peak": -13.15
  },
  "bed_sky": {
-  "bytes": 255093,
+  "bytes": 192726,
   "cat": "bed",
   "channels": 2,
   "doc": "From the sky: open-air wind (a gale in pines, 86345, high-passed so only the air is left) and a distant\n    low-passed blend of the whole park.",
@@ -272,7 +272,7 @@
   "true_peak": -12.55
  },
  "bed_wanderers": {
-  "bytes": 156539,
+  "bytes": 118438,
   "cat": "bed",
   "channels": 2,
   "doc": "A big cavernous convention-hall murmur (451600).",
@@ -291,7 +291,7 @@
   "true_peak": -11.99
  },
  "brine_shanty": {
-  "bytes": 228218,
+  "bytes": 200477,
   "cat": "music",
   "channels": 1,
   "doc": "The Brine & Barrel: 'Drunken Sailor' (traditional, public domain) arranged in E dorian at 144 bpm:\n    concertina lead with oom-pah chords and a stomping drum, then a fiddle takes the tune. 16 bars.",
@@ -308,7 +308,7 @@
   "true_peak": -6.03
  },
  "carousel_organ": {
-  "bytes": 343657,
+  "bytes": 300448,
   "cat": "music",
   "channels": 1,
   "doc": "Pavilion of Wings: a band-organ waltz (q = 144) on the full theme: pipe melody doubled by glockenspiel,\n    oom-pah-pah bass and chord pipes, bass drum on 1 and a light snare. 32 bars = 40 s.",
@@ -325,7 +325,7 @@
   "true_peak": -6.35
  },
  "chimes_loop": {
-  "bytes": 44327,
+  "bytes": 38317,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -426,7 +426,7 @@
   "true_peak": -5.98
  },
  "creak_loop": {
-  "bytes": 101916,
+  "bytes": 87542,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -445,7 +445,7 @@
   "true_peak": -2.96
  },
  "crickets_loop": {
-  "bytes": 101853,
+  "bytes": 87766,
   "cat": "emit",
   "channels": 1,
   "doc": "Crickets at night (522299), for a few placed spots only.",
@@ -464,7 +464,7 @@
   "true_peak": -10.77
  },
  "crowd_dense": {
-  "bytes": 115610,
+  "bytes": 87558,
   "cat": "bed",
   "channels": 2,
   "doc": null,
@@ -483,7 +483,7 @@
   "true_peak": -9.33
  },
  "crowd_murmur": {
-  "bytes": 238978,
+  "bytes": 180980,
   "cat": "bed",
   "channels": 2,
   "doc": null,
@@ -502,7 +502,7 @@
   "true_peak": -7.87
  },
  "crowd_sparse": {
-  "bytes": 132050,
+  "bytes": 99950,
   "cat": "bed",
   "channels": 2,
   "doc": null,
@@ -1249,7 +1249,7 @@
   "true_peak": -5.7
  },
  "fountain_loop": {
-  "bytes": 87683,
+  "bytes": 75404,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -1268,7 +1268,7 @@
   "true_peak": -12.31
  },
  "frost_court": {
-  "bytes": 228380,
+  "bytes": 200663,
   "cat": "music",
   "channels": 1,
   "doc": "Ice and glass: celesta + glass harmonica on the theme in B minor colours, a hushed low string bed,\n    rare high glock sparkles. 72 bpm, 8 bars.",
@@ -1285,7 +1285,7 @@
   "true_peak": -6.6
  },
  "frost_drum": {
-  "bytes": 104902,
+  "bytes": 90393,
   "cat": "emit",
   "channels": 1,
   "doc": "The Frost Fair's stern drum: a field-drum march cadence with bass drum, 72 bpm, 4 bars (13.3 s).",
@@ -1302,7 +1302,7 @@
   "true_peak": -2.86
  },
  "gate_welcome": {
-  "bytes": 301199,
+  "bytes": 264524,
   "cat": "music",
   "channels": 1,
   "doc": "Arrival: celesta + harp theme over warm strings, flute takes the B half; little glock 'lamp-lighting'\n    flourishes at phrase ends. 108 bpm, 16 bars.",
@@ -1319,7 +1319,7 @@
   "true_peak": -6.24
  },
  "ghost_hush": {
-  "bytes": 108923,
+  "bytes": 94024,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -1336,7 +1336,7 @@
   "true_peak": -7.35
  },
  "guild_tavern": {
-  "bytes": 301123,
+  "bytes": 264702,
   "cat": "music",
   "channels": 1,
   "doc": "Tavern jig, 6/8 at dotted-quarter 108: hurdy-gurdy then recorder on the theme, lute 'bass-chord' strums,\n    a soft hurdy drone (D/A) and a frame drum. Grid unit = eighth note (324 per minute), 32 bars.",
@@ -1423,7 +1423,7 @@
   "true_peak": -5.96
  },
  "lake_hush": {
-  "bytes": 271724,
+  "bytes": 238696,
   "cat": "music",
   "channels": 1,
   "doc": "The quiet heart: a wordless choir breathing through slow chords (no beat), a glass harmonica placing a\n    few theme notes far apart. 60 bpm grid, 8 chords x 4 s = 32 s.",
@@ -1482,7 +1482,7 @@
   "true_peak": -5.87
  },
  "lantern_market": {
-  "bytes": 228623,
+  "bytes": 200685,
   "cat": "music",
   "channels": 1,
   "doc": "Night market: koto on the theme (pentatonic as written) with grace notes, shamisen pulse on open fifths,\n    shakuhachi breathing long notes, a low bowed drone. 72 bpm, 8 bars (no Western chords).",
@@ -1541,7 +1541,7 @@
   "true_peak": -5.99
  },
  "meridian_signal": {
-  "bytes": 303508,
+  "bytes": 266959,
   "cat": "music",
   "channels": 1,
   "doc": "Signal Plaza: warm synthwave at 108 bpm, B minor (Bm G D A), pulsing octave bass, gated pad, 16th arp,\n    drum machine; the theme enters on a soft saw lead in bars 5-12.",
@@ -1558,7 +1558,7 @@
   "true_peak": -4.84
  },
  "neon_hum": {
-  "bytes": 65893,
+  "bytes": 56881,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -1761,7 +1761,7 @@
   "true_peak": -3.99
  },
  "rosewick_waltz": {
-  "bytes": 228410,
+  "bytes": 200611,
   "cat": "music",
   "channels": 1,
   "doc": "The Moonlit Promenade: a slow string waltz (3/4, q = 108) on the theme; violins lead, violas on 2 and 3,\n    cello on 1, harp rolls at phrase starts. 16 bars.",
@@ -1806,7 +1806,7 @@
   "true_peak": -2.99
  },
  "sizzle_loop": {
-  "bytes": 73366,
+  "bytes": 63017,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -2001,7 +2001,7 @@
   "true_peak": -2.97
  },
  "taiko_loop": {
-  "bytes": 105054,
+  "bytes": 89479,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -2018,7 +2018,7 @@
   "true_peak": -6.89
  },
  "torch_loop": {
-  "bytes": 73697,
+  "bytes": 63434,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -2037,7 +2037,7 @@
   "true_peak": -4.18
  },
  "train_loop": {
-  "bytes": 180893,
+  "bytes": 156132,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -2082,7 +2082,7 @@
   "true_peak": -9.99
  },
  "wanderers_hall": {
-  "bytes": 228063,
+  "bytes": 200308,
   "cat": "music",
   "channels": 1,
   "doc": "A great glass pavilion: soft flue organ on the theme harmony, glass harmonica melody high and slow,\n    distant choir; huge reverb. 72 bpm, 8 bars.",
