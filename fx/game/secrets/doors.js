@@ -46,7 +46,7 @@ export function init(S) {
     const ax = at.x + Math.cos(yaw) * 2.6, ay = at.y + Math.sin(yaw) * 2.6;
     if (z === null) { const gz = game.ground(ax, ay, at.z); z = gz !== null && Math.abs(gz - at.z) < 1.5 ? gz : at.z; }
     const fr = makeFrame(ax, ay, z, yaw + Math.PI);                         // the frame faces the visitor: its normal points back along -yaw
-    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', use() { go(back); } });
+    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', show: () => !game.cameraHeld, use() { go(back); } });
     ret = { fr, it, t: 0 };
   }
   function go(to) {
@@ -57,7 +57,7 @@ export function init(S) {
   }
   const d0 = doorWorld(), g0 = game.ground(d0[0], d0[1]);
   game.interact({
-    id: 'secrets-door', x: d0[0], y: d0[1], z: g0 ?? DOOR.z, r: 2.6, label: 'Open door VI',
+    id: 'secrets-door', x: d0[0], y: d0[1], z: g0 ?? DOOR.z, r: 2.6, label: 'Open door VI', show: () => !game.cameraHeld,
     use() {
       const pf = game.platformer, t = dest(game.weather ? game.weather.state : 'clear', !!(pf && pf.active)), here = lib.world(DOOR.land, DOOR.lx, DOOR.ly - 1.3), back = { x: here[0], y: here[1], z: DOOR.z, yaw: lib.outward(DOOR.land) };
       S.fade(() => {

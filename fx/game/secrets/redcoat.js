@@ -58,7 +58,7 @@ export function init(S) {
     const g = new THREE.CylinderGeometry(0.07, 0.07, 0.025, 14);
     const m = game.props.mesh(g, { x, y, z, color: [0.6, 0.02, 0.03], emissive: [0.9, 0.05, 0.06], lit: false });
     const glow = game.props.glow({ x, y, z: z + 0.05, color: [0.6, 0.04, 0.04], size: 0.6 });
-    const it = game.interact({ id: 'secrets-button', x, y, z, r: 2.2, label: 'Pick up the red button', use() { take(); } });
+    const it = game.interact({ id: 'secrets-button', x, y, z, r: 2.2, label: 'Pick up the red button', show: () => !game.cameraHeld, use() { take(); } });
     button = { m, glow, it, x, y, z };
   }
   function take() {
