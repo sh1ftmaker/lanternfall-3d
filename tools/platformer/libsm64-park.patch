@@ -1,0 +1,472 @@
+diff --git i/src/debug_print.h w/src/debug_print.h
+index 987cc31..3a70c14 100644
+--- i/src/debug_print.h
++++ w/src/debug_print.h
+@@ -5,6 +5,10 @@
+ 
+ extern SM64DebugPrintFunctionPtr g_debug_print_func;
+ 
++#ifdef LIBSM64_PARK
++// park build: no debug messages (keeps the binary free of their text)
++#define DEBUG_PRINT( ... ) do { } while(0)
++#else
+ #define DEBUG_PRINT( ... ) do { \
+     if( g_debug_print_func ) { \
+         char debugStr[1024]; \
+@@ -12,3 +16,4 @@ extern SM64DebugPrintFunctionPtr g_debug_print_func;
+         g_debug_print_func( debugStr ); \
+     } \
+ } while(0)
++#endif
+diff --git i/src/decomp/engine/surface_collision.c w/src/decomp/engine/surface_collision.c
+index 2c94abe..9af4c29 100644
+--- i/src/decomp/engine/surface_collision.c
++++ w/src/decomp/engine/surface_collision.c
+@@ -15,6 +15,7 @@ static struct SM64SurfaceCollisionData *find_ceil_from_list( s32 x, s32 y, s32 z
+ 
+     ceil = NULL;
+ 
++    LOADED_SURFACE_QUERY( x, z, 0.0f ); // libsm64 park build: grid candidates
+     uint32_t groupCount = loaded_surface_iter_group_count();
+     for( int i = 0; i < groupCount; ++i ) {
+     uint32_t surfCount = loaded_surface_iter_group_size( i );
+@@ -91,6 +92,7 @@ static struct SM64SurfaceCollisionData *find_floor_from_list( s32 x, s32 y, s32
+     f32 height;
+     struct SM64SurfaceCollisionData *floor = NULL;
+ 
++    LOADED_SURFACE_QUERY( x, z, 0.0f ); // libsm64 park build: grid candidates
+     uint32_t groupCount = loaded_surface_iter_group_count();
+     for( int i = 0; i < groupCount; ++i ) {
+     uint32_t surfCount = loaded_surface_iter_group_size( i );
+@@ -167,6 +169,7 @@ static s32 find_wall_collisions_from_list( struct SM64WallCollisionData *data) {
+         radius = 200.0f;
+     }
+ 
++    LOADED_SURFACE_QUERY( x, z, radius ); // libsm64 park build: grid candidates
+     uint32_t groupCount = loaded_surface_iter_group_count();
+     for( int i = 0; i < groupCount; ++i ) {
+     uint32_t surfCount = loaded_surface_iter_group_size( i );
+diff --git i/src/libsm64.c w/src/libsm64.c
+index b7db0b1..af56494 100644
+--- i/src/libsm64.c
++++ w/src/libsm64.c
+@@ -25,16 +25,24 @@
+ #include "decomp/engine/graph_node.h"
+ #include "decomp/engine/geo_layout.h"
+ #include "decomp/game/rendering_graph_node.h"
++#ifndef LIBSM64_NO_ROM
+ #include "decomp/mario/geo.inc.h"
++#endif
+ #include "decomp/game/platform_displacement.h"
+ #include "decomp/game/sound_init.h"
+ 
+ #include "debug_print.h"
+ #include "load_surfaces.h"
++#ifndef LIBSM64_NO_ROM
+ #include "gfx_adapter.h"
++#endif
+ #include "load_anim_data.h"
++#ifndef LIBSM64_NO_ROM
+ #include "load_audio_data.h"
+ #include "load_tex_data.h"
++#else
++extern bool g_is_audio_initialized;
++#endif
+ #include "obj_pool.h"
+ #include "fake_interaction.h"
+ 
+@@ -98,6 +106,22 @@ SM64_LIB_FN void sm64_register_play_sound_function( SM64PlaySoundFunctionPtr pla
+ }
+ 
+ 
++#ifdef LIBSM64_NO_ROM
++// LIBSM64_NO_ROM: no ROM is read. The animation clock the movement code depends on (lengths, loop points, flags) comes
++// from a table supplied by the host: 6 int16 per animation id (flags, startFrame, loopStart, loopEnd, yTransDivisor, 0).
++// No textures, no model, no audio.
++SM64_LIB_FN void sm64_global_init_norom( const int16_t *animTable, uint32_t animCount )
++{
++    if( s_init_global )
++        sm64_global_terminate();
++
++    s_init_global = true;
++
++    load_mario_anims_from_table( animTable, animCount );
++
++    memory_init();
++}
++#else
+ SM64_LIB_FN void sm64_global_init( const uint8_t *rom, uint8_t *outTexture )
+ {
+     if( s_init_global )
+@@ -110,6 +134,7 @@ SM64_LIB_FN void sm64_global_init( const uint8_t *rom, uint8_t *outTexture )
+ 
+     memory_init();
+ }
++#endif
+ 
+ SM64_LIB_FN void sm64_global_terminate( void )
+ {
+@@ -129,17 +154,20 @@ SM64_LIB_FN void sm64_global_terminate( void )
+     s_init_global = false;
+     s_init_one_mario = false;
+ 
++#ifndef LIBSM64_NO_ROM
+     if( s_mario_geo_pool )
+     {
+         alloc_only_pool_free( s_mario_geo_pool );
+         s_mario_geo_pool = NULL;
+     }
++#endif
+ 
+     surfaces_unload_all();
+     unload_mario_anims();
+     memory_terminate();
+ }
+ 
++#ifndef LIBSM64_NO_ROM
+ SM64_LIB_FN void sm64_audio_init( const uint8_t *rom ) {
+     load_audio_banks( rom );
+ }
+@@ -164,9 +192,23 @@ SM64_LIB_FN uint32_t sm64_audio_tick( uint32_t numQueuedSamples, uint32_t numDes
+     return num_audio_samples;
+ }
+ 
++#endif
++
+ SM64_LIB_FN void sm64_static_surfaces_load( const struct SM64Surface *surfaceArray, uint32_t numSurfaces )
+ {
+     surfaces_load_static( surfaceArray, numSurfaces );
++#ifdef LIBSM64_NO_ROM
++    // the previous list was freed: every Mario's floor / ceiling / wall pointers must not point into it any more
++    for( int i = 0; i < s_mario_instance_pool.size; ++i )
++    {
++        if( s_mario_instance_pool.objects[i] == NULL ) continue;
++        global_state_bind( ((struct MarioInstance *)s_mario_instance_pool.objects[i])->globalState );
++        struct MarioState *m = gMarioState;
++        m->wall = NULL;
++        m->floorHeight = find_floor( m->pos[0], m->pos[1], m->pos[2], &m->floor );
++        m->ceilHeight = find_ceil( m->pos[0], m->pos[1] + 80.0f, m->pos[2], &m->ceil );
++    }
++#endif
+ }
+ 
+ SM64_LIB_FN int32_t sm64_mario_create( float x, float y, float z )
+@@ -180,8 +222,10 @@ SM64_LIB_FN int32_t sm64_mario_create( float x, float y, float z )
+     if( !s_init_one_mario )
+     {
+         s_init_one_mario = true;
++#ifndef LIBSM64_NO_ROM
+         s_mario_geo_pool = alloc_only_pool_init();
+         s_mario_graph_node = process_geo_layout( s_mario_geo_pool, mario_geo_ptr );
++#endif
+     }
+ 
+     gCurrSaveFileNum = 1;
+@@ -246,9 +290,23 @@ SM64_LIB_FN void sm64_mario_tick( int32_t marioId, const struct SM64MarioInputs
+     bhv_mario_update();
+     update_mario_platform(); // TODO platform grabbed here and used next tick could be a use-after-free
+ 
++#ifdef LIBSM64_NO_ROM
++    // No model: advance only the animation clock that the movement code reads (is_anim_at_end, animFrame tests), as
++    // geo_set_animation_globals() did while drawing. outBuffers is not touched (it may be NULL).
++    (void)outBuffers;
++    {
++        struct AnimInfo *ai = &gMarioState->marioObj->header.gfx.animInfo;
++        if( ai->curAnim != NULL )
++        {
++            ai->animFrame = geo_update_animation_frame( ai, &ai->animFrameAccelAssist );
++            ai->animTimer = gAreaUpdateCounter;
++        }
++    }
++#else
+     gfx_adapter_bind_output_buffers( outBuffers );
+ 
+     geo_process_root_hack_single_node( s_mario_graph_node );
++#endif
+ 
+     gAreaUpdateCounter++;
+ 
+@@ -686,6 +744,7 @@ SM64_LIB_FN float sm64_surface_find_poison_gas_level( float x, float z )
+     return find_poison_gas_level( x, z );
+ }
+ 
++#ifndef LIBSM64_NO_ROM
+ SM64_LIB_FN void sm64_seq_player_play_sequence(uint8_t player, uint8_t seqId, uint16_t arg2)
+ {
+     seq_player_play_sequence(player,seqId,arg2);
+@@ -725,3 +784,4 @@ SM64_LIB_FN void sm64_set_sound_volume(float vol)
+ {
+     gAudioVolume = vol;
+ }
++#endif
+diff --git i/src/libsm64.h w/src/libsm64.h
+index 1f6c5e4..7309102 100644
+--- i/src/libsm64.h
++++ w/src/libsm64.h
+@@ -148,6 +148,8 @@ typedef void (*SM64PlaySoundFunctionPtr)( uint32_t soundBits, float *pos );
+ extern SM64_LIB_FN void sm64_register_play_sound_function( SM64PlaySoundFunctionPtr playSoundFunction );
+ 
+ extern SM64_LIB_FN void sm64_global_init( const uint8_t *rom, uint8_t *outTexture );
++// LIBSM64_NO_ROM builds: 6 int16 per animation id (flags, startFrame, loopStart, loopEnd, yTransDivisor, 0)
++extern SM64_LIB_FN void sm64_global_init_norom( const int16_t *animTable, uint32_t animCount );
+ extern SM64_LIB_FN void sm64_global_terminate( void );
+ 
+ extern SM64_LIB_FN void sm64_audio_init( const uint8_t *rom );
+diff --git i/src/load_anim_data.c w/src/load_anim_data.c
+index ec19ce3..819ebbe 100644
+--- i/src/load_anim_data.c
++++ w/src/load_anim_data.c
+@@ -29,6 +29,7 @@ static uint32_t read_u32_be( const uint8_t *p )
+         (uint32_t)p[3];
+ }
+ 
++#ifndef LIBSM64_NO_ROM
+ void load_mario_anims_from_rom( const uint8_t *rom )
+ {
+     #define GET_OFFSET( n ) (read_u32_be((uint8_t*)&((struct OffsetSizePair*)( rom + ANIM_DATA_ADDRESS + 8 + (n)*8 ))->offset))
+@@ -80,8 +81,29 @@ void load_mario_anims_from_rom( const uint8_t *rom )
+     #undef GET_SIZE
+ }
+ 
++#endif
++
++// LIBSM64_NO_ROM: animations from a host-supplied table. Only the clock matters to the movement code (no model is
++// drawn), so every animation gets the same zero root translation (3 channels: x, y, z).
++static u16 s_zero_index[6] = { 1, 0, 1, 0, 1, 0 };
++static s16 s_zero_values[1] = { 0 };
++void load_mario_anims_from_table( const int16_t *table, uint32_t count )
++{
++    s_num_entries = count;
++    s_libsm64_mario_animations = malloc( count * sizeof( struct Animation ));
++    for( uint32_t i = 0; i < count; ++i )
++    {
++        const int16_t *t = table + i * 6;
++        struct Animation *a = &s_libsm64_mario_animations[i];
++        a->flags = t[0]; a->startFrame = t[1]; a->loopStart = t[2]; a->loopEnd = t[3];
++        a->animYTransDivisor = t[4]; a->unusedBoneCount = 0; a->length = 0;
++        a->index = s_zero_index; a->values = s_zero_values;
++    }
++}
++
+ void load_mario_animation(struct MarioAnimation *a, u32 index)
+ {
++    if (index >= s_num_entries) index = 0;
+     if (a->currentAnimAddr != 1 + index) {
+         a->currentAnimAddr = 1 + index;
+         a->targetAnim = &s_libsm64_mario_animations[index];
+@@ -90,7 +112,7 @@ void load_mario_animation(struct MarioAnimation *a, u32 index)
+ 
+ void unload_mario_anims( void )
+ {
+-    for( int i = 0; i < s_num_entries; ++i )
++    for( int i = 0; s_libsm64_mario_animations != NULL && s_libsm64_mario_animations[0].index != s_zero_index && i < s_num_entries; ++i )
+     {
+         free( s_libsm64_mario_animations[i].index );
+         free( s_libsm64_mario_animations[i].values );
+diff --git i/src/load_anim_data.h w/src/load_anim_data.h
+index a0869ce..33669e7 100644
+--- i/src/load_anim_data.h
++++ w/src/load_anim_data.h
+@@ -7,4 +7,5 @@
+ 
+ extern void load_mario_animation(struct MarioAnimation *a, u32 index);
+ extern void load_mario_anims_from_rom( const uint8_t *rom );
++extern void load_mario_anims_from_table( const int16_t *table, uint32_t count );
+ extern void unload_mario_anims( void );
+\ No newline at end of file
+diff --git i/src/load_surfaces.c w/src/load_surfaces.c
+index afe66a7..31b8621 100644
+--- i/src/load_surfaces.c
++++ w/src/load_surfaces.c
+@@ -170,6 +170,16 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
+     ny *= mag;
+     nz *= mag;
+ 
++#ifdef LIBSM64_PARK
++    // Near-vertical faces of quantised meshes become exact walls (SM64 treats |ny| > 0.01 as a floor or ceiling,
++    // so a wall tilted by half a degree would act as a very steep floor).
++    if( ny > -LIBSM64_WALL_SNAP && ny < LIBSM64_WALL_SNAP && ( nx != 0.0f || nz != 0.0f ))
++    {
++        f32 h = 1.0f / sqrtf( nx * nx + nz * nz );
++        nx *= h; nz *= h; ny = 0.0f;
++    }
++#endif
++
+     surface->vertex1[0] = x1;
+     surface->vertex2[0] = x2;
+     surface->vertex3[0] = x3;
+@@ -208,6 +218,109 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
+     surface->isValid = 1;
+ }
+ 
++#ifdef LIBSM64_PARK
++// Spatial grid over the static surfaces (the original game bins surfaces into cells; libsm64 scans every surface for
++// every query). A query (point or disc in x/z) selects the candidate static surfaces that the iterator below then
++// returns as group 0, so the collision loops in surface_collision.c are unchanged apart from one query call.
++#define GRID_CELL 256
++static int32_t s_grid_x0 = 0, s_grid_z0 = 0, s_grid_w = 0, s_grid_h = 0;
++static uint32_t *s_grid_start = NULL, *s_grid_items = NULL, *s_stamp = NULL, s_stamp_id = 0;
++static uint32_t *s_cand = NULL, s_cand_count = 0, s_cand_cap = 0;
++static int s_query_active = 0;
++
++static void grid_free( void )
++{
++    free( s_grid_start ); free( s_grid_items ); free( s_stamp );
++    s_grid_start = s_grid_items = s_stamp = NULL; s_grid_w = s_grid_h = 0;
++}
++
++static void grid_cell_range( const struct SM64SurfaceCollisionData *f, int32_t *i0, int32_t *i1, int32_t *j0, int32_t *j1 )
++{
++    int32_t xa = f->vertex1[0], xb = f->vertex1[0], za = f->vertex1[2], zb = f->vertex1[2];
++    if( f->vertex2[0] < xa ) xa = f->vertex2[0]; if( f->vertex2[0] > xb ) xb = f->vertex2[0];
++    if( f->vertex3[0] < xa ) xa = f->vertex3[0]; if( f->vertex3[0] > xb ) xb = f->vertex3[0];
++    if( f->vertex2[2] < za ) za = f->vertex2[2]; if( f->vertex2[2] > zb ) zb = f->vertex2[2];
++    if( f->vertex3[2] < za ) za = f->vertex3[2]; if( f->vertex3[2] > zb ) zb = f->vertex3[2];
++    *i0 = ( xa - s_grid_x0 ) / GRID_CELL; *i1 = ( xb - s_grid_x0 ) / GRID_CELL;
++    *j0 = ( za - s_grid_z0 ) / GRID_CELL; *j1 = ( zb - s_grid_z0 ) / GRID_CELL;
++}
++
++static void grid_build( void )
++{
++    grid_free();
++    int32_t valid = 0;
++    for( uint32_t k = 0; k < s_static_surface_count; ++k ) valid += s_static_surface_list[k].isValid ? 1 : 0;
++    if( valid == 0 ) return;
++    int32_t x0 = 0x7fffffff, x1 = -0x7fffffff, z0 = 0x7fffffff, z1 = -0x7fffffff;
++    for( uint32_t k = 0; k < s_static_surface_count; ++k )
++    {
++        const struct SM64SurfaceCollisionData *f = &s_static_surface_list[k];
++        if( !f->isValid ) continue;       // degenerate triangles are left half-initialised by engine_surface_from_lib_surface
++        const int32_t *v[3] = { f->vertex1, f->vertex2, f->vertex3 };
++        for( int q = 0; q < 3; ++q )
++        {
++            if( v[q][0] < x0 ) x0 = v[q][0]; if( v[q][0] > x1 ) x1 = v[q][0];
++            if( v[q][2] < z0 ) z0 = v[q][2]; if( v[q][2] > z1 ) z1 = v[q][2];
++        }
++    }
++    s_grid_x0 = x0 - GRID_CELL; s_grid_z0 = z0 - GRID_CELL;
++    s_grid_w = ( x1 - s_grid_x0 ) / GRID_CELL + 2; s_grid_h = ( z1 - s_grid_z0 ) / GRID_CELL + 2;
++    uint32_t cells = (uint32_t)( s_grid_w * s_grid_h );
++    s_grid_start = calloc( cells + 1, sizeof( uint32_t ));
++    for( uint32_t k = 0; k < s_static_surface_count; ++k )
++    {
++        if( !s_static_surface_list[k].isValid ) continue;
++        int32_t i0, i1, j0, j1; grid_cell_range( &s_static_surface_list[k], &i0, &i1, &j0, &j1 );
++        for( int32_t j = j0; j <= j1; ++j ) for( int32_t i = i0; i <= i1; ++i ) s_grid_start[ j * s_grid_w + i + 1 ]++;
++    }
++    for( uint32_t c = 0; c < cells; ++c ) s_grid_start[c + 1] += s_grid_start[c];
++    s_grid_items = malloc( sizeof( uint32_t ) * ( s_grid_start[cells] + 1 ));
++    uint32_t *fill = calloc( cells, sizeof( uint32_t ));
++    for( uint32_t k = 0; k < s_static_surface_count; ++k )
++    {
++        if( !s_static_surface_list[k].isValid ) continue;
++        int32_t i0, i1, j0, j1; grid_cell_range( &s_static_surface_list[k], &i0, &i1, &j0, &j1 );
++        for( int32_t j = j0; j <= j1; ++j ) for( int32_t i = i0; i <= i1; ++i )
++        {
++            uint32_t c = j * s_grid_w + i;
++            s_grid_items[ s_grid_start[c] + fill[c]++ ] = k;
++        }
++    }
++    free( fill );
++    s_stamp = calloc( s_static_surface_count, sizeof( uint32_t ));
++    s_stamp_id = 0;
++}
++
++// Select the static surfaces whose cells touch the disc (x, z, r); r = 0 for a point. Valid until the next query.
++void loaded_surface_iter_query( f32 x, f32 z, f32 r )
++{
++    s_query_active = 1;
++    s_cand_count = 0;
++    if( s_grid_start == NULL ) return;
++    int32_t i0 = (int32_t)floorf(( x - r - s_grid_x0 ) / GRID_CELL ), i1 = (int32_t)floorf(( x + r - s_grid_x0 ) / GRID_CELL );
++    int32_t j0 = (int32_t)floorf(( z - r - s_grid_z0 ) / GRID_CELL ), j1 = (int32_t)floorf(( z + r - s_grid_z0 ) / GRID_CELL );
++    if( i0 < 0 ) i0 = 0; if( j0 < 0 ) j0 = 0;
++    if( i1 >= s_grid_w ) i1 = s_grid_w - 1; if( j1 >= s_grid_h ) j1 = s_grid_h - 1;
++    int multi = ( i1 > i0 || j1 > j0 );
++    if( multi && ++s_stamp_id == 0 ) { memset( s_stamp, 0, sizeof( uint32_t ) * s_static_surface_count ); s_stamp_id = 1; }
++    for( int32_t j = j0; j <= j1; ++j ) for( int32_t i = i0; i <= i1; ++i )
++    {
++        uint32_t c = j * s_grid_w + i;
++        for( uint32_t q = s_grid_start[c]; q < s_grid_start[c + 1]; ++q )
++        {
++            uint32_t k = s_grid_items[q];
++            if( multi ) { if( s_stamp[k] == s_stamp_id ) continue; s_stamp[k] = s_stamp_id; }
++            if( s_cand_count == s_cand_cap )
++            {
++                s_cand_cap = s_cand_cap ? s_cand_cap * 2 : 1024;
++                s_cand = realloc( s_cand, sizeof( uint32_t ) * s_cand_cap );
++            }
++            s_cand[ s_cand_count++ ] = k;
++        }
++    }
++}
++#endif
++
+ uint32_t loaded_surface_iter_group_count( void )
+ {
+     return 1 + s_surface_object_count;
+@@ -216,7 +329,11 @@ uint32_t loaded_surface_iter_group_count( void )
+ uint32_t loaded_surface_iter_group_size( uint32_t groupIndex )
+ {
+     if( groupIndex == 0 )
++#ifdef LIBSM64_PARK
++        return s_query_active ? s_cand_count : s_static_surface_count;
++#else
+         return s_static_surface_count;
++#endif
+ 
+     return s_surface_object_list[ groupIndex - 1 ].surfaceCount;
+ }
+@@ -224,7 +341,11 @@ uint32_t loaded_surface_iter_group_size( uint32_t groupIndex )
+ struct SM64SurfaceCollisionData *loaded_surface_iter_get_at_index( uint32_t groupIndex, uint32_t surfaceIndex )
+ {
+     if( groupIndex == 0 )
++#ifdef LIBSM64_PARK
++        return &s_static_surface_list[ s_query_active ? s_cand[ surfaceIndex ] : surfaceIndex ];
++#else
+         return &s_static_surface_list[ surfaceIndex ];
++#endif
+ 
+     return &s_surface_object_list[ groupIndex - 1 ].engineSurfaces[ surfaceIndex ];
+ }
+@@ -239,6 +360,9 @@ void surfaces_load_static( const struct SM64Surface *surfaceArray, uint32_t numS
+ 
+     for( int i = 0; i < numSurfaces; ++i )
+         engine_surface_from_lib_surface( &s_static_surface_list[i], &surfaceArray[i], NULL );
++#ifdef LIBSM64_PARK
++    grid_build();
++#endif
+ }
+ 
+ uint32_t surfaces_load_object( const struct SM64SurfaceObject *surfaceObject )
+@@ -327,6 +451,10 @@ void surfaces_unload_all( void )
+     free( s_static_surface_list );
+     s_static_surface_count = 0;
+     s_static_surface_list = NULL;
++#ifdef LIBSM64_PARK
++    grid_free();
++    s_cand_count = 0;
++#endif
+ 
+     for( int i = 0; i < s_surface_object_count; ++i )
+         surfaces_unload_object( i );
+diff --git i/src/load_surfaces.h w/src/load_surfaces.h
+index 3e99743..3ef16dc 100644
+--- i/src/load_surfaces.h
++++ w/src/load_surfaces.h
+@@ -3,6 +3,15 @@
+ #include "decomp/include/types.h"
+ #include "libsm64.h"
+ 
++#ifdef LIBSM64_PARK
++#ifndef LIBSM64_WALL_SNAP
++#define LIBSM64_WALL_SNAP 0.06f
++#endif
++extern void loaded_surface_iter_query( f32 x, f32 z, f32 r );
++#define LOADED_SURFACE_QUERY( x, z, r ) loaded_surface_iter_query( (x), (z), (r) )
++#else
++#define LOADED_SURFACE_QUERY( x, z, r ) ((void)0)
++#endif
+ extern uint32_t loaded_surface_iter_group_count( void );
+ extern uint32_t loaded_surface_iter_group_size( uint32_t groupIndex );
+ extern struct SM64SurfaceCollisionData *loaded_surface_iter_get_at_index( uint32_t groupIndex, uint32_t surfaceIndex );
