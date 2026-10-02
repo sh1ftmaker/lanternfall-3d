@@ -4,8 +4,10 @@ const DOOR = { land: 'wanderers', lx: -1.33, ly: 22.6, z: 0.95 };           // d
 const AWAY = Math.PI;                                                         // add to the land's outward yaw to face the lake
 // weather -> where the door opens (land-local x, y, z of the floor; yaw offset from "outward"; fp: where the walker can stand if the grid has no such place)
 const DEST = {
-  clear: { name: 'spire', world: [0, 5], z: 0.6, yaw: Math.PI / 2 },                                      // the Spire's island (north side, away from the stamp post and the jetty), facing the lake
-  mist: { land: 'lantern-row', lx: 0, ly: 28, z: 1.95, yaw: 0 },                                       // the Shrine of Wishes, facing the hall
+  // the Spire's island: the terrace on the north side (away from the stamp post and the jetty), facing the lake. ((0, 5) was inside the
+  // tower's ground hall, a wall ahead.) First person cannot stand on the island: the lake steps at the East Gate end, facing the Spire.
+  clear: { name: 'spire', world: [0, 7.9], z: 0.6, yaw: Math.PI / 2, fp: { world: [99.5, 0], z: 0.2, yaw: Math.PI } },
+  mist: { land: 'lantern-row', lx: 0, ly: 26.6, z: 1.95, yaw: 0 },                                     // the Shrine of Wishes, facing it, a step back from the offering box
   rain: { land: 'meridian', lx: 14, ly: 4.5, z: 35.05, yaw: AWAY },                                    // the Launch Deck, facing the lake
   storm: { land: 'guildhollow', lx: 0, ly: 22.6, z: 0.15, yaw: 0 },                                      // the castle courtyard, facing the keep
   snow: { land: 'frostmere', lx: 36, ly: 5, z: 0.15, yaw: 0 },                                        // the Crystal Court
@@ -16,8 +18,8 @@ export function init(S) {
   let ret = null;                                                              // { group, it, t }
   const doorWorld = () => lib.world(DOOR.land, DOOR.lx, DOOR.ly);
 
-  function dest(state) {
-    const d = DEST[state] || DEST.clear;
+  function dest(state, wick = true) {
+    let d = DEST[state] || DEST.clear; if (!wick && d.fp) d = d.fp;
     if (d.world) return { x: d.world[0], y: d.world[1], z: d.z, yaw: d.yaw };
     const w = lib.world(d.land, d.lx, d.ly); return { x: w[0], y: w[1], z: d.z, yaw: lib.outward(d.land) + d.yaw };
   }
@@ -31,15 +33,20 @@ export function init(S) {
     for (const [bx, by, bw, bh] of [[-W / 2, H / 2, T, H], [W / 2, H / 2, T, H], [0, H, W + T, T], [0, 0.04, W + T, T], [0, H / 2, W, T * 0.6]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, T), wood); m.position.set(bx, by, 0); grp.add(m); }
     game.v3(x, y, z, grp.position); grp.rotation.y = yaw - Math.PI / 2; game.scene.add(grp);
     const glow = game.props.glow({ x, y, z: z + 1.3, color: [0.8, 0.55, 0.28], size: 5 });
-    return { grp, paper, wood, glow, set(o) { paper.opacity = 0.75 * o; wood.opacity = o; glow.sprite.material.opacity = o; }, remove() { game.scene.remove(grp); paper.dispose(); wood.dispose(); glow.remove(); } };
+    return { grp, paper, wood, glow, set(o) { paper.opacity = 0.75 * o; wood.opacity = o; glow.sprite.material.opacity = o; }, remove() { game.scene.remove(grp); grp.traverse((o) => o.geometry && o.geometry.dispose()); paper.dispose(); wood.dispose(); glow.remove(); } };
   }
   function dropReturn() { if (!ret) return; ret.it.remove(); ret.fr.remove(); ret = null; }
   function placeReturn(back, at) {                                              // `at`: where the visitor was put (known, not read back: Wick takes a moment to arrive)
     dropReturn();
-    const yaw = at.yaw, ax = at.x + Math.cos(yaw) * 2.6, ay = at.y + Math.sin(yaw) * 2.6;
-    const gz = game.ground(ax, ay, at.z), z = gz !== null && Math.abs(gz - at.z) < 1.5 ? gz : at.z;
+    // 2.6 m ahead, unless the walk grid says the way there is blocked or falls away (a box, steps into the water): then to one side
+    // or behind, wherever the visitor can walk straight to it. Off the grid (the island, a deck) it stays ahead.
+    const reach = (yaw) => { let z = at.z; for (let k = 1; k <= 6; k++) { const g = game.ground(at.x + Math.cos(yaw) * 2.6 * k / 6, at.y + Math.sin(yaw) * 2.6 * k / 6, z); if (g === null || Math.abs(g - z) > 0.45 || Math.abs(g - at.z) > 0.6) return null; z = g; } return z; };
+    let yaw = at.yaw, z = null;
+    for (const turn of [0, -0.7, 0.7, -1.57, 1.57, Math.PI]) if ((z = reach(at.yaw + turn)) !== null) { yaw = at.yaw + turn; break; }
+    const ax = at.x + Math.cos(yaw) * 2.6, ay = at.y + Math.sin(yaw) * 2.6;
+    if (z === null) { const gz = game.ground(ax, ay, at.z); z = gz !== null && Math.abs(gz - at.z) < 1.5 ? gz : at.z; }
     const fr = makeFrame(ax, ay, z, yaw + Math.PI);                         // the frame faces the visitor: its normal points back along -yaw
-    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', use() { go(back); } });
+    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', show: () => !game.cameraHeld, use() { go(back); } });
     ret = { fr, it, t: 0 };
   }
   function go(to) {
@@ -50,9 +57,9 @@ export function init(S) {
   }
   const d0 = doorWorld(), g0 = game.ground(d0[0], d0[1]);
   game.interact({
-    id: 'secrets-door', x: d0[0], y: d0[1], z: g0 ?? DOOR.z, r: 2.6, label: 'Open door VI',
+    id: 'secrets-door', x: d0[0], y: d0[1], z: g0 ?? DOOR.z, r: 2.6, label: 'Open door VI', show: () => !game.cameraHeld,
     use() {
-      const t = dest(game.weather ? game.weather.state : 'clear'), here = lib.world(DOOR.land, DOOR.lx, DOOR.ly - 1.3), back = { x: here[0], y: here[1], z: DOOR.z, yaw: lib.outward(DOOR.land) };
+      const pf = game.platformer, t = dest(game.weather ? game.weather.state : 'clear', !!(pf && pf.active)), here = lib.world(DOOR.land, DOOR.lx, DOOR.ly - 1.3), back = { x: here[0], y: here[1], z: DOOR.z, yaw: lib.outward(DOOR.land) };
       S.fade(() => {
         const gz = game.ground(t.x, t.y), z = gz !== null && Math.abs(gz - t.z) < 3 ? gz : t.z;
         // Wick is put exactly there; the first-person walker lands on the nearest walk-grid spot, so read where it ended up

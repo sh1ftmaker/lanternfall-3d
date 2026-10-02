@@ -59,7 +59,7 @@ const INSTALL = AGENT + `;window.__tr = {
         if (t < un.until) { const a = un.sign * Math.min(2.6, 0.8 + 0.5 * (un.n || 1)), c1 = Math.cos(a), s1 = Math.sin(a); out = { world: [dx * c1 - dz * s1, dx * s1 + dz * c1], a: Math.floor(t * 4) % 2 === 0 }; }   // blocked: jump and sidestep
         if ((v.s.action & 0x1C0) === 0xC0) {            // swimming: strokes, and the stick only turns him (a forward push would dive)
           let err = Math.atan2(dx, dz) - v.yaw; err = Math.atan2(Math.sin(err), Math.cos(err));
-          out = { a: (t % 0.5) < 0.15, mx: Math.max(-1, Math.min(1, err * 2)) };
+          out = { a: (t % 0.5) < 0.15, mx: Math.max(-1, Math.min(1, -err * 2)) };      // in water the stick turns him the way it points (it was reversed)
         }
         return { ...out, ...(plan ? plan(r.t, v, cp, r.n, l) : {}) };
       };
@@ -107,7 +107,7 @@ if (want('lake')) try {
   await page.evaluate(`__park.platformer.teleport(103.6 - 1.5, 0.3, -9, 0)`); await sleep(1000); await page.evaluate('__park.game.use()'); await sleep(3500);
   check('race running', await page.evaluate(`!!${T}.race && ${T}.race.phase === 'run'`));
   await page.evaluate(`__park.platformer.teleport(-60, 0.3, -200, 0)`); await sleep(1800);
-  check('far away cancels quietly', await page.evaluate(`!${T}.race`));
+  check('far away (a teleport) cancels quietly', await page.evaluate(`!${T}.race`));
   await page.evaluate(`__park.platformer.teleport(103.6 - 1.5, 0.3, -9, 0)`); await sleep(1500); await page.evaluate('__park.game.use()'); await sleep(800);
   await page.evaluate('__park.game.use()'); await sleep(300);
   check('post again cancels', await page.evaluate(`!${T}.race`));
@@ -156,7 +156,8 @@ if (want('fp')) {
     const r0 = await page.evaluate(`${T}.race`); check('fp: race starts with E', !!r0 && r0.style === 'f', JSON.stringify(r0));
     const cps = await page.evaluate(`${T}.courses.find(c => c.id === 'lake').cps`);
     await sleep(3500);
-    for (const c of cps) { await page.evaluate(`__park.setMode('walk', { at: [${c[0]}, ${c[1]}], yaw: 0 })`); await sleep(500); if (c === cps[4]) await shot('fp_midrace'); }
+    // walk from ring to ring in short hops (a jump of over 20 m in a frame is a teleport and calls the race off)
+    for (const c of cps) { for (let k = 1; k <= 4; k++) { await page.evaluate(`(() => { const w = __park.walk; __park.setMode('walk', { at: [w.x + (${c[0]} - w.x) * ${k} / 4, w.y + (${c[1]} - w.y) * ${k} / 4], yaw: 0 }); })()`); await sleep(150); } await sleep(200); if (c === cps[4]) await shot('fp_midrace'); }
     await sleep(600);
     const fin = await page.evaluate('__tr.fin'); check('fp: finishes through all checkpoints', !!fin && fin.style === 'f' && (await page.evaluate('__tr.n')) === 14, JSON.stringify(fin));
     await sleep(600); check('fp: first-person best saved apart', await page.evaluate(`!!${T}.best('lake', 'f') && !${T}.best('lake', 'w')`));
@@ -181,11 +182,13 @@ if (want('phone')) {
     await page.tap('#game-prompt'); await sleep(1200); await shot('phone_countdown');
     check('phone: tap starts the race', await page.evaluate(`!!${T}.race`));
     await sleep(3500);
-    await page.evaluate(`__park.platformer.teleport(60, 0.3, -52, 0)`); await sleep(1500);
+    for (const [x, y] of [[96, 18], [88, 30], [80, 38], [70, 44], [60, 50]]) { await page.evaluate(`__park.platformer.teleport(${x}, 0.6, ${-y}, 0)`); await sleep(250); }   // short hops: a long jump is a teleport and ends the race
+    await sleep(1200);
     await shot('phone_midrace');
     const box = await page.evaluate(`(() => { const r = (id) => { const e = document.getElementById(id); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom].map(Math.round); }; return { track: r('game-track'), prompt: r('game-prompt'), toasts: r('game-toasts') }; })()`);
     check('phone: tracker line shows', !!box.track && /Lake Lap/.test(await page.evaluate(`document.getElementById('game-track').textContent`)), JSON.stringify(box));
-    await page.evaluate(`__park.platformer.teleport(102.1, 0.3, -9, 0)`); await sleep(1500);
+    for (const [x, y] of [[70, 44], [80, 38], [88, 30], [96, 18], [102.1, 9]]) { await page.evaluate(`__park.platformer.teleport(${x}, 0.6, ${-y}, 0)`); await sleep(250); }
+    await sleep(1200);
     await page.tap('#game-prompt'); await sleep(500); check('phone: tap on the post cancels', await page.evaluate(`!${T}.race`));
     await page.evaluate(`__park.game.save.update('trials', (s) => { s.c['lake.w'] = { runs: 3, t: 83.4, sp: [], g: { n: 1, k: [0, 0, 0], d: '' }, m: 1 }; s.c['swim.w'] = { runs: 1, t: 47.2, sp: [], g: { n: 1, k: [0, 0, 0], d: '' }, m: 2 }; return s; }, { c: {} })`);
     await page.evaluate('__park.game.journal.open()'); await sleep(900); await shot('phone_journal');

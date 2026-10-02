@@ -7,7 +7,7 @@
 //   343 m/s, darker and quieter the farther it is, panned toward the flash. Music and ambience duck a little in heavy rain.
 // Everything goes into the engine's ambience bus, so the "Ambience & effects" switch and the volume apply.
 const FILES = { open: 'rain_open', lake: 'rain_lake', roof: 'rain_roof', wind: 'wind' };
-const LOOP = { open: [0.5, 16.5], lake: [0.5, 16.5], roof: [0.5, 14.5], wind: [0.5, 18.5] };
+const LOOP = { open: [0.5, 16.5], lake: [0.5, 16.5], roof: [0.5, 14.5], wind: [0.5, 24.5] };
 const THUNDER = ['thunder_1', 'thunder_2', 'thunder_3'];
 const C = 343;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -112,8 +112,9 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
     if (ch.wind) ch.wind.g.gain.setTargetAtTime(gWind, t, 0.6);
     lp.frequency.setTargetAtTime(16000 * (1 - 0.92 * cov) * (1 - 0.7 * air) + 400, t, 0.3);
     bus.gain.setTargetAtTime(1 / duck, t, 0.5);
-    N.music.gain.setTargetAtTime((est.music ? 1 : 0) * duck, t, 0.5);
-    N.amb.gain.setTargetAtTime((est.ambience ? 1 : 0) * duck, t, 0.5);
+    const hk = est.hush || 0;                                       // the clock's silent four minutes (fx/game/clock/hush.js)
+    N.music.gain.setTargetAtTime((est.music ? 1 - 0.97 * hk : 0) * duck, t, 0.5);
+    N.amb.gain.setTargetAtTime((est.ambience ? 1 - 0.92 * hk : 0) * duck, t, 0.5);
     // thunder: late by distance, darker and quieter the farther, from the flash's side
     const L = shade && shade.lightning && shade.lightning.last;
     if (L && L.seq !== lastSeq) {
@@ -121,7 +122,7 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
       if (b && est.enabled) {
         const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
         s.buffer = b; s.playbackRate.value = 0.85 + 0.3 * Math.random();
-        g.gain.value = clamp(700 / L.dist, 0.3, 1.1) * 0.9;
+        g.gain.value = clamp(700 / L.dist, 0.3, 1.1) * 0.55;    // a close strike (350 m) peaks near the limiter, not 3 dB into it
         f.type = 'lowpass'; f.frequency.value = 250 + 3500 * Math.exp(-L.dist / 500);
         s.connect(f); f.connect(g);
         camera.matrixWorld.extractBasis(_r, _d, _d); if (pan) { pan.pan.value = clamp(L.dir.dot(_r), -1, 1) * 0.7; g.connect(pan); pan.connect(bus); } else g.connect(bus);
@@ -132,7 +133,7 @@ export function createWeatherAudio({ THREE, camera, fetchBin, getEngine, getPark
     // all quiet for a while: stop the loops and hand the buses back untouched
     if (!active && duck === 1) {
       quietFor += dt;
-      if (quietFor > 2 && Object.keys(ch).length) { stopAll(); N.music.gain.setTargetAtTime(est.music ? 1 : 0, t, 0.2); N.amb.gain.setTargetAtTime(est.ambience ? 1 : 0, t, 0.2); bus.gain.setTargetAtTime(1, t, 0.2); }
+      if (quietFor > 2 && Object.keys(ch).length) { stopAll(); const hk = est.hush || 0; N.music.gain.setTargetAtTime(est.music ? 1 - 0.97 * hk : 0, t, 0.2); N.amb.gain.setTargetAtTime(est.ambience ? 1 - 0.92 * hk : 0, t, 0.2); bus.gain.setTargetAtTime(1, t, 0.2); }
     } else quietFor = 0;
     st.voices = Object.keys(ch).length;
     return !st.voices;

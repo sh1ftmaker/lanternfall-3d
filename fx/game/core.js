@@ -17,7 +17,6 @@ const CSS = `
   touch-action:manipulation;-webkit-user-select:none;user-select:none;max-width:calc(100vw - 32px)}
 #game-prompt[hidden]{display:none} #game-prompt kbd{font:600 11px var(--ui);border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:8px;opacity:.8}
 @media (pointer:coarse){ #game-prompt kbd{display:none} #game-prompt{bottom:calc(env(safe-area-inset-bottom,0px) + 330px)} }
-@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 170px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 #game-toasts{position:fixed;z-index:7;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(420px,calc(100vw - 32px))}
 .game-toast{padding:9px 16px;border-radius:14px;background:rgba(13,11,38,.8);border:1px solid var(--line);color:var(--paper);font:500 14px/1.35 var(--ui);text-align:center;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
@@ -28,6 +27,8 @@ const CSS = `
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
 #game-journal .gj-reset{margin-top:10px;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);opacity:.7;font:500 12px var(--ui);padding:6px 12px;cursor:pointer}
+/* phones: after the rules above, or they lose (the toasts sat over the tracker pill); toasts start below a three-line pill */
+@media (max-width:640px){ #game-track{top:calc(env(safe-area-inset-top,0px) + 110px)} #game-toasts{top:calc(env(safe-area-inset-top,0px) + 200px)} #game-journal{top:calc(env(safe-area-inset-top,0px) + 110px);max-height:calc(100dvh - 126px - env(safe-area-inset-top,0px))} }
 body.clean #game-track,body.clean #game-prompt,body.clean #game-toasts{opacity:0;pointer-events:none}
 @media (prefers-reduced-motion:reduce){ .game-toast{animation:none} }
 `;
@@ -36,21 +37,54 @@ export function createGame(ctx) {
   const { THREE, scene, camera, walk } = ctx;
   const hash = new Set(location.hash.slice(1).split(/[&,+]/));
   const off = hash.has('no-game');
-  /* ── saved state: one JSON object, one key per module ── */
-  let data = {}; try { data = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { data = {}; }
-  if (typeof data !== 'object' || Array.isArray(data)) data = {};     // a damaged save must not stop every module
-  let dirty = 0;
-  const flush = () => { dirty = 0; try { localStorage.setItem(STORE, JSON.stringify(data)); } catch (e) { /* private mode: this visit only */ } };
-  const save = {
-    get: (k, d) => (k in data ? data[k] : d),
-    set(k, v) { data[k] = v; if (!dirty) dirty = setTimeout(flush, 400); return v; },
-    update(k, fn, d) { return save.set(k, fn(save.get(k, d))); },
-    reset() { data = {}; flush(); },
+  /* ── saved state: one JSON object, one key per module. A write merges this tab's changed keys into what is stored (another
+     tab may have saved its own keys meanwhile); a changed key that does not fit keeps its last stored value (and lasts this
+     visit only) rather than costing everyone's progress; a blob that will not parse is kept aside under STORE + '.bad' ── */
+  let badRaw = null;
+  const read = () => {
+    let raw = null; try { raw = localStorage.getItem(STORE); } catch (e) { return {}; }
+    if (raw == null) return {};
+    try { const o = JSON.parse(raw); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* below */ }
+    if (raw !== badRaw) { badRaw = raw; try { localStorage.setItem(STORE + '.bad', raw); } catch (e) { /* no room: it is lost */ } console.warn('game: saved progress could not be read; kept aside as', STORE + '.bad'); }
+    return {};
   };
+  let data = read(), dirty = 0; const changed = new Set(), unsaved = new Set();
+  function flush() {
+    clearTimeout(dirty); dirty = 0; if (!changed.size) return;
+    const stored = read(), out = { ...stored }, keys = [...changed]; changed.clear();
+    for (const k of keys) { if (data[k] === undefined) delete out[k]; else out[k] = data[k]; }
+    for (;;) {
+      try { localStorage.setItem(STORE, JSON.stringify(out)); for (const k of keys) unsaved.delete(k); break; } catch (e) {
+        if (!/quota/i.test(e.name + ' ' + e.message)) break;                       // storage off (private mode): this visit only
+        let big = null, bs = -1; for (const k of keys) { if (out[k] === stored[k]) continue; const n = JSON.stringify(out[k] ?? null).length; if (n > bs) { bs = n; big = k; } }
+        if (big === null) break;
+        if (big in stored) out[big] = stored[big]; else delete out[big];             // the last value that fitted
+        if (!unsaved.has(big)) { unsaved.add(big); console.warn('game: no room to save', big, '(' + bs + ' characters); it lasts this visit only'); }
+      }
+    }
+    for (const k in stored) if (!changed.has(k) && !unsaved.has(k) && !keys.includes(k)) data[k] = stored[k];   // another tab's keys
+  }
+  const save = {
+    get: (k, d) => (Object.prototype.hasOwnProperty.call(data, k) ? data[k] : d),
+    set(k, v) { data[k] = v; changed.add(k); if (!dirty) dirty = setTimeout(flush, 400); return v; },
+    update(k, fn, d) { return save.set(k, fn(save.get(k, d))); },
+    flush,
+    reset() { data = {}; changed.clear(); unsaved.clear(); clearTimeout(dirty); dirty = 0; try { localStorage.removeItem(STORE); } catch (e) { /* nothing stored */ } },
+    get size() { try { return (localStorage.getItem(STORE) || '').length; } catch (e) { return 0; } },
+  };
+  addEventListener('pagehide', flush); document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
   /* ── events ── */
   const subs = new Map();
   const on = (type, fn) => { if (!subs.has(type)) subs.set(type, new Set()); subs.get(type).add(fn); return () => subs.get(type).delete(fn); };
-  const emit = (type, d) => { const s = subs.get(type); if (s) for (const fn of [...s]) { try { fn(d); } catch (e) { console.warn('game:', type, e); } } };
+  // a listener that throws is reported once; one that throws 30 times within ten seconds (a 'frame' listener failing every
+  // frame) is switched off so it cannot flood the console or cost every frame
+  const bad = new WeakMap();
+  function fail(what, fn, e, s) {
+    const now = performance.now(), b = bad.get(fn) || { n: 0, t0: now }; if (now - b.t0 > 10000) { b.n = 0; b.t0 = now; } b.n++; bad.set(fn, b);
+    if (b.n === 1) console.warn('game:', what, e);
+    if (b.n >= 30 && s) { s.delete(fn); console.warn('game: a', what, 'listener kept failing and was switched off', e); }
+  }
+  const emit = (type, d) => { const s = subs.get(type); if (s) for (const fn of s) { try { fn(d); } catch (e) { fail(type, fn, e, s); } } };   // (a Set may lose members while it is walked)
 
   /* ── DOM: tracker pill (opens the journal), prompt button, toasts, journal sheet ── */
   const el = (tag, id, cls) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; return e; };
@@ -61,18 +95,33 @@ export function createGame(ctx) {
   const journalEl = el('div', 'game-journal', 'sheet'); journalEl.hidden = true; journalEl.setAttribute('role', 'dialog'); journalEl.setAttribute('aria-label', 'Journal');
   journalEl.innerHTML = '<div class="sheet-head"><h2>Journal</h2><button type="button" class="sheet-close" aria-label="Close the journal">&times;</button></div><div class="gj-list"></div><button type="button" class="gj-reset">Start over</button>';
   if (!off) document.body.append(trackEl, promptEl, toastsEl, journalEl);
+  // anything typed by the visitor or read back from storage goes in with esc(), as text: { text } or a Node
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const fill = (e, v) => { if (v instanceof Node) e.replaceChildren(v); else if (v && typeof v === 'object' && 'text' in v) e.textContent = v.text; else e.innerHTML = v; };
+  // toasts: three at most on screen; more wait their turn (a burst from several modules used to push the first ones out
+  // unseen), and while some wait, each one up is cut to 2 s on screen
+  const shown = [], waiting = [];
   function toast(text, { ms = 4200, tone = '' } = {}) {
-    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); t.innerHTML = text; toastsEl.appendChild(t);
-    while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
-    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 600); }, ms);
+    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); fill(t, text); if (ctx.reduceMotion && ctx.reduceMotion()) t.style.animation = 'none';   // the in-app setting, not only the system one
+    waiting.push({ t, ms }); pump(); return t;
+  }
+  function pump() {
+    while (shown.length < 3 && waiting.length) {
+      const w = waiting.shift(); toastsEl.appendChild(w.t); w.at = performance.now(); w.timer = setTimeout(() => hideToast(w), w.ms); shown.push(w);
+    }
+    if (waiting.length) for (const w of shown) { const left = 2000 - (performance.now() - w.at); if (left < w.ms) { clearTimeout(w.timer); w.ms = Math.max(0, left); w.timer = setTimeout(() => hideToast(w), w.ms); } }
+  }
+  function hideToast(w) {
+    if (w.gone) return; w.gone = true; w.t.classList.add('out');
+    setTimeout(() => { w.t.remove(); const i = shown.indexOf(w); if (i >= 0) shown.splice(i, 1); pump(); }, 600);
   }
   // tracker: up to three short lines, lowest `order` first; a line is { text, order }
   const lines = new Map();
   function track(id, text, { order = 50 } = {}) {
     if (text == null || text === '') lines.delete(id); else lines.set(id, { text, order });
     const list = [...lines.values()].sort((a, b) => a.order - b.order).slice(0, 3);
-    trackEl.innerHTML = '<b>Journal</b>' + list.map((l) => `<span>${l.text}</span>`).join('');
-    trackEl.hidden = !started || (!list.length && !sections.size);
+    trackEl.innerHTML = '<b>Journal</b>'; for (const l of list) { const sp = el('span'); fill(sp, l.text); trackEl.appendChild(sp); }
+    trackEl.hidden = !started || (!list.length && (!sections.size || player.mode === 'tour'));   // Tour keeps today's first look: no empty pill
   }
   // journal: modules add sections; render(el) is called whenever the journal opens or journal.refresh() runs
   const sections = new Map();
@@ -81,17 +130,18 @@ export function createGame(ctx) {
     refresh() {
       if (journalEl.hidden) return;
       const list = journalEl.querySelector('.gj-list'); list.textContent = '';
-      for (const s of [...sections.values()].sort((a, b) => a.order - b.order)) {
+      for (const s of [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {   // equal orders: by id, not by which module happened to load first
         const sec = el('div', null, 'gj-sec'), h = el('h3'), body = el('div', null, 'gj-body'); h.textContent = s.title; sec.append(h, body); list.appendChild(sec);
         try { s.render(body); } catch (e) { console.warn('game: journal', s.id, e); }
       }
       if (!sections.size) list.innerHTML = '<p class="gj-empty">Nothing yet. Walk the park.</p>';
     },
-    open() { journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },
+    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
     close() { journalEl.hidden = true; emit('journal', { open: false }); },
     get isOpen() { return !journalEl.hidden; },
   };
   trackEl.addEventListener('click', () => (journal.isOpen ? journal.close() : journal.open()));
+  const setBtn = document.getElementById('btn-set'); if (setBtn) setBtn.addEventListener('click', () => { if (journal.isOpen) journal.close(); }, true);
   journalEl.querySelector('.sheet-close').addEventListener('click', journal.close);
   journalEl.querySelector('.gj-reset').addEventListener('click', () => { if (journalEl.querySelector('.gj-reset').dataset.sure) { save.reset(); location.reload(); } else { const b = journalEl.querySelector('.gj-reset'); b.dataset.sure = '1'; b.textContent = 'Erase all progress? Tap again'; } });
 
@@ -114,21 +164,27 @@ export function createGame(ctx) {
   }
 
   /* ── interactables ── */
-  const inter = new Set(); let near = null;
+  const inter = []; let near = null;          // an array: walked every frame without an iterator
   function interact(o) {
     const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o };
-    it.remove = () => { inter.delete(it); if (near === it) { near = null; promptEl.hidden = true; } };
+    it.remove = () => { const i = inter.indexOf(it); if (i >= 0) inter.splice(i, 1); if (near === it) { near = null; promptEl.hidden = true; promptKey.it = null; } };
     it.move = (x, y, z = it.z) => { it.x = x; it.y = y; it.z = z; };
-    inter.add(it); return it;
+    inter.push(it); return it;
   }
-  const dist = (it) => Math.hypot(it.x - player.x, it.y - player.y, (it.z - player.z) * 0.6);
-  const usable = (it) => it.enabled && (!it.show || it.show());
-  function findNear(extra = 0) {
+  const usable = (it) => { if (!it.enabled) return false; if (!it.show) return true; try { return !!it.show(); } catch (e) { fail('interact show ' + it.id, it.show, e); return false; } };
+  const labelOf = (it) => { try { return String((typeof it.label === 'function' ? it.label() : it.label) ?? ''); } catch (e) { it.enabled = false; console.warn('game: interact', it.id, 'label failed; switched off', e); return ''; } };
+  function findNear(extra = 0, swing = false) {     // swing: only what the pole can use (a swing passes over a swing: false thing)
     let best = null, bd = Infinity;
-    for (const it of inter) { if (!usable(it)) continue; const d = dist(it); if (d < it.r + extra && d < bd) { bd = d; best = it; } }
+    const px = player.x, py = player.y, pz = player.z;
+    for (let i = 0; i < inter.length; i++) {      // squared distances, inline: this runs every frame over every interactable
+      const it = inter[i]; if (swing && !it.swing) continue;
+      const dx = it.x - px, dy = it.y - py, dz = (it.z - pz) * 0.6, d = dx * dx + dy * dy + dz * dz, r = it.r + extra;
+      if (d < r * r && d < bd && usable(it)) { bd = d; best = it; }     // show() only for those in reach
+    }
     return best;
   }
-  function use(it = near) { if (!it || !usable(it)) return false; try { it.use(it); } catch (e) { console.warn('game: use', it.id, e); } emit('use', { id: it.id }); return true; }
+  function use(it = near) { if (!it || !inter.includes(it) || !usable(it)) return false; try { it.use(it); } catch (e) { console.warn('game: use', it.id, e); } emit('use', { id: it.id }); return true; }
+  const kbdE = el('kbd'); kbdE.textContent = 'E';
   promptEl.addEventListener('click', () => use());
   addEventListener('keydown', (e) => {
     if (off || e.ctrlKey || e.metaKey || e.altKey || e.repeat || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
@@ -164,15 +220,16 @@ export function createGame(ctx) {
     set(t) { const prev = clock.t; clock.t = ((t % 1440) + 1440) % 1440; emit('clock', { t: clock.t, prev, jump: true }); },
     fmt: (t = clock.t) => String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(Math.floor(t % 60)).padStart(2, '0'),
     // fn() when the clock passes hh:mm going forward (also on a set() that lands within 1 minute after it)
-    at(hhmm, fn) { const [h, m] = hhmm.split(':').map(Number), T = h * 60 + m; return on('clock', ({ t, prev, jump }) => { if (jump ? t >= T && t < T + 1 : prev < T && t >= T) fn(); }); },
+    // (while running, prev is below 0 on the frame the clock passes midnight, so a time late in the day still fires)
+    at(hhmm, fn) { const [h, m] = hhmm.split(':').map(Number), T = h * 60 + m; return on('clock', ({ t, prev, jump }) => { if (jump ? t >= T && t < T + 1 : (prev < T && t >= T) || (prev < T - 1440 && t >= T - 1440)) fn(); }); },
   };
 
   /* ── per frame ── */
-  let started = false, lastAction = '', lastWeather = '', landT = 0, promptKey = '';
+  let started = false, lastAction = '', lastWeather = '', landT = 0; const promptKey = { it: null, label: '', wick: false };
   function frame(dt, time) {
     if (off || !started) return;
     const mode = ctx.getMode(), pf = ctx.getPlatformer(), wick = !!(pf && pf.active);
-    if (mode !== player.mode || wick !== player.wick) { player.mode = mode; player.wick = wick; emit('mode', { mode, wick }); }
+    if (mode !== player.mode || wick !== player.wick) { player.mode = mode; player.wick = wick; track('', null); emit('mode', { mode, wick }); }
     const px = player.x, py = player.y;
     if (mode === 'walk') {
       player.x = walk.x; player.y = walk.y; player.yaw = walk.yaw;
@@ -183,18 +240,37 @@ export function createGame(ctx) {
     const act = wick && pf.view && pf.view.s ? ACTION_NAMES[pf.view.s.action] || '' : '';
     if (act !== lastAction) {
       const prev = lastAction; lastAction = player.action = act; emit('action', { name: act, prev });
-      if (act === 'punching' || act === 'move punching' || act === 'jump kick') { emit('swing', { x: player.x, y: player.y, z: player.z }); const it = findNear(0.9); if (it && it.swing) use(it); }
+      if (act === 'punching' || act === 'move punching' || act === 'jump kick') { emit('swing', { x: player.x, y: player.y, z: player.z }); const it = driver ? null : findNear(0.9, true); if (it) use(it); }
       if (act === 'ground pound land') emit('pound', { x: player.x, y: player.y, z: player.z });
     }
     // which land the visitor is in (app.js nearestPlace(): a place id such as 'meridian', 'spire', 'gate', or null)
     if ((landT -= dt) < 0) { landT = 0.5; const p = mode === 'walk' ? ctx.nearestPlace() : null, id = p ? p.id : null; if (id !== player.land) { const prev = player.land; player.land = id; emit('land', { id, prev }); } }
     const w = ctx.weather ? ctx.weather.state : 'clear'; if (w !== lastWeather) { const prev = lastWeather; lastWeather = w; emit('weather', { state: w, prev }); }
     if (clock.running) { const prev = clock.t; clock.t = (clock.t + dt * clock.rate) % 1440; emit('clock', { t: clock.t, prev: prev > clock.t ? prev - 1440 : prev, jump: false }); }
-    // the prompt: the nearest thing that can be used, in Walk mode only
-    near = mode === 'walk' ? findNear() : null;
-    const key = near ? (wick ? 'w' : 'f') + near.id + '|' + (typeof near.label === 'function' ? near.label() : near.label) : '';
-    if (key !== promptKey) { promptKey = key; promptEl.hidden = !near; if (near) promptEl.innerHTML = key.slice(key.indexOf('|') + 1) + (wick ? '' : '<kbd>E</kbd>'); }
+    // the prompt: the nearest thing that can be used, in Walk mode only and not while a module holds the camera
+    near = mode === 'walk' && !driver ? findNear() : null;
+    let label = near ? labelOf(near) : ''; if (near && !near.enabled) { near = findNear(); label = near ? labelOf(near) : ''; }
+    if (near !== promptKey.it || label !== promptKey.label || wick !== promptKey.wick) {
+      promptKey.it = near; promptKey.label = label; promptKey.wick = wick; promptEl.hidden = !near;
+      if (near) { promptEl.textContent = label; if (!wick) promptEl.appendChild(kbdE); }     // the label is text, never markup
+    }
     emit('frame', { dt, time });
+  }
+
+  /* ── moving the visitor: teleport(x, y, yaw) stands the walker on the walk grid near (x, y), on its lowest level and never
+     on the Spire island (as before). With { z }, the spot is taken as given: the walk-grid level nearest z when there is
+     one within 1.5 m (an upper deck, a platform), else, for Wick only, (x, y, z) itself (a roof, a ledge, the Spire island, the
+     lake bed); the first-person walker, which lives on the grid, then gets the nearest grid spot as before. Returns the
+     height used, or null if Walk could not start (the park still loading). Wick spawns from the walker's spot (app.js) ── */
+  function teleport(x, y, yaw, { z } = {}) {
+    ctx.setMode('walk', { at: [x, y], yaw });
+    if (ctx.getMode() !== 'walk') return null;
+    if (z === undefined || !Number.isFinite(z)) return walk.z;
+    const g = ground(x, y, z), wick = ctx.wickWanted ? ctx.wickWanted() : !!(ctx.getPlatformer() && ctx.getPlatformer().active);
+    const h = g !== null && Math.abs(g - z) < 1.5 ? g : wick ? z : null;
+    if (h === null) return walk.z;
+    walk.x = x; walk.y = y; walk.z = walk.cz = h; walk.hop = walk.vh = 0;
+    return h;
   }
 
   /* ── the camera, on loan: while a module holds it, fn(dt) places the camera each frame and the mode's own update
@@ -214,7 +290,7 @@ export function createGame(ctx) {
     save, on, emit, player, v3, ground, lightAt, interact, use, toast, track, journal, props, clock, frame,
     takeCamera, drive, get cameraHeld() { return driver ? driver.name || true : false; },
     sound: (name, pos) => ctx.sound.play(name, pos),
-    setMode: ctx.setMode, teleport: (x, y, yaw) => ctx.setMode('walk', { at: [x, y], yaw }),
+    setMode: ctx.setMode, teleport, esc, get interactables() { return inter.slice(); },
     modules: {}, get started() { return started; },
     // app.js calls this once the park can be walked: loads the modules, then 'start' fires
     async start() {

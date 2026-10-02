@@ -19,7 +19,7 @@ import music, sfx
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--only', default='')
-ap.add_argument('--src', default=os.environ.get('AUDIO_SRC', '/tmp/claude-1000/-home-zalo/253e908b-4e3c-4d12-a43e-a8b3b88482f6/scratchpad/agents/sound-music/src'))
+ap.add_argument('--src', default=os.environ.get('AUDIO_SRC', '/tmp/claude-1000/-home-zalo/253e908b-4e3c-4d12-a43e-a8b3b88482f6/scratchpad/agents/sound-fix/src'))   # sound-music/src + the wind recordings
 ap.add_argument('--tmp', default=os.environ.get('AUDIO_TMP', '/tmp'))
 ap.add_argument('--json-only', action='store_true')
 args = ap.parse_args()
@@ -38,7 +38,7 @@ _cache = {}
 USED = []          # Freesound ids used by the item being rendered (provenance -> render_meta -> CREDITS.md)
 
 
-def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0.0, search=None):
+def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0.0, search=None, calm=False):
     key = (fid, mono)
     USED.append(fid)
     if key not in _cache:
@@ -49,7 +49,7 @@ def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0
     if lpf: sos += [lp(lpf), lp(lpf * 1.2)]
     if start is None and search:
         a, b = secs(search[0]), min(x.shape[0], secs(search[1]))
-        start = (a + aio.best_window(x[a:b], L + secs(xfade))) / SR
+        start = (a + (aio.calm_window if calm else aio.best_window)(x[a:b], L + secs(xfade))) / SR
     y, st = aio.make_loop(x, L, start=None if start is None else secs(start), xfade=xfade)
     if sos:
         y = pfilter(y, chain(*sos))
@@ -64,6 +64,18 @@ def lvl(x, db):
 
 def st(x):
     return x if x.ndim == 2 else np.stack([x, x], 1)
+
+
+# ------------------------------------------------------------------ wind from recordings
+_wind = {}
+
+
+def wind_rec(fid, L, gain_db=0.0, **kw):
+    """Recorded wind (Freesound `fid`) as a stereo periodic loop of L samples at -24 LUFS + gain_db; see
+    lib.io.wind_loop for the rumble filter, the gust tamer and the loop choice."""
+    USED.append(fid)
+    y = aio.wind_loop(os.path.join(args.src, f'fs{fid}.mp3'), L, **kw)
+    return y / 10 ** (aio.lufs(y, True) / 20) * 10 ** ((-24 + gain_db) / 20)
 
 
 # ------------------------------------------------------------------ beds (stereo, 16-20 s, layered lengths)
@@ -82,35 +94,37 @@ def width(x, target=0.35):
 
 def bed_gate():
     """Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival
-    walla (848976), soft air."""
-    L = secs(18)
-    return width(rec(741283, L, lpf=6500, hpf=90, search=(0, 30)) + rec(848976, L, lpf=4000, hpf=100, gain_db=-6) +
-                 lvl(sfx.wind(L, 11, lo=60, hi=500, gust=.4), -14))
+    walla (848976), a little night air in the trees (37873)."""
+    L = secs(28)
+    return width(rec(741283, L, lpf=6500, hpf=90, search=(0, 34), calm=True) +
+                 rec(848976, L, lpf=4000, hpf=100, gain_db=-6, search=(55, 100), calm=True) +
+                 wind_rec(37873, L, hpf=200, lpf=5000, search=(12, 66), gain_db=-14))
 
 
 def bed_lake():
     """The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices."""
-    L = secs(17)
-    return width(rec(352356, L, lpf=5000, hpf=60) + lvl(sfx.lapping(L, 21), -7) + lvl(sfx.wind(L, 22, 50, 400, .5), -11))
+    L = secs(28)
+    return width(rec(352356, L, lpf=5000, hpf=60, search=(0, 165), calm=True) + lvl(sfx.lapping(L, 21), -7) +
+                 wind_rec(435206, L, hpf=200, lpf=5000, search=(125, 235), gain_db=-12))
 
 
 def bed_guild():
     """Courtyard evening crowd (741283) + torches crackling (483692)."""
-    L = secs(16)
-    return width(rec(741283, L, lpf=5500, hpf=90, search=(35, 70)) + rec(483692, L, lpf=7000, gain_db=-8))
+    L = secs(28)
+    return width(rec(741283, L, lpf=5500, hpf=90, search=(36, 71), calm=True) + rec(483692, L, lpf=7000, hpf=150, gain_db=-8))
 
 
 def bed_frost():
-    """Wind over snow with a faint whistle; the crowd heard muffled (low-passed) behind it."""
-    L = secs(19)
-    w = sfx.wind(L, 41, lo=80, hi=1200, gust=.8, whistle=.15)
-    return width(lvl(w, 0) + rec(461060, L, lpf=1500, hpf=120, gain_db=-8))
+    """Cold winter wind in conifers (575245); the crowd heard muffled (low-passed) behind it."""
+    L = secs(24)
+    return width(wind_rec(575245, L, hpf=200, lpf=7000, tame=.5) + rec(461060, L, lpf=1500, hpf=120, gain_db=-8))
 
 
 def bed_meridian():
-    """Plaza crowd (848976) and a low electric hum under the neon."""
-    L = secs(16)
-    return width(rec(848976, L, lpf=6500, hpf=100) + lvl(sfx.hum(L, 51), -17))
+    """Plaza crowd (848976) and a low electric hum under the neon. The stretch is the one with the fewest stand-out
+    events (the old one had a beep 29 dB over the crowd, heard every 16 s all over the land)."""
+    L = secs(28)
+    return width(rec(848976, L, lpf=6500, hpf=100, search=(0, 55), calm=True) + lvl(sfx.hum(L, 51), -17))
 
 
 def bed_wanderers():
@@ -121,14 +135,14 @@ def bed_wanderers():
 
 def bed_brine():
     """Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574)."""
-    L = secs(17)
-    return width(rec(843246, L, lpf=6000, hpf=50) + rec(31574, L, lpf=4000, hpf=120, gain_db=-7))
+    L = secs(28)
+    return width(rec(843246, L, lpf=6000, hpf=110, search=(0, 185), calm=True) + rec(31574, L, lpf=4000, hpf=120, gain_db=-7))   # hull slaps: thuds, not rumble
 
 
 def bed_lantern():
     """A bustling night market walked through (752436) with chimes tuned to the park's pentatonic."""
-    L = secs(16)
-    return width(rec(752436, L, lpf=5500, hpf=100) + lvl(sfx.chimes(L, 91, rate=.35), -15))
+    L = secs(28)
+    return width(rec(752436, L, lpf=5500, hpf=100, search=(0, 486), calm=True) + lvl(sfx.chimes(L, 91, rate=.35), -15))
 
 
 def bed_rosewick():
@@ -140,16 +154,19 @@ def bed_rosewick():
 
 
 def bed_gap():
-    """Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere."""
-    L = secs(19)
-    return width(lvl(sfx.leaves(L, 112), 0) + lvl(sfx.wind(L, 113, 200, 900, .4), -10))
+    """Green gaps and woods: wind in the trees at night (37873) over a breeze through oak leaves (435206).
+    No crickets: this bed is heard a little everywhere."""
+    L = secs(28)
+    return width(wind_rec(37873, L, hpf=200, lpf=7000, search=(12, 66), tame=.25) +
+                 wind_rec(435206, L, hpf=200, lpf=8000, search=(125, 235), tame=.25, gain_db=-5))
 
 
 def bed_sky():
-    """From the sky: wind and a distant low-passed blend of the whole park."""
-    L = secs(20)
-    w = sfx.wind(L, 121, lo=40, hi=700, gust=.7, whistle=.08)
-    return width(lvl(w, 0) + rec(461060, L, lpf=900, hpf=100, gain_db=-9) + rec(848976, L, lpf=600, hpf=80, gain_db=-12))
+    """From the sky: open-air wind (a gale in pines, 86345, high-passed so only the air is left) and a distant
+    low-passed blend of the whole park."""
+    L = secs(30)
+    return width(wind_rec(86345, L, hpf=250, lpf=6000, tame=.6) + rec(461060, L, lpf=900, hpf=120, gain_db=-9) +
+                 rec(848976, L, lpf=600, hpf=120, gain_db=-12))
 
 
 def crowd(fid, secs_, **kw):
@@ -175,18 +192,19 @@ for nm, fn in [('gate', bed_gate), ('lake', bed_lake), ('guildhollow', bed_guild
                ('meridian', bed_meridian), ('wanderers', bed_wanderers), ('brinewatch', bed_brine),
                ('lantern-row', bed_lantern), ('rosewick', bed_rosewick), ('gap', bed_gap), ('sky', bed_sky)]:
     ITEMS['bed_' + nm] = dict(fn=fn, cat='bed', loop=True)
-for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(848976, 17, lpf=6000, hpf=90, search=(100, 200))),
+for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(848976, 28, lpf=6000, hpf=90, search=(100, 200), calm=True)),
                ('dense', crowd(546676, 13, lpf=6500, hpf=100))]:
     ITEMS['crowd_' + nm] = dict(fn=fn, cat='bed', loop=True)
 
 for nm, fn in music.LOOPS.items():
     ITEMS[nm] = dict(fn=fn, cat='music', loop=True)
 ITEMS['frost_drum']['cat'] = 'emit'
+ITEMS['frost_drum']['hpf'] = 60          # drum loops that play continuously: keep the body, lose the sub
 
 
 @item('torch_loop', 'emit')
 def _():
-    return mono(rec(483692, secs(9), lpf=7000, search=(200, 400)))
+    return mono(rec(483692, secs(9), lpf=7000, hpf=150, search=(200, 400)))   # the recording has rumble under the fire
 
 
 @item('crickets_loop', 'emit')
@@ -225,6 +243,9 @@ def _():
     return sfx.taiko_loop(secs(13.3333333), 72, 73)   # 16 beats @72 = 13.33 s, same grid as the market music
 
 
+ITEMS['taiko_loop']['hpf'] = 60
+
+
 @item('chimes_loop', 'emit')
 def _():
     return mono(sfx.chimes(secs(13), 74, rate=.8, width=0))
@@ -236,6 +257,7 @@ def _():
 
 
 ONESHOT_LEVEL = {}   # peak dBFS baked into the file (relative levels); default -3
+ONESHOT_HPF = {'firework_burst': 55, 'firework_launch': 70, 'strength_bell': 70, 'splash': 80, 'footstep_gravel': 60}
 
 
 def oneshot(name, fn, n, level=-3.0):
@@ -341,13 +363,22 @@ def render_all():
             x = x if x.ndim == 1 else x.mean(1)
         if it['loop']:
             x = x - x.mean(0)                              # no DC
+            if it.get('hpf'):                              # sub-bass a phone cannot play and the compressor pumps on
+                x = pfilter(x, chain(hp(it['hpf']), hp(it['hpf'])))
             x = x / 10 ** (aio.lufs(x, True) / 20) * 10 ** (TARGET[cat] / 20)
-            x = aio.limit_periodic(x, -3.0)            # AAC overshoots by up to ~2 dB on peaky material
+            # AAC overshoots by up to ~2 dB on peaky material; a bed is texture: its peaks stay within ~18 dB of its
+            # loudness (water slaps and shouts at 23 dB over the bed pushed the master limiter)
+            x = aio.limit_periodic(x, -8.0 if cat == 'bed' else -3.0)
             m_ = x if x.ndim == 1 else x.mean(1)
             src_wrap = float(abs(m_[0] - m_[-1]) / (np.percentile(np.abs(np.diff(m_)), 99) + 1e-12))
         else:
             src_wrap = None
             x = x - np.mean(x[: secs(.002)], 0) if x.shape[0] > 100 else x
+            # one-shots: no DC or sub-sonic content (several synthetic ones had most of their energy below 60 Hz:
+            # offsets from their envelopes, booms down to 25 Hz), 4th-order high-pass at ONESHOT_HPF (default 40 Hz)
+            from lib.dsp import filt, fade
+            f0 = ONESHOT_HPF.get(it.get('group'), 40)
+            x = fade(filt(np.concatenate([x, np.zeros_like(x[:secs(.08)])]), chain(hp(f0), hp(f0))), 0, .06)
             x = x / (np.max(np.abs(x)) + 1e-12) * 10 ** (it.get('level', -3) / 20)
             if it.get('group', '').startswith('footstep'):   # steps: equal loudness across surfaces, peak <= -3 dBFS
                 x = x / 10 ** (aio.lufs(x) / 20) * 10 ** (-27 / 20)

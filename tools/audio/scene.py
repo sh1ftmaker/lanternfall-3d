@@ -101,8 +101,8 @@ def write_json(meta, path):
         em('gate_lamplighter', 'lamplighter_1', [205.0, 0.0, 3.5], .5, 5, 45, loop=False, every=[6, 16],
            files=files('lamplighter'), area={'r': 22}),
         em('carousel_organ', 'carousel_organ', 'carousel', .8, 12, 130),
-        em('spire_bell', 'spire_bell_1', P['spire_bell'], 1.0, 60, 600, loop=False, schedule='quarter'),
-        em('guild_anvil', 'anvil_1', P['guild_forge'], .7, 6, 70, loop=False, every=[2.5, 8], files=files('anvil')),
+        em('spire_bell', 'spire_bell_1', P['spire_bell'], .7, 35, 500, loop=False, schedule='quarter'),   # was 1.0 / 60 m: the loudest thing at the lake rail
+        em('guild_anvil', 'anvil_1', P['guild_forge'], .6, 6, 70, loop=False, every=[4, 13], files=files('anvil')),
         em('guild_strength_bell', 'strength_bell_1', P['guild_bell'], .7, 8, 90, loop=False, every=[14, 40],
            files=files('strength_bell')),
         em('guild_fanfare', 'fanfare_1', P['guild_walls'], .9, 25, 260, loop=False, every=[70, 150]),
@@ -163,7 +163,7 @@ def write_json(meta, path):
         'crowd': [dict(file=f('crowd_sparse'), gain=.8, loop=lp('crowd_sparse'), density=[.05, .35]),
                   dict(file=f('crowd_murmur'), gain=.85, loop=lp('crowd_murmur'), density=[.2, .6]),
                   dict(file=f('crowd_dense'), gain=.8, loop=lp('crowd_dense'), density=[.55, 1.0])],
-        'oneshot_gains': {'firework_burst': 1.0, 'firework_launch': .7, 'lantern_release': .6, 'splash': .5,
+        'oneshot_gains': {'firework_burst': .8, 'firework_launch': .6, 'lantern_release': .6, 'splash': .5,
                           'footstep_stone': .35, 'footstep_wood': .35, 'footstep_snow': .35, 'footstep_grass': .3, 'footstep_gravel': .35,
                           'ui_click': .4, 'oar': .45},
     }

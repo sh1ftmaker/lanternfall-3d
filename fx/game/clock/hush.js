@@ -45,6 +45,7 @@ export function createHush(game) {
   function audio(k) {
     const e = game.ctx.sound && game.ctx.sound.engine, N = e && e.debug && e.debug.nodes, ctx = e && e.debug && e.debug.ctx; if (!N || !ctx) { applied = -1; return; }
     const st = e.debug.st, now = ctx.currentTime;
+    st.hush = k;                                   // the weather's rain ducking (fx/weather/audio.js) keeps the hush
     N.music.gain.setTargetAtTime(st.music ? 1 - 0.97 * k : 0, now, 0.4);
     N.amb.gain.setTargetAtTime(st.ambience ? 1 - 0.92 * k : 0, now, 0.4);
     applied = k;
