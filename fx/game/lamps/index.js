@@ -77,10 +77,10 @@ export function init(game) {
 
   /* ── pools of light under the lit lamps (one instanced disc mesh), glows near the visitor (pooled sprites) ── */
   const discTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
-  const discs = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: discTex, color: new THREE.Color(0.55, 0.32, 0.12), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), N);
+  const discs = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: discTex, color: new THREE.Color(0.42, 0.24, 0.09), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), N);
   discs.frustumCulled = false; discs.renderOrder = 7; discs.count = 0; scene.add(discs);
   const discOrder = []; // lit lamps in the order of their disc slot
-  function setDisc(slot, l, s) { tmp.position.set(l.x, l.z + 0.05, -l.y); tmp.rotation.set(0, 0, 0); tmp.scale.setScalar(s * 3.4); tmp.updateMatrix(); discs.setMatrixAt(slot, tmp.matrix); }
+  function setDisc(slot, l, s) { tmp.position.set(l.x, l.z + 0.05, -l.y); tmp.rotation.set(0, 0, 0); tmp.scale.setScalar(s * 2.9); tmp.updateMatrix(); discs.setMatrixAt(slot, tmp.matrix); }
   function rebuildDiscs() { discOrder.length = 0; for (const l of L) if (l.lit) { setDisc(discOrder.length, l, l.litAt >= 0 && now() - l.litAt < 1 ? Math.min(1, (now() - l.litAt)) : 1); discOrder.push(l); } discs.count = discOrder.length; discs.instanceMatrix.needsUpdate = true; }
   const POOL = 12, glows = [];
   const glowSize = (l) => 1.7 * (styleOf(l)[2] * 0.5 + 0.5), glowCol = (l) => { const s = styleOf(l)[3]; return [0.6 + s[0] * 0.35, 0.38 + s[1] * 0.22, 0.16 + s[2] * 0.15]; };
@@ -187,7 +187,7 @@ export function init(game) {
   function revealPole() {
     if (pole) return; const [x, y, z] = HIDDEN.pole, g = new THREE.Group(), dark = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.07, 0.045, 0.03), fog: false });
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 2.3, 6).translate(0, 1.15, 0), dark); rod.rotation.z = -0.22; g.add(rod);
-    const hd = new THREE.Mesh(headG, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 0.4, 0.14), vertexColors: true, fog: false })); hd.position.set(-0.5, 2.22, 0); hd.scale.set(0.8, 0.8, 0.8); hd.rotation.z = -0.22; g.add(hd);
+    const hd = new THREE.Mesh(headG, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.22, 0.12, 0.05), vertexColors: true, fog: false })); hd.position.set(-0.5, 2.22, 0); hd.scale.set(0.8, 0.8, 0.8); hd.rotation.z = -0.22; g.add(hd);
     g.position.set(x, z, -y); g.rotation.y = 0.6; scene.add(g); pole = g;
     poleIt = game.interact({ id: 'lamps:note', x, y, z: z + 1, r: 2.2, label: 'Read the note', swing: false, use: () => { card.hidden = false; if (!st.pole) { st.pole = true; persist(); game.emit('lamps:pole', {}); game.journal.refresh(); } } });
     if (!st.pole) game.toast('<b>An old lantern pole</b> leans in the corner by the fire. There is a note.', { ms: 6500 });
@@ -200,7 +200,7 @@ export function init(game) {
   document.body.append(wish, card);
   const winp = wish.querySelector('input'), wn = wish.querySelector('.n'); let railAt = null;
   const closeWish = () => { wish.hidden = true; winp.blur(); };
-  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; setTimeout(() => winp.focus(), 50); }
+  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; winp.focus(); setTimeout(() => winp.focus(), 60); }
   function release() {
     const text = winp.value.trim().slice(0, 80); if (!text) { winp.focus(); return; }
     const w = { t: Date.now(), text }; st.wishes.unshift(w); st.wishes = st.wishes.slice(0, 12); persist(); closeWish();
@@ -235,7 +235,7 @@ export function init(game) {
   const dirName = (dx, dy) => DIRS[((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8];
   const landNow = () => {
     const p = game.player; if (p.mode !== 'walk') return null; if (landBy[p.land]) return p.land;
-    let best = null, bd = 95 * 95; for (const l of lands) { const d = (l.center[0] - p.x) ** 2 + (l.center[1] - p.y) ** 2; if (d < bd) { bd = d; best = l.id; } } return best;
+    let best = null, bd = 75 * 75; for (const l of lands) { const d = (l.center[0] - p.x) ** 2 + (l.center[1] - p.y) ** 2; if (d < bd) { bd = d; best = l.id; } } return best;
   };
   function nearestDark(land) { const p = game.player; let best = null, bd = 1e12; for (const l of L) if (l.land === land && !l.lit && !l.hidden) { const d = (l.x - p.x) ** 2 + (l.y - p.y) ** 2; if (d < bd) { bd = d; best = l; } } return best && { l: best, d: Math.sqrt(bd) }; }
   const approx = (d) => (d < 12 ? 'close by' : d < 100 ? `about ${Math.round(d / 5) * 5} m` : `about ${Math.round(d / 10) * 10} m`);
@@ -286,6 +286,6 @@ export function init(game) {
     lamps: L, byId, lit: countAll, count, total, state: st, light, read, celebrate, finale, burst, floater, railPoints: () => rail, openWish, release, hung: () => hung.length, flBusy: () => flBusy,
     // tests: light every lamp of a land except one, silently (no toast, no events)
     lightAllBut(land, except) { for (const l of L) if (l.land === land && l.id !== except && !l.lit) light(l, { silent: true }); game.journal.refresh(); updateTrack(true); },
-    lightAll() { for (const l of L) light(l, { silent: true }); },
+    lightAll(except) { for (const l of L) if (l.id !== except) light(l, { silent: true }); game.journal.refresh(); updateTrack(true); },
   };
 }

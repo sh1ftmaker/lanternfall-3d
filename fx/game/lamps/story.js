@@ -16,4 +16,4 @@ export const NOTE = {
   sign: 'E.M.',
 };
 // where the extra lamp stands, and the old pole leans (Brine & Barrel, Brinewatch): [x, y, z]
-export const HIDDEN = { land: 'brinewatch', at: [135.4, -21.2, 0.7], pole: [141.2, -16.4, 0.7] };
+export const HIDDEN = { land: 'brinewatch', at: [140.6, -24.4, 0.7], pole: [141.2, -16.4, 0.7] };
