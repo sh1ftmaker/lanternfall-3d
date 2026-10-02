@@ -29,6 +29,7 @@ const run = async (mobile) => {
   // 1. Wick swings the pole
   await near('lantern-row:4'); await wait(800); await shot('unlit');
   ok('prompt shows Light the lamp', /Light the lamp/.test(await promptText()));
+  await until(`!!(__park.platformer&&__park.platformer.test)`, 120000);   // Wick loads on the first Walk, slowly on a busy machine
   await ev(`__park.platformer.test.input=(t)=>({b:(t%1)<0.15})`);
   ok('swing lights the lamp', await until(`${lamp('lantern-row:4')}.lit`, 12000)); await ev(`__park.platformer.test.input=null`); await wait(2200); await shot('lit');
   ok('sparks or flare ran', true);
