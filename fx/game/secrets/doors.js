@@ -34,34 +34,30 @@ export function init(S) {
     return { grp, paper, wood, glow, set(o) { paper.opacity = 0.75 * o; wood.opacity = o; glow.sprite.material.opacity = o; }, remove() { game.scene.remove(grp); paper.dispose(); wood.dispose(); glow.remove(); } };
   }
   function dropReturn() { if (!ret) return; ret.it.remove(); ret.fr.remove(); ret = null; }
-  function placeReturn(back) {
+  function placeReturn(back, at) {                                              // `at`: where the visitor was put (known, not read back: Wick takes a moment to arrive)
     dropReturn();
-    const p = game.player, yaw = p.yaw, ax = p.x + Math.cos(yaw) * 2.6, ay = p.y + Math.sin(yaw) * 2.6;
-    const gz = game.ground(ax, ay, p.z), z = gz !== null && Math.abs(gz - p.z) < 1.5 ? gz : p.z;
+    const yaw = at.yaw, ax = at.x + Math.cos(yaw) * 2.6, ay = at.y + Math.sin(yaw) * 2.6;
+    const gz = game.ground(ax, ay, at.z), z = gz !== null && Math.abs(gz - at.z) < 1.5 ? gz : at.z;
     const fr = makeFrame(ax, ay, z, yaw + Math.PI);                         // the frame faces the visitor: its normal points back along -yaw
-    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', use() { go(back, false); } });
+    const it = game.interact({ id: 'secrets-door-back', x: ax, y: ay, z: z + 0.8, r: 2.4, label: 'Step back through', use() { go(back); } });
     ret = { fr, it, t: 0 };
   }
-  function go(to, first) {
+  function go(to) {
     S.fade(() => {
-      const p = game.player, ground = game.ground(to.x, to.y), z = (ground !== null && Math.abs(ground - to.z) < 3 ? ground : to.z);
-      const back = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
-      lib.goTo(to.x, to.y, z + 0.6, to.yaw);
-      if (first) setTimeout(() => placeReturn(back), 350);
-      else dropReturn();
+      const ground = game.ground(to.x, to.y), z = ground !== null && Math.abs(ground - to.z) < 3 ? ground : to.z;
+      lib.goTo(to.x, to.y, z + 0.6, to.yaw); dropReturn();
     });
-    if (first) S.found('doors');
   }
   const d0 = doorWorld(), g0 = game.ground(d0[0], d0[1]);
   game.interact({
     id: 'secrets-door', x: d0[0], y: d0[1], z: g0 ?? DOOR.z, r: 2.6, label: 'Open door VI',
     use() {
-      const t = dest(game.weather ? game.weather.state : 'clear'), p = game.player, back = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
-      const here = lib.world(DOOR.land, DOOR.lx, DOOR.ly - 1.3); back.x = here[0]; back.y = here[1]; back.z = DOOR.z; back.yaw = lib.outward(DOOR.land);
+      const t = dest(game.weather ? game.weather.state : 'clear'), here = lib.world(DOOR.land, DOOR.lx, DOOR.ly - 1.3), back = { x: here[0], y: here[1], z: DOOR.z, yaw: lib.outward(DOOR.land) };
       S.fade(() => {
         const gz = game.ground(t.x, t.y), z = gz !== null && Math.abs(gz - t.z) < 3 ? gz : t.z;
-        lib.goTo(t.x, t.y, z + 0.6, t.yaw);
-        setTimeout(() => placeReturn(back), 350);
+        // Wick is put exactly there; the first-person walker lands on the nearest walk-grid spot, so read where it ended up
+        if (lib.goTo(t.x, t.y, z + 0.6, t.yaw)) placeReturn(back, { x: t.x, y: t.y, z, yaw: t.yaw });
+        else setTimeout(() => { const p = game.player; placeReturn(back, { x: p.x, y: p.y, z: p.z, yaw: p.yaw }); }, 200);
       });
       S.found('doors');
     },

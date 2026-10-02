@@ -43,6 +43,7 @@ export function init(game) {
   let fading = false;
   function fade(fn, { color = '#f5ecdc', slow = false } = {}) {
     if (fading) return Promise.resolve(false);
+    if (game.reduceMotion) { try { fn(); } catch (e) { console.warn('secrets: fade', e); } return Promise.resolve(true); }       // Reduce motion: no fade at all
     fading = true; fadeEl.style.setProperty('--sx-fade', color); fadeEl.classList.toggle('slow', slow);
     const ms = game.reduceMotion ? 0 : slow ? 950 : 480;
     return new Promise((res) => {

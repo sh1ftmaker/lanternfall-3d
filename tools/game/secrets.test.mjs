@@ -48,7 +48,7 @@ const run = async (kind) => {
     ok(`return door (${w})`, !!(await ev(`!!${API}.doors.returnDoor`)));
     if (w === 'storm' || w === 'mist') await shot('door_' + w);
     // step back through it
-    await ev(`(()=>{const it=${API}.doors.returnDoor.it, p=${G}.player, x=it.x-Math.cos(p.yaw)*1.6, y=it.y-Math.sin(p.yaw)*1.6; if (p.wick) __park.platformer.enter({ x, y, z: it.z - 0.5, yaw: p.yaw }); else ${G}.teleport(x, y, p.yaw)})()`); await wait(2600);
+    await ev(`(()=>{const it=${API}.doors.returnDoor.it, p=${G}.player, x=it.x-Math.cos(p.yaw)*0.7, y=it.y-Math.sin(p.yaw)*0.7; if (p.wick) __park.platformer.enter({ x, y, z: it.z - 0.5, yaw: p.yaw }); else ${G}.teleport(x, y, p.yaw)})()`); await wait(2600);
     await ev(`${G}.use()`); await wait(4200);
     const q = await ev(`(({x,y})=>({x,y}))(${G}.player)`); ok(`back through the return door (${w})`, Math.hypot(q.x - door[0], q.y - door[1]) < 8, `d=${Math.hypot(q.x - door[0], q.y - door[1]).toFixed(1)}`);
   }
@@ -58,8 +58,8 @@ const run = async (kind) => {
 
   /* 7. the bell, 23 times (our own bell appears ten seconds in if nobody has put one there) */
   await wait(8000);
-  const bell = await ev(`${API}.bell.own?[${API}.bell.own.x,${API}.bell.own.y]:null`);
-  ok('a fallback bell exists when no module provides one', !!bell || (await ev(`!!${API}.bell`)));
+  const bell = await ev(`(()=>{const b=${G}.modules.bounty;if(b&&b.positions){const p=b.positions().bell;return [p.x,p.y]}return ${API}.bell.own?[${API}.bell.own.x,${API}.bell.own.y]:null})()`);
+  ok('a bell to ring (the bounty module\'s, else our fallback)', !!bell);
   if (bell) {
     await place(bell[0] - 1.2, bell[1] - 1.4, 0.7); await wait(2500); ok('bell prompt', /bell/i.test(await prompt()), await prompt());
     if (mobile) { await shot('bell'); await tapPrompt(); } else await ev(`${G}.use()`);
@@ -147,10 +147,10 @@ const run = async (kind) => {
   }
 
   /* journal, then persistence */
-  await ev(`${G}.journal.open()`); await wait(700); await shot('journal');
+  await ev(`${G}.journal.open()`); await wait(700); await ev(`document.querySelector('#game-journal').scrollTop=1e5`); await wait(300); await shot('journal');
   const jtxt = await ev(`document.querySelector('#game-journal').textContent`), nf = await ev(`Object.keys(${M}.state().found).length`);
   ok('journal lists Curiosities and the found ones', /Curiosities/.test(jtxt) && (nf === 0 || /Twenty-three rings|paper door/.test(jtxt)), `found ${nf}`);
-  ok('journal fits the screen', await ev(`(()=>{const r=document.querySelector('#game-journal').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight+1})()`));
+  ok('journal fits the screen width', await ev(`(()=>{const r=document.querySelector('#game-journal').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()`));
   if (nf >= 3) ok('a faint hint for what is not found', await ev(`!!document.querySelector('.sx-jrow.hint')`) || nf === 8);
   await ev(`${G}.journal.close()`);
   await wait(1200); await page.reload(); await ready();

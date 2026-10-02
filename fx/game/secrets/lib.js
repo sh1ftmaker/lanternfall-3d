@@ -6,7 +6,6 @@ export function makeLib(game) {
   // land-local (lx, ly) -> world (x, y)
   const world = (id, lx, ly) => { const l = land(id), s = Math.sin(l.phi), c = Math.cos(l.phi); return [l.center[0] + lx * s + ly * c, l.center[1] - lx * c + ly * s]; };
   const outward = (id) => land(id).phi;                          // yaw that looks away from the lake
-  const clamp01 = (x) => Math.max(0, Math.min(1, x));
   // Move the visitor to (x, y, z) facing yaw. The walk grid cannot hold places such as the Spire island or a tower deck, so
   // Wick is placed with the platformer and the first-person walker is set by hand (only where the grid has the place).
   function goTo(x, y, z, yaw) {
@@ -15,5 +14,5 @@ export function makeLib(game) {
     game.setMode('walk', { at: [x, y], yaw });                                                       // first person: the nearest spot on the walk grid
     return false;
   }
-  return { land, world, outward, clamp01, goTo };
+  return { land, world, outward, goTo };
 }

@@ -48,7 +48,7 @@ export function init(S) {
   });
   // our own bell, only if nobody else has put one in by ten seconds
   setTimeout(() => {
-    if (realSeen) return;
+    if (realSeen || (game.modules.bounty && game.modules.bounty.positions)) return;       // bounty puts the real one there: nothing to add
     const gz = game.ground(BELL[0], BELL[1]);
     own = game.interact({ id: 'secrets-bell', x: BELL[0], y: BELL[1], z: gz ?? 0.3, r: 3.2, label: 'Ring the bell', use() { game.sound('guild_strength_bell', [BELL[0], BELL[1], 2.5]); } });
   }, 10000);
