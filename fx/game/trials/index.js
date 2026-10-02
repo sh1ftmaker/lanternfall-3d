@@ -2,13 +2,12 @@
 // lantern replaying your best run (a fixed-pace one the first time), medals, and the journal's "Trials" section.
 import { COURSES } from './courses.js';
 
-const KEY = 'trials', DT = 0.1, QN = 4, KF = 60, MEDALS = ['Bronze', 'Silver', 'Gold'];
+const KEY = 'trials', DT = 0.1, QN = 4, KF = 60, CAP = 3000, MEDALS = ['Bronze', 'Silver', 'Gold'];
 const CSS = `
 #trials-count{position:fixed;z-index:7;left:50%;top:34%;transform:translate(-50%,-50%);pointer-events:none;font:700 84px/1 var(--ui);color:var(--amber);
   text-shadow:0 2px 24px rgba(255,160,40,.55);opacity:0;transition:opacity .2s ease} #trials-count.on{opacity:1}
 #trials-count small{display:block;font:600 13px var(--ui);letter-spacing:.16em;text-transform:uppercase;color:var(--paper);text-align:center;margin-top:8px;text-shadow:none}
 body.clean #trials-count{display:none}
-#game-journal{box-sizing:border-box}  /* the core sheet is 34 px wider than the phone screen without this */
 .tr-row{padding:4px 0 8px} .tr-row b{font-weight:600} .tr-row .tr-t{color:var(--amber);font-weight:600} .tr-row .tr-sub{opacity:.72;font-size:12.5px;line-height:1.4}
 .tr-go{margin-top:5px;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:500 12px var(--ui);padding:4px 11px;cursor:pointer}
 `;
@@ -16,19 +15,27 @@ const fmt = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return m + ':
 const medalOf = (c, t, style) => { const k = style === 'f' ? c.fp : 1; return t <= c.medals.gold * k ? 2 : t <= c.medals.silver * k ? 1 : 0; };
 
 // a run is a flat Float32Array [x, y, z, ...] at 10 Hz; saved as keyframes every KF samples plus one char per component delta (quarter metres)
+// a run longer than CAP samples (5 minutes) keeps every s-th sample (s = 2, 3, ... chosen to fit, in g.s), so a very slow run cannot bloat the save
 function encode(rec) {
-  const n = rec.length / 3, keys = []; let s = '', c = [0, 0, 0];
+  const n0 = rec.length / 3, st = Math.max(1, Math.ceil(n0 / CAP)), n = st > 1 ? Math.floor((n0 - 1) / st) + 1 : n0, keys = []; let s = '', c = [0, 0, 0];
+  if (st > 1) { const o = new Float32Array(n * 3); for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) o[i * 3 + k] = rec[i * st * 3 + k]; rec = o; }
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) {
     const q = Math.round(rec[i * 3 + k] * QN);
     if (i % KF === 0) { keys.push(q); c[k] = q; } else { const d = Math.max(-45, Math.min(45, q - c[k])); s += String.fromCharCode(80 + d); c[k] += d; }
   }
-  return { n, k: keys, d: s };
+  return st > 1 ? { n, k: keys, d: s, s: st } : { n, k: keys, d: s };
 }
 function decode(g) {
   const out = new Float32Array(g.n * 3), c = [0, 0, 0]; let p = 0;
   for (let i = 0; i < g.n; i++) for (let k = 0; k < 3; k++) {
     if (i % KF === 0) c[k] = g.k[(i / KF) * 3 + k]; else c[k] += g.d.charCodeAt(p++) - 80;
     out[i * 3 + k] = c[k] / QN;
+  }
+  const st = g.s | 0;
+  if (st > 1) {                                       // thinned run: back to 10 samples a second by straight lines between the kept ones
+    const m = (g.n - 1) * st + 1, o = new Float32Array(m * 3);
+    for (let i = 0; i < m; i++) { const a = Math.min(g.n - 2, Math.floor(i / st)), u = (i - a * st) / st; for (let k = 0; k < 3; k++) o[i * 3 + k] = out[a * 3 + k] + (out[a * 3 + 3 + k] - out[a * 3 + k]) * u; }
+    return o;
   }
   return out;
 }
@@ -63,7 +70,7 @@ export function init(game) {
     g.label = labelSprite(c.short.toUpperCase() + ' · TIME TRIAL'); game.v3(x, y, z + 4.1, g.label.position); g.label.visible = false; scene.add(g.label);
     g.it = game.interact({
       id: 'trial-' + c.id, x, y, z: z + 1, r: 3.4,
-      label: () => (race && race.c === c ? 'Cancel the race' : 'Race: ' + c.name + (c.wick && !player.wick ? ' (Wick only)' : '')),
+      label: () => (race && race.c === c ? 'Cancel the race' : 'Race: ' + c.name + (c.wick && !player.wick ? ' (as Wick)' : '')),
       show: () => !game.cameraHeld, use: () => (race && race.c === c ? cancel('post', true) : start(c.id)),
     });
     posts.set(c.id, g);
@@ -123,7 +130,7 @@ export function init(game) {
   function start(id) {
     const c = COURSES.find((q) => q.id === id); if (!c) return false;
     if (!game.started || player.mode !== 'walk') { game.toast('Trials run in Walk mode.'); return false; }
-    if (c.wick && !player.wick) { game.toast('The ' + c.name + ' needs Wick. Press <b>P</b> for the lamplighter.'); return false; }
+    if (c.wick && !player.wick) { game.toast('The ' + c.name + ' needs Wick. Press <b>P</b> to switch to Wick.'); return false; }
     if (race) cancel('restart');
     build(); const st = player.wick ? 'w' : 'f'; 
     race = { c, st, phase: 'count', cd: game.reduceMotion ? 0 : 2.4, t: 0, n: 0, splits: [], rec: [], recN: 0, px: player.x, py: player.y, pz: player.z, stray: 0, shown: '', ghost: makeGhost(c, st), mA: marker(), mB: marker(), best: bestOf(c.id, st) };
@@ -141,7 +148,10 @@ export function init(game) {
     if (r.pole) for (const m of r.pole) { m.userData.remove(); m.geometry.dispose(); }
     game.track('trials', null); countEl.classList.remove('on');
   }
-  function cancel(why, say) { if (!race) return; end(why); if (say) game.toast('Race called off.', { ms: 1800 }); }
+  // a race that stops for any reason but the visitor's own restart or finish says so
+  const CALLED = { post: 'Race called off.', mode: 'Race called off: you left Walk.', wick: 'Race called off: you switched between Wick and first person.', camera: 'Race called off: the camera was taken over (photo mode or a ride).',
+    teleport: 'Race called off: you were moved away from the course.', stray: 'Race called off: you left the course.' };
+  function cancel(why, say) { if (!race) return; end(why); if (say || CALLED[why]) game.toast(CALLED[why] || 'Race called off.', { ms: 2600 }); }
   function go() {
     race.phase = 'run'; race.t = 0; race.px = player.x; race.py = player.y; race.pz = player.z; race.rec.length = 0; race.recN = 0;
     if (!game.reduceMotion) { countEl.innerHTML = 'Go<small>' + race.c.short + '</small>'; setTimeout(() => countEl.classList.remove('on'), 700); }
@@ -196,7 +206,7 @@ export function init(game) {
     }
   }
   game.on('frame', onFrame);
-  game.on('mode', () => cancel('mode'));
+  game.on('mode', (e) => { if (race) cancel(e && e.mode === 'walk' ? 'wick' : 'mode'); });
   game.on('camera', (e) => { if (e.held) cancel('camera'); });
 
   /* ── journal ── */
@@ -206,7 +216,7 @@ export function init(game) {
       for (const c of COURSES) {
         const w = bestOf(c.id, 'w'), f = bestOf(c.id, 'f'), row = document.createElement('div'); row.className = 'tr-row';
         const line = (b, tag) => `<span class="tr-t">${fmt(b.t)}</span> · ${MEDALS[b.m] || MEDALS[medalOf(c, b.t, tag)]}${tag === 'f' ? ' (first person)' : ''}`;
-        row.innerHTML = `<b>${c.name}</b>${c.wick ? ' <span class="tr-sub">Wick only</span>' : ''}<br>` + (w ? line(w, 'w') + (f ? '<br>' + line(f, 'f') : '') : f ? line(f, 'f') : '<span class="tr-sub">No time yet. Bronze for finishing, silver ' + fmt(c.medals.silver) + ', gold ' + fmt(c.medals.gold) + '.</span>') +
+        row.innerHTML = `<b>${c.name}</b>${c.wick ? ' <span class="tr-sub">as Wick</span>' : ''}<br>` + (w ? line(w, 'w') + (f ? '<br>' + line(f, 'f') : '') : f ? line(f, 'f') : '<span class="tr-sub">No time yet. Bronze for finishing, silver ' + fmt(c.medals.silver) + ', gold ' + fmt(c.medals.gold) + '.</span>') +
           `<div class="tr-sub">${c.blurb} Start post: ${c.where}.</div>`;
         const b = document.createElement('button'); b.type = 'button'; b.className = 'tr-go'; b.textContent = 'Take me there';
         b.addEventListener('click', () => { game.journal.close(); game.teleport(c.post[0] - Math.cos(c.post[3]) * 3, c.post[1] - Math.sin(c.post[3]) * 3, c.post[3]); });

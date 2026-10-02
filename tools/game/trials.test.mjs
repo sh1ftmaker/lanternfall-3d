@@ -1,11 +1,12 @@
-// Time trials, end to end. usage: node trials.test.mjs [url] [--only lake,swim,roof,fp,phone] [--shots DIR]
+// Time trials, end to end. usage: node trials.test.mjs [url] [--quick] [--only course,lake,swim,roof,fp,phone] [--shots DIR]
+// --quick (about 2 minutes, for every merge): the course data check, first person on desktop, and the phone layout. The full run is about 12 minutes.
 // Wick is driven with scripted input (__park.platformer.test.input) straight at the next checkpoint. A full lake lap
 // takes about a minute of real time. Needs puppeteer-core (resolved from a node_modules above this folder).
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 const args = process.argv.slice(2), BASE = (args[0] && !args[0].startsWith('--') ? args[0] : 'http://127.0.0.1:8906/index.html');
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
-const only = (opt('only', '') || '').split(',').filter(Boolean), want = (k) => !only.length || only.includes(k);
+const only = args.includes('--quick') && !opt('only', '') ? ['course', 'fp', 'phone'] : (opt('only', '') || '').split(',').filter(Boolean), want = (k) => !only.length || only.includes(k);
 const SHOTS = opt('shots', '/tmp/claude-1000/-home-zalo/253e908b-4e3c-4d12-a43e-a8b3b88482f6/scratchpad/agents/trials/shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [], fails = [], errs = new Map();
@@ -67,6 +68,22 @@ const INSTALL = AGENT + `;window.__tr = {
   },
 };`;
 
+// the course itself, no running: every leg stays on dry promenade (the walk grid has ground under it), medals sit in order, a long run's ghost is capped
+if (want('course')) {
+  const { browser, page } = await open(false);
+  try {
+    const T = 'window.__park.game.modules.trials';
+    const legs = await page.evaluate(`(() => { const c = ${T}.courses.find((q) => q.id === 'lake'), g = __park.game.ground, all = [c.post, ...c.cps], out = []; for (let i = 1; i < all.length; i++) { const [ax, ay] = all[i - 1], [bx, by] = all[i], L = Math.hypot(bx - ax, by - ay); let dry = 0, n = 0; for (let d = 0; d <= L; d += 0.5) { const z = g(ax + (bx - ax) * d / L, ay + (by - ay) * d / L); n++; if (z !== null && z > -0.3) dry++; } out.push([i, L, dry / n]); } return out; })()`);
+    const wet = legs.filter((l) => l[2] < 0.97); check('lake: every leg of the course is on walkable ground (the grid has none in the water)', wet.length === 0, JSON.stringify(wet));
+    check('lake: legs are 15 to 45 m', legs.every((l) => l[1] > 15 && l[1] < 45), JSON.stringify(legs.map((l) => Math.round(l[1]))));
+    const m = await page.evaluate(`${T}.courses.map((c) => [c.id, c.medals.gold, c.medals.silver, c.fp])`);
+    check('medals: gold under silver, first person about 1.5x on the lake lap', m.every((r) => r[1] < r[2]) && m[0][3] === 1.5, JSON.stringify(m));
+    const cap = await page.evaluate(`(() => { const t = ${T}, n = 9000, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = 50 + Math.sin(i / 300) * 40; a[i * 3 + 1] = i * 0.01; a[i * 3 + 2] = 0.12; } const g = t.encode(a), b = t.decode(g); return { n: g.n, s: g.s, bytes: JSON.stringify(g).length, back: b.length / 3, x: [b[0], b[b.length - 3]] }; })()`);
+    check('ghost: a very long run is thinned to a bounded save and keeps its duration', cap.bytes < 14000 && cap.s >= 2 && Math.abs(cap.back - 9000) < 6, JSON.stringify(cap));
+  } catch (e) { check('course section ran', false, e.message.slice(0, 200)); }
+  await browser.close();
+}
+
 if (want('lake')) try {
   const { browser, page, shot } = await open(false);
   await page.evaluate(INSTALL); await page.evaluate('__tr.hook()');
@@ -91,7 +108,7 @@ if (want('lake')) try {
   check('run 1 finishes', why === 'finish', why + ' ' + JSON.stringify(await page.evaluate(`[${T}.race, __park.platformer.view.pos.toArray(), __park.game.player.x, __park.game.player.y]`)));
   await shot('lake_finish');
   const ev1 = await page.evaluate('__tr.ev');
-  check('events: 1 start, 14 checkpoints, 1 finish', (ev1['trials:start'] || []).length === 1 && (ev1['trials:checkpoint'] || []).length === 14 && (ev1['trials:finish'] || []).length === 1, JSON.stringify(Object.fromEntries(Object.entries(ev1).map(([k, v]) => [k, v.length]))));
+  check('events: 1 start, every checkpoint, 1 finish', (ev1['trials:start'] || []).length === 1 && (ev1['trials:checkpoint'] || []).length === (await page.evaluate(`${T}.courses[0].cps.length`)) && (ev1['trials:finish'] || []).length === 1, JSON.stringify(Object.fromEntries(Object.entries(ev1).map(([k, v]) => [k, v.length]))));
   const f1 = (ev1['trials:finish'] || [])[0] || {}; check('finish payload', f1.course === 'lake' && f1.time > 20 && f1.newBest === true, JSON.stringify(f1));
   await sleep(600); const saved2 = await page.evaluate(`JSON.parse(localStorage.getItem('lanternfall.game.v1')).trials`);
   const e = saved2 && saved2.c && saved2.c['lake.w']; check('best saved', !!e && Math.abs(e.t - f1.time) < 0.02, e && `${e.t}s, ghost ${JSON.stringify(e.g).length} bytes, ${e.g.n} samples`);
@@ -114,6 +131,7 @@ if (want('lake')) try {
   await page.evaluate('__park.game.use()'); await sleep(500); check('restarts', await page.evaluate(`!!${T}.race`));
   await page.evaluate(`__park.setMode('orbit')`); await sleep(500);
   check('mode change cancels', await page.evaluate(`!${T}.race`));
+  check('a cancelled race says so', await page.evaluate(`/Race called off/.test(document.getElementById('game-toasts').textContent)`));
   await browser.close();
 } catch (e) { check('lake section ran', false, e.message.slice(0, 200)); }
 
@@ -159,12 +177,13 @@ if (want('fp')) {
     // walk from ring to ring in short hops (a jump of over 20 m in a frame is a teleport and calls the race off)
     for (const c of cps) { for (let k = 1; k <= 4; k++) { await page.evaluate(`(() => { const w = __park.walk; __park.setMode('walk', { at: [w.x + (${c[0]} - w.x) * ${k} / 4, w.y + (${c[1]} - w.y) * ${k} / 4], yaw: 0 }); })()`); await sleep(150); } await sleep(200); if (c === cps[4]) await shot('fp_midrace'); }
     await sleep(600);
-    const fin = await page.evaluate('__tr.fin'); check('fp: finishes through all checkpoints', !!fin && fin.style === 'f' && (await page.evaluate('__tr.n')) === 14, JSON.stringify(fin));
+    const fin = await page.evaluate('__tr.fin'); check('fp: finishes through all checkpoints', !!fin && fin.style === 'f' && (await page.evaluate('__tr.n')) === cps.length, JSON.stringify(fin));
     await sleep(600); check('fp: first-person best saved apart', await page.evaluate(`!!${T}.best('lake', 'f') && !${T}.best('lake', 'w')`));
     await page.evaluate(`__park.setMode('walk', { at: [102, 9], yaw: 0 })`); await sleep(1500);
     await page.keyboard.press('KeyE'); await sleep(800); check('fp: starts again', await page.evaluate(`!!${T}.race`));
     await page.keyboard.press('KeyE'); await sleep(500); check('fp: the post cancels', await page.evaluate(`!${T}.race`));
     await page.keyboard.press('KeyE'); await sleep(500); await page.evaluate(`__park.setMode('orbit')`); await sleep(500); check('fp: mode change cancels', await page.evaluate(`!${T}.race`));
+    check('fp: the cancel says so (a toast)', await page.evaluate(`/Race called off/.test(document.getElementById('game-toasts').textContent)`));
   } catch (e) { check('fp: ran', false, e.message.slice(0, 200)); }
   await browser.close();
 }
