@@ -19,6 +19,7 @@ import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
 import { createWeather } from './fx/weather/index.js';  // weather hook: Clear / Mist / Rain / Storm / Snow (fx/weather/)
+import { createCull } from './fx/cull/index.js';          // culling hook: per-camera frustum culling of chunks + forest cells (fx/cull/)
 
 const DATA = 'data/';
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
@@ -343,6 +344,7 @@ const park = new THREE.Group(); scene.add(park);
 const farMeshes = [], landMeshes = [], lodMeshes = [];
 let manifest, nav = null, trains = [], lanterns = null, forest = [], fxWater = null;
 let guests = null;                                   // park guests (fx/guests/render.js); '#no-guests' turns them off
+const cull = createCull({ THREE, renderer, scene, camera, park, on: !HASH.has('no-cull') });   // culling hook ('#no-cull' turns it off)
 
 /* rail (monorail ellipse) */
 const rail = { a: 160, b: 119, n: 2048, acc: null, len: 0 };
@@ -509,7 +511,7 @@ async function load() {
     lanterns = FX.fxLanterns(Q, { f32: lf, count: ex.lanterns.count, waterY: manifest.water_z, uTime });
     if (lanterns) scene.add(lanterns); else buildLanterns(lf, ex.lanterns.count);
   }
-  if (ex.forest) buildForest(exU8, ex.forest);
+  if (ex.forest) { buildForest(exU8, ex.forest); cull.splitForest(forest); }      // culling hook: one instance buffer per species, drawn by visible cell
   const names = { core: 'Filling Stillwater', transit: 'Raising the monorail' };
   const pill = $('#loadpill');
   for (const part of manifest.parts) {
@@ -953,7 +955,7 @@ const fsBtn = $('#btn-full');
   document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
 }
 const perf = { ema: 16, n: 0, step: 0, locked: false, cool: 0 };
-function setForest(f) { Q.forest = f; for (const im of forest) { im.count = Math.floor(im.userData.total * f); im.visible = f > 0; } }
+function setForest(f) { Q.forest = f; for (const im of forest) { if (im.userData.setFraction) { im.userData.setFraction(f); continue; }   /* culling hook */ im.count = Math.floor(im.userData.total * f); im.visible = f > 0; } }
 function adapt(ms) {
   if (!loaded || document.hidden) return;
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
@@ -1060,6 +1062,7 @@ const togglePlatformer = () => setPlatformer(!(mode === 'walk' && pfWant));
 $('#btn-pf').addEventListener('click', togglePlatformer);
 addEventListener('keydown', (e) => { if (e.code === 'KeyP' && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
 Object.defineProperty(window.__park, 'platformer', { get: () => pf });
+window.__park.cull = cull;                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 frame();
 let loadFailed = false;
