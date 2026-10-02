@@ -124,20 +124,20 @@ export function init(game) {
     flM.setColorAt(i, col.setRGB(c[0], c[1], c[2])); flM.instanceColor.needsUpdate = true; flTop = Math.max(flTop, i + 1); flM.count = flTop; flBusy++; return i;
   }
   function stepFloaters(dt, time) {
-    if (!flBusy) return; let busy = 0;
+    if (!flBusy) return; let busy = 0, top = 0;
     for (let i = 0; i < flTop; i++) {
       if (fl.age[i] >= fl.life[i] && !fl.hang[i]) continue; fl.age[i] += dt; const a = fl.age[i];
-      if (a < 0) { busy++; continue; }
+      if (a < 0) { busy++; top = i + 1; continue; }
       let s = fl.s[i], x = fl.x[i], y = fl.y[i], z = fl.z[i];
-      if (fl.hang[i]) { z += Math.sin(time * 0.7 + fl.seed[i]) * 0.18; x += Math.sin(time * 0.31 + fl.seed[i] * 2) * 0.4; s *= Math.min(1, a * 0.8); busy++; }
+      if (fl.hang[i]) { z += Math.sin(time * 0.7 + fl.seed[i]) * 0.18; x += Math.sin(time * 0.31 + fl.seed[i] * 2) * 0.4; s *= Math.min(1, a * 0.8); busy++; top = i + 1; }
       else {
-        if (a >= fl.life[i]) { hide(i); continue; } busy++;
+        if (a >= fl.life[i]) { hide(i); continue; } busy++; top = i + 1;
         const k = a * fl.vz[i]; z = fl.z[i] + k; x += Math.sin(a * 0.5 + fl.seed[i]) * 2.2 + a * 0.35; y += Math.cos(a * 0.4 + fl.seed[i] * 1.7) * 1.6;
         s *= Math.min(1, a * 1.2) * Math.min(1, (fl.life[i] - a) / 3);
       }
       tmp.position.set(x, z, -y); tmp.rotation.set(0, a * 0.3 + fl.seed[i], 0); tmp.scale.setScalar(Math.max(s, 0.0001)); tmp.updateMatrix(); flM.setMatrixAt(i, tmp.matrix);
     }
-    flBusy = busy; flM.instanceMatrix.needsUpdate = true;
+    flBusy = busy; flTop = flM.count = top; flM.instanceMatrix.needsUpdate = true;   // after a celebration the loop and the upload shrink back to the hanging wishes
   }
   const landCol = (id, k = 1.6) => { const s = (STYLE[id] || STYLE['lantern-row'])[3]; return [s[0] * k + 0.4, s[1] * k + 0.25, s[2] * k + 0.15]; };
   function celebrate(land) {
@@ -277,7 +277,7 @@ export function init(game) {
       posts.instanceColor.needsUpdate = heads.instanceColor.needsUpdate = discs.instanceMatrix.needsUpdate = true;
     }
     stepSparks(dt); stepFloaters(dt, time);
-    for (const g of glows) if (g.at) { const f = flaring.has(g.at) ? 1 + 1.8 * Math.exp(-(now() - g.at.litAt) * 2.2) : 1; g.h.set({ size: glowSize(g.at) * f * (1 + 0.05 * Math.sin(time * 7 + g.at.i * 1.7) + 0.03 * Math.sin(time * 13 + g.at.i)) }); }
+    for (const g of glows) if (g.at) { const f = flaring.has(g.at) ? 1 + 1.8 * Math.exp(-(now() - g.at.litAt) * 2.2) : 1; g.h.sprite.scale.setScalar(glowSize(g.at) * f * (1 + 0.05 * Math.sin(time * 7 + g.at.i * 1.7) + 0.03 * Math.sin(time * 13 + g.at.i))); }
     if ((glowT -= dt) < 0) { glowT = 0.35; assignGlows(); if (tintTries < 40 && !tinted) { tintTries++; if (retint()) tinted = 1; } updateTrack(); }
     if ((railT -= dt) < 0) { railT = 0.2; updateRail(); }
   });
