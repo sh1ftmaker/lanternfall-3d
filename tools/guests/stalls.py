@@ -136,6 +136,11 @@ def queue_line(nav, x, y, z, dx, dy, step=0.7, nmax=8):
             if np.isnan(C.nav_height(nav, px + ox, py + oy, z, 0.35)): ok = False
         if not ok: break
         n += 1
+    # (crowd-geo) a queue keeps to its own half of a lane: when something stands across the way within 12 m (stalls on
+    # the far side of a market aisle, a house front), the line stops 0.8 m short of the middle so walkers keep a lane
+    free = 0.0
+    while free < 12.0 and not np.isnan(C.nav_height(nav, x + dx * free, y + dy * free, z, 0.35)): free += 0.25
+    if free < 12.0: n = min(n, 1 + int(max(0.0, free / 2 - 0.8) / step))
     return n
 
 def extract(geo, nav, log=print):

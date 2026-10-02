@@ -1,0 +1,254 @@
+--- a/parts/brinewatch.py
++++ b/parts/brinewatch.py
+@@ -530,7 +530,7 @@
+     # the wharf deck), a plank floor and the jetty's underside as the ceiling. Furnished in tavern_interior().
+     t, H1 = 0.3, 3.6
+     xi, yi = w / 2 - t, d / 2 - t
+-    DS, DE, DN, DH = (-1.8, 0.2), (-1.0, 1.0), (-1.0, 1.0), 2.6   # south / east / north doorway ranges, doorway height
++    DS, DE, DN, DH = (-2.3, 0.7), (-1.5, 1.5), (-1.8, 0.9), 2.6   # south / east / north doorway ranges, doorway height ((crowd-geo) 2.7-3 m wide, were 2 m)
+     def wall_seg(x0, x1, y0, y1, z0=0.0, z1=H1):
+         mb.box(((x0 + x1) / 2, (y0 + y1) / 2, base + z0), (x1 - x0, y1 - y0, z1 - z0), sid)
+     wall_seg(-w / 2, DS[0], -d / 2, -yi); wall_seg(DS[1], w / 2, -d / 2, -yi); wall_seg(DS[0], DS[1], -d / 2, -yi, DH)
+--- a/parts/core_lake.py
++++ b/parts/core_lake.py
+@@ -17,6 +17,22 @@
+ 
+ COPING_W = 0.6
+ Z_COPE = 0.2
++# (crowd-geo) where the lands' main lanes, the green-gap footpaths and the Lamplighters' Walk meet the Shore Promenade:
++# (angle in degrees, half-width in metres). The kerb is dropped and the paving runs on over the grass verge to the land,
++# and no planter, bench or lamp post of the promenade stands in front of them (they used to block the ways in).
++# Guildhollow's stays at 5 m: the bench 8 m south of its axis is the secrets module's long-nap bench (fx/game/secrets/nap.js).
++MOUTHS = [(179.9, 5.0), (137.2, 6.0), (72.9, 5.0), (19.5, 5.0), (-19.5, 6.0), (-72.7, 6.0), (-138.4, 5.5),
++          (106.5, 3.5), (42.5, 3.5), (-42.9, 3.5), (-107.6, 3.5), (-160.4, 3.5), (160.3, 3.5), (0.0, 11.0)]
++MOUTH_CLEAR = 1.6        # extra clear margin (m) either side of a mouth for the promenade's furniture
++
++
++def mouth_dist(x, y):
++    """Distance (m, along the shore) from (x, y) to the nearest mouth's edge; negative inside a mouth."""
++    ph = math.atan2(y, x); r = math.hypot(x, y); best = 1e9
++    for a, hw in MOUTHS:
++        d = (ph - math.radians(a) + math.pi) % TAU - math.pi
++        best = min(best, abs(d) * r - hw)
++    return best
+ 
+ 
+ def ring(mb, r0, r1, z0, z1, m, top=True, inner=False, outer=False):
+@@ -87,8 +103,21 @@
+     M = dict(pave=0, cope=1, iron=2, glow=3, wood=4, ball=5, topiary=6)
+     mats = [pave, cope, iron, glowm, wood, ball, topi]
+     mb = MB()
+-    ring(mb, rl + COPING_W, rs - 0.4, 0.0, pc.Z_PAVE, M["pave"])
+-    ring(mb, rs - 0.4, rs, -0.05, 0.18, M["cope"], top=True, inner=True, outer=True)  # kerb on the shore edge
++    c, s = np.cos(PHI), np.sin(PHI)
++    inm = np.array([mouth_dist(rs[k] * c[k], rs[k] * s[k]) < 0 for k in range(NA)])
++    ring(mb, rl + COPING_W, np.where(inm, rs + 1.0, rs - 0.4), 0.0, pc.Z_PAVE, M["pave"])   # (crowd-geo) paved on over the verge at the mouths
++    # kerb on the shore edge, broken at the mouths (with end faces)
++    i = np.arange(NA); j = (i + 1) % NA
++    seg = ~inm & ~inm[j]
++    for r0, r1, z0, z1 in ((rs - 0.4, rs - 0.4, -0.05, 0.18), (rs, rs, -0.05, 0.18)):
++        V = np.concatenate([np.c_[r0 * c, r0 * s, np.full(NA, z0)], np.c_[r1 * c, r1 * s, np.full(NA, z1)]])
++        mb.add(V, [np.stack([i, j, NA + j, NA + i], 1)[seg]], M["cope"])
++    V = np.concatenate([np.c_[(rs - 0.4) * c, (rs - 0.4) * s, np.full(NA, 0.18)], np.c_[rs * c, rs * s, np.full(NA, 0.18)]])
++    mb.add(V, [np.stack([i, NA + i, NA + j, j], 1)[seg]], M["cope"])
++    for k in np.nonzero(seg & ~np.roll(seg, 1))[0].tolist() + np.nonzero(seg & ~np.roll(seg, -1))[0].tolist():
++        kk = k if not seg[(k - 1) % NA] else (k + 1) % NA       # the open end of the run
++        p0 = ((rs[kk] - 0.4) * c[kk], (rs[kk] - 0.4) * s[kk]); p1 = (rs[kk] * c[kk], rs[kk] * s[kk])
++        mb.add(np.array([[p0[0], p0[1], -0.05], [p1[0], p1[1], -0.05], [p1[0], p1[1], 0.18], [p0[0], p0[1], 0.18]]), [[[0, 1, 2, 3]]], M["cope"])
+ 
+     # ── balustrade path along the lake edge
+     c, s = np.cos(PHI), np.sin(PHI)
+@@ -161,8 +190,9 @@
+                  lathe([(0.24, 4.18), (0.27, 4.24), (0.03, 4.6), (0.03, 4.8), (0.06, 4.86), (0.0, 4.95)], 6))
+     head = lathe([(0.15, 3.62), (0.2, 4.18)], 6)
+     rz = np.arctan2(ltan[:, 1], ltan[:, 0])
+-    mb.add(*instances(post, np.c_[lpts, np.zeros(len(lpts))], rz), m=M["iron"])
+-    mb.add(*instances(head, np.c_[lpts, np.zeros(len(lpts))], rz), m=M["glow"])
++    keep = np.array([mouth_dist(x, y) > 0.6 for x, y in lpts])                    # (crowd-geo) no post in a way in
++    mb.add(*instances(post, np.c_[lpts[keep], np.zeros(int(keep.sum()))], rz[keep]), m=M["iron"])
++    mb.add(*instances(head, np.c_[lpts[keep], np.zeros(int(keep.sum()))], rz[keep]), m=M["glow"])
+     # benches midway, facing the lake (template front = +y, rz = tangent angle -> +y points inward)
+     bench = []
+     for yy, zz in ((0.0, 0.44), (0.14, 0.44), (-0.14, 0.44)):
+@@ -176,11 +206,11 @@
+     mid = (lpts + np.roll(lpts, -1, 0)) / 2
+     bdir = (ltan + np.roll(ltan, -1, 0)); bdir /= np.linalg.norm(bdir, axis=1)[:, None]
+     mphi = np.degrees(np.arctan2(mid[:, 1], mid[:, 0]))
+-    ok = ~((mphi > -3.5) & (mphi < 3.5))
++    ok = np.array([mouth_dist(x, y) > 0.9 + MOUTH_CLEAR for x, y in mid])          # (crowd-geo) was: not within 3.5 deg of the East axis
+     mid = mid[ok]; bdir = bdir[ok]
+-    # pull benches 0.6 m toward the lake from the lamp line
++    # pull benches 0.15 m toward the lake from the lamp line ((crowd-geo) was 0.6: more standing room at the rail)
+     rad = mid / np.linalg.norm(mid, axis=1)[:, None]
+-    bp = np.c_[mid - rad * 0.6, np.full(len(mid), pc.Z_PAVE - 0.12)]
++    bp = np.c_[mid - rad * 0.15, np.full(len(mid), pc.Z_PAVE - 0.12)]
+     brz = np.arctan2(bdir[:, 1], bdir[:, 0])
+     for prim, m in bench:
+         mb.add(*instances(prim, bp, brz), m=m)
+@@ -191,9 +221,11 @@
+         d = ltan + np.roll(ltan, -1, 0); d /= np.linalg.norm(d, axis=1)[:, None]
+         pp.append(q); pd.append(d)
+     pp = np.concatenate(pp); pd = np.concatenate(pd)
+-    pphi = np.degrees(np.arctan2(pp[:, 1], pp[:, 0]))
+-    ok = ~((pphi > -4.5) & (pphi < 4.5))
+-    pp, pd = pp[ok], pd[ok]
++    # (crowd-geo) was: not within 4.5 deg of the East axis; now clear of every mouth, with the bench beside it
++    okp = np.array([mouth_dist(x, y) > 0.8 + MOUTH_CLEAR for x, y in pp])
++    okb = np.array([mouth_dist(*(q + d * 1.7)) > 0.9 + MOUTH_CLEAR for q, d in zip(pp, pd)])   # the bench beside it on its own
++    ppb, pdb = pp[okb], pd[okb]
++    pp, pd = pp[okp], pd[okp]
+     prz = np.arctan2(pd[:, 1], pd[:, 0])
+     PZ = np.c_[pp, np.full(len(pp), pc.Z_PAVE)]
+     pot = lathe([(0.55, 0.0), (0.62, 0.08), (0.62, 0.62), (0.68, 0.66), (0.68, 0.74), (0.5, 0.74)], 10)
+@@ -206,10 +238,10 @@
+     mb.add(*instances(trunk, PZ, prz), m=M["wood"])
+     mb.add(*instances(crown, PZ, prz, s=np.c_[rsc, rsc, rsc]), m=M["topiary"])
+     # bench next to each planter (1.6 m along the tangent), pulled toward the lake, facing it
+-    rad2 = pp / np.linalg.norm(pp, axis=1)[:, None]
+-    bq = pp + pd * 1.7 - rad2 * 0.6
++    rad2 = ppb / np.linalg.norm(ppb, axis=1)[:, None]
++    bq = ppb + pdb * 1.7 - rad2 * 0.15
+     BQ = np.c_[bq, np.zeros(len(bq))]
+     for prim, m in bench:
+-        mb.add(*instances(prim, BQ, prz), m=m)
++        mb.add(*instances(prim, BQ, np.arctan2(pdb[:, 1], pdb[:, 0])), m=m)
+     mb.build("core_promenade", col, mats)
+     return lpts, ltan
+--- a/parts/frostmere.py
++++ b/parts/frostmere.py
+@@ -914,7 +914,7 @@
+     pts = []
+     for i in range(17):
+         a = math.pi + 0.35 + (math.pi - 0.7) * i / 16
+-        pts.append((ox + 4.3 * math.cos(a), oy + 4.3 * math.sin(a), abs(a - 1.5 * math.pi) < 0.75))
++        pts.append((ox + 4.3 * math.cos(a), oy + 4.3 * math.sin(a), abs(a - 1.5 * math.pi) < 1.05))   # (crowd-geo) 1.05 (was 0.75): the ways past the sign wall's ends to the Shore Promenade were 1.3 m
+     for (x, y, hide) in pts[::2]:
+         if hide or not inside(x, y, 0.3): continue
+         ob.cyl(M("iron"), (x, y, 0.12), 0.05, 1.0, 6)
+--- a/parts/guildhollow.py
++++ b/parts/guildhollow.py
+@@ -1363,7 +1363,7 @@
+             mb.cyl(0.08, 6.0, (px, py, Z + 1.0), M['iron'], segs=6)
+             banner(mb, M, 1.0, 2.8, (px, py - 0.1, Z + 6.6), mat=M['red'] if x == 6 else M['blue'], emblem=x == 6)
+     # stone benches on the terrace
+-    for x in (-10, -3.0, 3.0, 10):
++    for x in (-10.5, -5.5, 5.5, 10.5):      # (crowd-geo) clear of the Midway's mouth (were at -10, -3, 3, 10)
+         mb.box((2.0, 0.6, 0.45), (x, -76.0, Z), M['stone_pale'])
+     # guild crest mosaic in the terrace paving
+     mb.cyl(3.2, 0.012, (0, -79.0, Z), M['flag_edge'], segs=24)
+--- a/parts/lantern_row.py
++++ b/parts/lantern_row.py
+@@ -452,7 +452,7 @@
+     k = 0
+     x = 8.0
+     while x < el - 2.5:
+-        for side, (yy, rz) in enumerate(((3.25, math.pi), (8.75, 0.0))):
++        for side, (yy, rz) in enumerate(((2.95, math.pi), (9.05, 0.0))):     # (crowd-geo) 0.3 m nearer the houses (were 3.25 / 8.75)
+             xx = x + side * 2.2
+             if 41.5 < xx < 52.5: continue
+             if not G.rect_inside(xx, yy, 3.0, 2.0, rz, 1.0): continue
+--- a/parts/lantern_row_bld.py
++++ b/parts/lantern_row_bld.py
+@@ -176,8 +176,8 @@
+                 mb.box((rnd.uniform(-w / 2 + .2, w / 2 - .2), d / 2 - 0.12, 1.3 + rnd.choice([0, .35, .7])),
+                        (0.22, 0.12, 0.22), M[rnd.choice(["cloth_r", "paper", "maple2", "cap_yel", "wood_l"])])
+         # stools
+-        for k in range(rnd.randint(0, 3)):
+-            mb.cyl((rnd.uniform(-w / 2, w / 2), -d / 2 - 0.55, 0), 0.17, 0.48, M["wood_l"], segs=6)
++        for k in range(rnd.randint(0, 3)):      # (crowd-geo) tucked in at the counter (were 0.55 m out in the lane)
++            mb.cyl((rnd.uniform(-w / 2 + 0.35, w / 2 - 0.35), -d / 2 + 0.12, 0), 0.17, 0.48, M["wood_l"], segs=6)
+ 
+ 
+ def crates(mb, M, x, y, rz, rnd, n=4, z0=0.12):
+--- a/parts/rosewick.py
++++ b/parts/rosewick.py
+@@ -203,7 +203,7 @@
+ 
+ # ───────────────────────── the rose maze ─────────────────────────
+ def build_maze(col, M, rnd, lights):
+-    N = MAZE_N; c = MAZE_C; x0 = MAZE_X0; y0 = MAZE_Y0; t = 0.8; h = 2.25
++    N = MAZE_N; c = MAZE_C; x0 = MAZE_X0; y0 = MAZE_Y0; t = 0.38; h = 2.25     # (crowd-geo) hedges 0.38 thick (were 0.8): 2.2 m paths
+     H = [[True] * N for _ in range(N + 1)]       # H[j][i]: wall below row j (y = y0 + j c)
+     V = [[True] * N for _ in range(N + 1)]       # V[i][j]: wall left of column i
+     centre = {(i, j) for i in range(5, 8) for j in range(5, 8)}
+@@ -252,8 +252,8 @@
+         for q in range(nb):
+             u = rnd.uniform(0.05, 0.95); px = a[0] + (b[0] - a[0]) * u; py = a[1] + (b[1] - a[1]) * u
+             side = rnd.choice((-1, 1)); z = rnd.uniform(0.5, hh - 0.05)
+-            if o == 'h': py += side * (t / 2 + 0.02)
+-            else: px += side * (t / 2 + 0.02)
++            if o == 'h': py += side * (t / 2 - 0.01)      # (crowd-geo) set into the hedge face (were 0.02 proud)
++            else: px += side * (t / 2 - 0.01)
+             m = M[rnd.choice(['rose_pink', 'rose_pink', 'rose_white', 'rose_red', 'rose_deep'])]
+             sc = (0.45, 1, 1) if o == 'v' else (1, 0.45, 1)
+             roses.add(p_sphere(0.085, 6, 3), m, T(px, py, z) @ S(*sc), True)
+@@ -268,10 +268,10 @@
+     floor.add(p_torus(3.4, 0.08, 40, 4), M['rosestone'], T(cx, cy, 0.1))
+     # gateposts: taller clipped hedge piers with topiary balls at the entrances
+     for (gx, gy, horiz) in ((x0 + 6 * c, y0, True), (x0 + 7 * c, y0, True), (x0 + W, y0 + 11 * c, False), (x0 + W, y0 + 12 * c, False)):
+-        hedge.add(p_box(0.8, 0.8, h + 0.5), M['hedge'], T(gx, gy, 0.06))   # (interiors) as thick as the hedges (was 1.0: pinched the ways in)
++        hedge.add(p_box(0.5, 0.5, h + 0.5), M['hedge'], T(gx, gy, 0.06))   # (interiors) as thick as the hedges (was 1.0: pinched the ways in); (crowd-geo) 0.5
+         hedge.add(p_sphere(0.5, 10, 6), M['box'], T(gx, gy, h + 1.05), True)
+     ho = hedge.obj(P + "maze_hedges", col)
+-    bv = ho.modifiers.new("bevel", 'BEVEL'); bv.width = 0.16; bv.segments = 2; bv.limit_method = 'NONE'
++    bv = ho.modifiers.new("bevel", 'BEVEL'); bv.width = 0.12; bv.segments = 2; bv.limit_method = 'NONE'   # (crowd-geo) 0.12 (was 0.16) for the thinner hedges
+     roses.obj(P + "maze_roses", col)
+     floor.obj(P + "maze_floor", col)
+     # secret garden: wishing well, urns, benches, roses
+@@ -457,10 +457,11 @@
+     # lake gate
+     gz = gate_arch(arches, M, rnd, 0.0, yl + 1.2, 0.0, span=6.2, h=3.6)
+     sign_text(col, M, "rosewick", "ROSEWICK GARDENS", (0, yl + 1.05, gz + 0.15), 0.0, size=0.5)
+-    sign_text(col, M, "promenade_lake", "The Moonlit Promenade", (0, yl + 0.95, 1.15), 0.0, size=0.26, mat='sign_pink',
++    sign_text(col, M, "promenade_lake", "The Moonlit Promenade", (0, yl + 0.95, 2.42), 0.0, size=0.26, mat='sign_pink',
+               board=False)
+-    arches.add(p_box(4.0, 0.12, 0.55), M['sign_board'], T(0, yl + 1.12, 0.88))
+-    arches.add(p_box(0.12, 0.12, 0.88), M['iron'], T(-1.8, yl + 1.2, 0.06)); arches.add(p_box(0.12, 0.12, 0.88), M['iron'], T(1.8, yl + 1.2, 0.06))
++    # (crowd-geo) the board hangs from the arch on two rods (it stood on posts across the middle of the gate, at hip height)
++    arches.add(p_box(4.0, 0.12, 0.55), M['sign_board'], T(0, yl + 1.12, 2.15))
++    for sx in (-1.8, 1.8): arches.add(p_box(0.04, 0.04, 1.75), M['iron'], T(sx, yl + 1.12, 2.68))   # up to the inner arch tube
+     # sign facing the Ring Promenade (readable when walking south)
+     gz2 = gate_arch(arches, M, rnd, 0.0, prom_lo(0.0) - 1.6, math.pi, span=6.2, h=3.4)
+     sign_text(col, M, "promenade", "THE MOONLIT PROMENADE", (0, prom_lo(0.0) - 1.45, gz2 + 0.1), math.pi, size=0.34)
+--- a/parts/transit_gate.py
++++ b/parts/transit_gate.py
+@@ -337,12 +337,15 @@
+     # turnstiles
+     mb = MB()
+     lanes = 8
++    OPEN = (3, 4)          # (crowd-geo) the two middle lanes are one open 3.8 m way (no divider, no turnstile): guests
++                           # in parties, prams and the evening's departures (the 1.7 m turnstile lanes are single file)
+     for i in range(lanes + 1):
+         y = -8.4 + i * 2.1
++        if i == 4: continue
+         mb.box((GATE_X - 0.6, y, ZP), (1.6, 0.36, 0.95), 0)
+         mb.box((GATE_X - 0.6, y, ZP + 0.95), (1.7, 0.42, 0.06), 1)
+         mb.box((GATE_X + 0.15, y, ZP + 0.96), (0.08, 0.3, 0.05), 2)
+-        if i < lanes:
++        if i < lanes and i not in OPEN:
+             hub = (GATE_X - 0.6, y + 0.21, ZP + 0.85)
+             for k in range(3):
+                 a = k * 2 * math.pi / 3
+@@ -351,10 +354,12 @@
+     # wing fences from the towers to the perimeter opening
+     mb = MB()
+     for sy in (-1, 1):
+-        ya, yb = sy * (TOWER_Y + 3.1), sy * 29.0
++        # (crowd-geo) run on to the perimeter wall's end (they stopped at 29 m and left a gap in the park's edge that
++        # crowds squeezed through beside the gate)
++        ya, yb = sy * (TOWER_Y + 3.1), sy * 34.4
+         mb.box((GATE_X, (ya + yb) / 2, ZP), (0.6, abs(yb - ya), 0.9), 0)
+         mb.box((GATE_X, (ya + yb) / 2, ZP + 0.9), (0.75, abs(yb - ya), 0.1), 1)
+-        n = 5
++        n = 6
+         for k in range(n + 1):
+             y = ya + (yb - ya) * k / n
+             mb.box((GATE_X, y, ZP), (0.8, 0.8, 2.9), 0)
+@@ -431,6 +436,7 @@
+     mb = MB()
+     for i in range(9):
+         y = -8.4 + i * 2.1
++        if i == 4: continue    # (crowd-geo) no rail down the middle of the open way
+         xs = [262.2 + k * 2.0 for k in range(5)]
+         for x in xs:
+             mb.cyl((x, y, ZP), 0.16, 0.05, 0, segs=8)
