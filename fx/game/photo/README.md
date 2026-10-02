@@ -21,7 +21,7 @@ the top bar. On a 390 px phone the top bar has no room (brand plus five buttons 
   `platformer.animator.update` while photo mode is on.
 - Saving: the shutter flashes (not with Reduce motion), the next frame is read back right after `composer.render` (via
   `Q.afterRender`), cropped to the chosen aspect at the canvas's full resolution, JPEG. On touch devices with
-  `navigator.canShare({files})` it opens the share sheet, otherwise it downloads `lanternfall-YYYY-MM-DD-HHMM.jpg`.
+  `navigator.canShare({files})` it opens the share sheet, otherwise it downloads `lanternfall-YYYY-MM-DD-HHMMSS.jpg`.
 - Time: nothing is frozen (Wick is already held with the camera; guests and particles stay alive).
 
 **The post pass.** `pass.js` is ONE extra pass, added as the last pass of the composer only while photo mode is on and
