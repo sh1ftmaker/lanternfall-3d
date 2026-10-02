@@ -18,14 +18,14 @@
 // of 2-4 walk in formation behind a leader and take neighbouring slots. Local avoidance: uniform hash grid, a few
 // neighbours, time-to-collision steering plus separation; walls via the clearance field. Behaviour is updated every
 // frame near the camera and every 2nd-8th frame farther away.
-import { cellAt, nearestCell, cellX, cellY, clearance, ground, lineClearQ as lineClear, DX, DY } from './sim-nav.js';
+import { cellAt, nearestCell, cellX, cellY, clearance, ground, lineClearQ as lineClear, fget, DX, DY } from './sim-nav.js';
 import { ANIM } from './sim-poi.js';
 import { prepare, localField, mulberry, LOCAL_HALF } from './sim-prep.js';
 
 export { ANIM };
 const TAU = Math.PI * 2;
 const PATH = new Int32Array(16);
-const MIN_D = 0.5;              // m: walkers never closer than this to anyone (position correction)
+const MIN_D = 0.5, LOCAL_MAX = 256, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
 // centre of the most open fine cell of a coarse cell
 const fineX = (N, c) => N.x0 + ((N.cfine[c] % N.W) + 0.5) * N.cell, fineY = (N, c) => N.y0 + (((N.cfine[c] / N.W) | 0) + 0.5) * N.cell;
 const wrapA = (a) => { if (a > Math.PI) { a -= TAU; if (a > Math.PI) a = ((a + Math.PI) % TAU) - Math.PI; } else if (a < -Math.PI) { a += TAU; if (a < -Math.PI) a = ((a - Math.PI) % TAU) + Math.PI; } return a; };
@@ -49,7 +49,7 @@ export const PARAMS = {
 const ST = { OFF: 0, GO: 1, SETTLE: 2, ACT: 3, UNSETTLE: 4, QUEUE: 5, FOLLOW: 6, PAUSE: 7, WAIT: 8 };
 const LAND_POP = { 'lantern-row': 1.35, meridian: 1.25, wanderers: 1.2, brinewatch: 1.1, frostmere: 1.0, rosewick: 0.95, guildhollow: 0.85, gate: 1.3, ring: 1, lake: 1 };
 
-export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, sync = false, onReady = null } = {}) {
+export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduceMotion = false, max = 0, sync = false, manualLocal = false, onReady = null } = {}) {
   const CAP = Math.max(16, max || Math.ceil(Math.max(count, 400) * 1.7));
   const state = new Float32Array(CAP * 8);
   for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
@@ -60,9 +60,10 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   if (!nav || !nav.A || !manifest) return crowd;
 
   let D = null;                       // prepared data: {N, P, hubF}
-  const local = new Map();            // site id -> local field (or 'pending')
+  const local = new Map();            // site id -> local field (null while pending); at most LOCAL_MAX, least recently used go
+  let LUSE = new Int32Array(1);       // frame a site's local field was last used
   let worker = null, pendingLocal = [];
-  const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; D = prep; debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
+  const startSim = (prep) => { if (!prep.N.A) prep.N.A = nav.A; D = prep; LUSE = new Int32Array(prep.P.sites.length); debug.times = prep.times; init(); debug.ready = crowd.ready = true; if (onReady) onReady(crowd); };
 
   // ── preparation: Worker when possible ──
   const canWorker = !sync && typeof Worker !== 'undefined' && typeof window !== 'undefined';
@@ -72,7 +73,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       worker.onmessage = (e) => {
         const m = e.data;
         if (m.type === 'ready') startSim(m.prep);
-        else if (m.type === 'local') local.set(m.site, m.f);
+        else if (m.type === 'local') { if (local.has(m.site)) { local.set(m.site, m.f); trimLocal(); } }
         else if (m.type === 'error') { debug.error = m.error; fallback(); }
       };
       worker.onerror = (e) => { debug.error = (e && e.message) || 'worker failed'; e.preventDefault && e.preventDefault(); fallback(); };
@@ -86,9 +87,15 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const run = () => { try { startSim(prepare(nav, manifest, pois, seed)); } catch (err) { debug.error = String(err && err.stack || err); } };
     if (sync) run(); else setTimeout(run, 0);
   }
+  function trimLocal() {                // forget the least recently used local fields beyond LOCAL_MAX
+    while (local.size > LOCAL_MAX) {
+      let old = -1, ou = 2147483647; for (const [k, v] of local) if (v && LUSE[k] < ou) { ou = LUSE[k]; old = k; }
+      if (old < 0) break; local.delete(old);
+    }
+  }
   function requestLocal(site) {
-    if (local.has(site)) return;
-    local.set(site, null);
+    if (local.has(site)) { LUSE[site] = frameNo; return; }
+    local.set(site, null); LUSE[site] = frameNo;
     if (worker) worker.postMessage({ type: 'local', site });
     else pendingLocal.push(site);
   }
@@ -293,7 +300,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     }
     STT[L] = ST.GO; MODE[L] = 0; STUCK[L] = 0; RT[L] = 0;
     for (let q = 1; q < members.length; q++) { const f = members[q]; if (STT[f] !== ST.FOLLOW) { STT[f] = ST.FOLLOW; } }
-    requestLocal(site.id);
+    if (Math.hypot(site.x - X[L], site.y - Y[L]) < LOCAL_REQ) requestLocal(site.id);
     return true;
   }
   function releaseSlot(i) { const s = SLOT[i]; if (s >= 0 && D && D.P.slots.occ[s] === i) D.P.slots.occ[s] = -1; SLOT[i] = -1; }
@@ -332,7 +339,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       if (isFinite(f.x)) { focus.vx = dt > 0 ? (f.x - focus.x) / dt : 0; focus.vy = dt > 0 ? (f.y - focus.y) / dt : 0; if (Math.abs(focus.vx) > 30 || Math.abs(focus.vy) > 30) focus.vx = focus.vy = 0; focus.x = f.x; focus.y = f.y; focus.z = f.z || 0; }
     }
     // local fields computed on the main thread (no Worker): one per frame
-    if (pendingLocal.length) { const s = pendingLocal.shift(); local.set(s, localField(D.N, D.P, s)); }
+    if (pendingLocal.length && !manualLocal) { const s = pendingLocal.shift(); if (local.has(s)) { local.set(s, localField(D.N, D.P, s)); trimLocal(); } }
     // population changes
     if (crowd.active < crowd.want && !reduceMotion && (frameNo % 7 === 0)) populate(Math.min(crowd.want, crowd.active + 4), false);
     if (crowd.active > crowd.want + 2 && frameNo % 5 === 0) shrink();
@@ -433,6 +440,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (d < arriveR) { arrive(i, site); return; }
     RT[i] -= dt;
     const replan = RT[i] <= 0 || Math.hypot(TX[i] - X[i], TY[i] - Y[i]) < 1.1;
+    if (replan && d < LOCAL_REQ && !local.has(site.id)) requestLocal(site.id);
     if (replan && MODE[i] !== 2 && d < 6 && lineClear(N, X[i], Y[i], gx, gy, 0.22)) MODE[i] = 2;
     let tx, ty, speed = PREF[i];
     if (MODE[i] !== 2 && !replan) { tx = TX[i]; ty = TY[i]; }
@@ -443,17 +451,17 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       const c = cellAt(N, X[i], Y[i]) >= 0 ? cellAt(N, X[i], Y[i]) : nearestCell(N, X[i], Y[i], 2);
       const lf = local.get(site.id);
       let f = null, isLocal = false;
-      if (lf && c >= 0) { const I = (N.ccell[c] % N.cw) - lf.I0, J = ((N.ccell[c] / N.cw) | 0) - lf.J0; if (I >= 0 && J >= 0 && I < lf.w && J < lf.h && lf.dir[J * lf.w + I] !== 255) { f = lf; isLocal = true; } }
+      if (lf && c >= 0) { const I = (N.ccell[c] % N.cw) - lf.I0, J = ((N.ccell[c] / N.cw) | 0) - lf.J0; if (I >= 0 && J >= 0 && I < lf.w && J < lf.h && fget(lf.dir, J * lf.w + I) !== 15) { f = lf; isLocal = true; } LUSE[site.id] = frameNo; }
       if (!f) f = D.hubF[site.hub];
       if (c < 0 || !f) { tx = gx; ty = gy; }
       else {
         let cc = c, steps = 0; PATH[0] = c;
         for (; steps < params.lookahead; steps++) {
           let dd;
-          if (isLocal) { const I = (N.ccell[cc] % N.cw) - f.I0, J = ((N.ccell[cc] / N.cw) | 0) - f.J0; dd = (I >= 0 && J >= 0 && I < f.w && J < f.h) ? f.dir[J * f.w + I] : 255; }
-          else dd = f[cc];
+          if (isLocal) { const I = (N.ccell[cc] % N.cw) - f.I0, J = ((N.ccell[cc] / N.cw) | 0) - f.J0; dd = (I >= 0 && J >= 0 && I < f.w && J < f.h) ? fget(f.dir, J * f.w + I) : 15; }
+          else dd = fget(f, cc);
           if (dd >= 8) {
-            if (dd === 255 && steps === 0) {           // unreachable from here: try again later, else give up on this goal
+            if (dd === 15 && steps === 0) {           // unreachable from here: try again later, else give up on this goal
               STUCK[i] += dt; if (STUCK[i] > 3) { STUCK[i] = 0; if (!isFollowerGoing) { STT[i] = ST.WAIT; TIMER[i] = 0.5; } }
             }
             if (dd === 8 && steps === 0 && !isLocal) { // at the hub but the local field is not ready: wait for it
@@ -700,9 +708,14 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
         }
       }
     }
-    // separation from overlapping guests: a small positional nudge (rare; keeps pairs from interpenetrating)
-    if (VX[i] !== 0 || VY[i] !== 0) {
-      // (done in think via forces; nothing here)
+    // a party keeps apart every frame (members walk close together and think at different times)
+    if (GS[i] > 1) {
+      const L = LEAD[i] >= 0 ? LEAD[i] : i;
+      for (let k = -1; k < 4; k++) {
+        const j = k < 0 ? L : MEM[L * 4 + k]; if (j < 0 || j === i || STT[j] === ST.OFF) continue;
+        const dx = X[i] - X[j], dy = Y[i] - Y[j], r2 = dx * dx + dy * dy;
+        if (r2 < 0.3025 && r2 > 1e-6) { const r = Math.sqrt(r2), k2 = Math.min(0.02 + dt * 0.6, (0.55 - r) * 0.5), nx = X[i] + dx / r * k2, ny = Y[i] + dy / r * k2; if (canStand(i, nx, ny)) { X[i] = nx; Y[i] = ny; } }
+      }
     }
     { const c = Math.cos(YAW[i]), s = Math.sin(YAW[i]); AVX[i] = c * SPD[i]; AVY[i] = s * SPD[i]; }
     const g = ground(N, X[i], Y[i]); if (g === g && Math.abs(g - ZT[i]) < 0.6) ZT[i] = g;
@@ -719,10 +732,24 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const ci = k0 % W, cj = (k0 / W) | 0, x = X[i], y = Y[i];
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
       const k = k0 + dj * W + di;
-      if (add) { const cx = N.x0 + (ci + di + 0.5) * N.cell, cy = N.y0 + (cj + dj + 0.5) * N.cell; if ((cx - x) * (cx - x) + (cy - y) * (cy - y) > 0.16 && (di || dj)) { continue; } if (OCC[k] < 255) OCC[k]++; STMASK[i] |= 1 << ((dj + 1) * 3 + di + 1); }
+      if (add) { const cx = N.x0 + (ci + di + 0.5) * N.cell, cy = N.y0 + (cj + dj + 0.5) * N.cell; if ((cx - x) * (cx - x) + (cy - y) * (cy - y) > 0.36 && (di || dj)) { continue; } if (OCC[k] < 255) OCC[k]++; STMASK[i] |= 1 << ((dj + 1) * 3 + di + 1); }
       else if (STMASK[i] & (1 << ((dj + 1) * 3 + di + 1))) { if (OCC[k]) OCC[k]--; }
     }
     if (!add) { OCCK[i] = -1; STMASK[i] = 0; }
+  }
+  // a move to (x, y) comes closer than 0.55 m to a standing guest (not of my party) and closer than before
+  function standingBlocks(i, x, y) {
+    const N = D.N, head = HG.head, next = HG.next, gw = HG.w, gx = Math.floor((x - N.x0) / 2), gy = Math.floor((y - N.y0) / 2);
+    const party = LEAD[i] >= 0 ? LEAD[i] : i;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const xx = gx + ox, yy = gy + oy; if (xx < 0 || yy < 0 || xx >= gw || yy >= HG.h) continue;
+      for (let j = head[yy * gw + xx]; j >= 0; j = next[j]) {
+        if (OCCK[j] < 0 || (LEAD[j] >= 0 ? LEAD[j] : j) === party) continue;
+        const d2 = (X[j] - x) * (X[j] - x) + (Y[j] - y) * (Y[j] - y);
+        if (d2 < 0.3025 && d2 < (X[j] - X[i]) * (X[j] - X[i]) + (Y[j] - Y[i]) * (Y[j] - Y[i])) return true;
+      }
+    }
+    return false;
   }
   function canStand(i, x, y) {
     const N = D.N, fi = ((x - N.x0) / N.cell) | 0, fj = ((y - N.y0) / N.cell) | 0;
@@ -730,10 +757,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const cv = N.clr[fj * N.W + fi];
     // near a wall: keep the body radius clear, or at least do not get any closer (so nobody is ever pinned)
     if (cv < (params.radius + 0.25 + 0.36) * 6) { const c = clearance(N, x, y); if (c < params.radius && c < clearance(N, X[i], Y[i]) + 0.002) return false; }
-    if (OCC[fj * N.W + fi] && OCCK[i] < 0) {           // a standing guest there (unless I am already in a marked cell: let me out)
-      const ci = ((X[i] - N.x0) / N.cell) | 0, cj = ((Y[i] - N.y0) / N.cell) | 0;
-      if (!OCC[cj * N.W + ci]) return false;
-    }
+    if (OCC[fj * N.W + fi] && OCCK[i] < 0 && standingBlocks(i, x, y)) return false;   // a standing guest there
     const g = ground(D.N, x, y); if (!(g === g) || Math.abs(g - Z[i]) > 0.45) return false;
     return true;
   }
@@ -816,6 +840,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       }
       return { pairs, inside };
     },
+    pumpLocal(n = 1e9) { while (n-- > 0 && pendingLocal.length) { const s = pendingLocal.shift(); if (local.has(s)) { local.set(s, localField(D.N, D.P, s)); trimLocal(); } } },   // tests: the Worker's job, outside the timed frame
     countStates() { const c = {}; const names = Object.keys(ST); for (let i = 0; i < CAP; i++) { if (STT[i] === ST.OFF) continue; const n = names[STT[i]]; c[n] = (c[n] || 0) + 1; } return c; },
   });
   if (!worker) fallback();

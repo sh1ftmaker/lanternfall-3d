@@ -150,8 +150,9 @@ export function components(N) {
 }
 
 // Flow field toward `sources` (array of compact cells). `win` = {I0, J0, I1, J1} limits the search to a coarse-cell
-// window (local fields). Returns Uint8Array(N.m) (global) or, windowed, {I0, J0, w, h, dir: Uint8Array(w*h)} indexed by
-// window cell. Dijkstra with a bucket queue (integer costs; linked lists in typed arrays, reused between calls).
+// window (local fields). Returns a packed field (4 bits per cell: 0-7 direction, 8 source, 15 unreachable; read with
+// `fget`) over the compact cells (global) or, windowed, {I0, J0, w, h, dir} indexed by window cell.
+// Dijkstra with a bucket queue (integer costs; linked lists in typed arrays, reused between calls).
 const INF = 0xFFFFFFFF, NB = 256;
 let Q = null;
 function queue(n) {
@@ -202,16 +203,20 @@ export function field(N, sources, win = null) {
       }
     }
   }
-  return win ? { I0, J0, w: ww, h: wh, dir } : dir;
+  const packed = new Uint8Array((size + 1) >> 1);
+  for (let k = 0; k < size; k += 2) packed[k >> 1] = (dir[k] & 15) | ((k + 1 < size ? dir[k + 1] & 15 : 15) << 4);
+  return win ? { I0, J0, w: ww, h: wh, dir: packed } : packed;
 }
+// packed field value at index k (15 = unreachable)
+export const fget = (f, k) => (f[k >> 1] >> ((k & 1) << 2)) & 15;
 
-// Direction stored for compact cell c in a field (global Uint8Array or windowed object), 255 if none
+// Direction stored for compact cell c in a field (global or windowed), 15 if none
 export function fieldDir(N, f, c) {
-  if (c < 0) return 255;
-  if (f.dir === undefined) return f[c];
+  if (c < 0) return 15;
+  if (f.dir === undefined) return fget(f, c);
   const K = N.ccell[c], I = K % N.cw - f.I0, J = ((K / N.cw) | 0) - f.J0;
-  if (I < 0 || J < 0 || I >= f.w || J >= f.h) return 255;
-  return f.dir[J * f.w + I];
+  if (I < 0 || J < 0 || I >= f.w || J >= f.h) return 15;
+  return fget(f.dir, J * f.w + I);
 }
 // the cell one step along direction d from compact cell c
 export function stepCell(N, c, d) { const K = N.ccell[c]; return N.cidx[K + DY[d] * N.cw + DX[d]]; }

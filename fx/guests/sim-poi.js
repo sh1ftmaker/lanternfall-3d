@@ -46,10 +46,20 @@ export function buildSites(N, manifest, poiData, rnd) {
     const si = new Int32Array(cap); if (S.site) si.set(S.site); S.site = si;
     const oc = new Int32Array(cap).fill(-1); if (S.occ) oc.set(S.occ); S.occ = oc; S.cap = cap;
   };
+  // slots never overlap: a new one closer than DEDUP to an existing one (any site) is dropped
+  const DEDUP = 0.6, hash = new Map(), hkey = (i, j) => i * 100003 + j;
+  const nearSlot = (x, y, r) => {
+    const i0 = Math.floor(x), j0 = Math.floor(y);
+    for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) { const l = hash.get(hkey(i, j)); if (l) for (const k of l) if (Math.hypot(S.x[k] - x, S.y[k] - y) < r) return true; }
+    return false;
+  };
   const addSlot = (site, x, y, z, yaw, ax, ay, anim) => {
+    if (nearSlot(x, y, anim === ANIM.sit ? 0.42 : DEDUP)) return -1;
     if (S.n >= S.cap) grow();
     const k = S.n++; S.x[k] = x; S.y[k] = y; S.z[k] = z; S.yaw[k] = yaw; S.ax[k] = ax; S.ay[k] = ay; S.anim[k] = anim; S.site[k] = site.id; S.occ[k] = -1;
-    site.slots.push(k); return k;
+    site.slots.push(k);
+    const hk = hkey(Math.floor(x), Math.floor(y)); let l = hash.get(hk); if (!l) hash.set(hk, l = []); l.push(k);
+    return k;
   };
   const sites = [];
   const newSite = (o) => { const s = { id: sites.length, slots: [], weight: 1, open: true, hub: -1, ...o }; sites.push(s); return s; };
@@ -81,18 +91,20 @@ export function buildSites(N, manifest, poiData, rnd) {
         let sx, sy, syaw, ax, ay;
         if (type === 'bench') {
           const o = (i - (cap - 1) / 2) * pitch; sx = p.x + rx * o; sy = p.y + ry * o; syaw = yaw;
-        } else { const a = yaw + Math.PI + i * TAU / cap; sx = p.x + Math.cos(a) * 0.7; sy = p.y + Math.sin(a) * 0.7; syaw = a + Math.PI; }
+        } else { const a = yaw + Math.PI + i * TAU / cap, r = +p.r > 0.4 ? Math.min(1.6, +p.r) : 0.75; sx = p.x + Math.cos(a) * r; sy = p.y + Math.sin(a) * r; syaw = a + Math.PI; }
         // approach: the first open standing spot straight in front of the seat (0.35 - 1.3 m)
         const cx = Math.cos(syaw), cy = Math.sin(syaw); let ap = null;
         for (let t = 0.35; t <= 1.3; t += 0.05) { const qx = sx + cx * t, qy = sy + cy * t; if (okStand(qx, qy, 0.27)) { ap = [qx + cx * 0.05, qy + cy * 0.05]; break; } }
         if (!ap) continue;
-        const z = isFinite(p.z) ? p.z : (ground(N, sx, sy) || 0) + 0.45;
+        // seat height: the bench's own, else a chair's (0.45 m above the floor at the approach point)
+        const z = type === 'bench' && isFinite(p.z) ? p.z : (ground(N, ap[0], ap[1]) || 0) + 0.45;
         addSlot(site, sx, sy, z, syaw, ap[0], ap[1], ANIM.sit);
       }
     } else if (type === 'stall' || type === 'queue') {
-      site = newSite({ type, kind: 'queue', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(3, Math.min(7, cap > 1 ? cap : 5)), name: p.name });
-      // a spaced line behind the first customer; it bends (up to +-50 deg) round obstacles
-      let x = p.x, y = p.y, a = yaw;
+      // a spaced line behind the first customer (along `qyaw` for `qlen` m when given); it bends round obstacles
+      const qn = isFinite(p.qlen) ? 1 + Math.floor(+p.qlen / 0.85) : (cap > 1 ? cap : 5);
+      site = newSite({ type, kind: 'queue', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(2, Math.min(7, Math.min(qn, cap > 1 ? cap : 7))), name: p.name });
+      let x = p.x, y = p.y, a = isFinite(p.qyaw) ? +p.qyaw + Math.PI : yaw;
       const first = findStand(x, y, 0.8, 0.3); if (first) { x = first[0]; y = first[1]; }
       for (let i = 0; i < site.cap; i++) {
         if (i > 0) {
@@ -104,31 +116,30 @@ export function buildSites(N, manifest, poiData, rnd) {
           if (!ok) break;
         } else if (!okStand(x, y, 0.28)) break;
         const g = ground(N, x, y);
-        addSlot(site, x, y, isFinite(g) ? g : p.z || 0, a, x, y, ANIM.stand);
+        if (addSlot(site, x, y, isFinite(g) ? g : p.z || 0, i === 0 ? yaw : a, x, y, ANIM.stand) < 0) break;
       }
     } else if (type === 'stage') {
-      // audience rows facing the stage: (x, y) = front of the audience, yaw = toward the stage
-      site = newSite({ type, kind: 'stage', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 6), name: p.name });
-      let n = 0;
-      for (let row = 0; row < 5 && n < site.cap; row++) for (let k = 0; k < 7 && n < site.cap; k++) {
-        const o = (k - 3) * 0.9 + (row & 1) * 0.45, sx = p.x - fx * row * 1.1 + rx * o + (rnd() - 0.5) * 0.25, sy = p.y - fy * row * 1.1 + ry * o + (rnd() - 0.5) * 0.25;
-        if (!okStand(sx, sy, 0.35)) continue;
-        const syaw = Math.atan2(p.y + fy * 4 - sy, p.x + fx * 4 - sx), g = ground(N, sx, sy);
-        addSlot(site, sx, sy, g, syaw, sx, sy, ANIM.stand); n++;
+      // audience: the spot and its neighbours, facing what is on stage (the data gives several spots per stage)
+      site = newSite({ type, kind: 'stage', x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 3), name: p.name, dance: /dance/i.test(p.name || '') });
+      for (const [o, b] of [[0, 0], [0.85, -0.15], [-0.85, -0.15], [0.4, -1.0], [-0.45, -1.0]]) {
+        if (site.slots.length >= site.cap) break;
+        const sp = findStand(p.x + rx * o + fx * b + (rnd() - 0.5) * 0.2, p.y + ry * o + fy * b + (rnd() - 0.5) * 0.2, 0.3, 0.3); if (!sp) continue;
+        const syaw = Math.atan2(p.y + fy * 5 - sp[1], p.x + fx * 5 - sp[0]);
+        addSlot(site, sp[0], sp[1], ground(N, sp[0], sp[1]), syaw, sp[0], sp[1], ANIM.stand);
       }
     } else {
       // view / photo / anything else: the spot plus neighbours to either side and a second row
-      const kind = 'look';
-      site = newSite({ type, kind, x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 2), name: p.name });
-      const offs = [[0, 0], [0.8, 0], [-0.8, 0], [1.6, -0.3], [-1.6, -0.3], [0.4, -1.0], [-0.4, -1.0], [1.2, -1.1]];
-      // a rail in front (blocked 0.6 m ahead): guests lean on it
+      // a rail in front (blocked 0.7 m ahead): guests lean on it; on the lake shore that makes it part of the lake rail
       const lean = clearance(N, p.x + fx * 0.7, p.y + fy * 0.7) < 0.1;
+      const kind = lean && distPoly(lake, p.x, p.y) < 8 ? 'rail' : 'look';
+      site = newSite({ type, kind, x: p.x, y: p.y, z: p.z, yaw, land, cap: Math.max(cap, 2) + (kind === 'rail' ? 1 : 0), name: p.name });
+      const offs = [[0, 0], [0.8, 0], [-0.8, 0], [1.6, -0.3], [-1.6, -0.3], [0.4, -1.0], [-0.4, -1.0], [1.2, -1.1]];
       for (let i = 0, n = 0; i < offs.length && n < site.cap; i++) {
         const [o, b] = offs[i], sx = p.x + rx * o + fx * b, sy = p.y + ry * o + fy * b;
         const sp = findStand(sx, sy, 0.4, 0.28); if (!sp) continue;
         const ap = lean ? (findStand(sp[0] - fx * 0.7, sp[1] - fy * 0.7, 0.5, 0.35) || sp) : sp;
         const g = ground(N, sp[0], sp[1]);
-        addSlot(site, sp[0], sp[1], g, yaw, ap[0], ap[1], lean && b === 0 ? ANIM.lean : type === 'photo' ? ANIM.look : ANIM.stand); n++;
+        if (addSlot(site, sp[0], sp[1], g, yaw, ap[0], ap[1], lean && b === 0 ? ANIM.lean : type === 'photo' ? ANIM.look : ANIM.stand) >= 0) n++;
       }
     }
     if (site) {
@@ -205,9 +216,23 @@ export function buildSites(N, manifest, poiData, rnd) {
         for (const o of [0, 0.8, -0.8, 1.6]) { const q = findStand(p[0] + rx * o, p[1] + ry * o, 0.4, 0.35); if (q) addSlot(site, q[0], q[1], ground(N, q[0], q[1]), w[2], q[0], q[1], o ? ANIM.stand : ANIM.look); }
       }
     }
-    for (let k = 0; k < (has ? 2 : 6); k++) {
-      const a = l.phi + (rnd() - 0.5) * 0.5, r = 175 + rnd() * 45;
-      addWalk(r * Math.cos(a), r * Math.sin(a), l.id, has ? 0.6 : 1.2, 'land');
+  }
+  // wander points: open paving in each land, at least 14 m apart (guests stroll between them and stop to look round)
+  {
+    const pts = [];
+    for (let c = 0; c < N.m; c += 3) {
+      if (N.csurf[c] !== 0 || comp.lab[c] !== main) continue;
+      const e = N.clr[N.cfine[c]] / 6 - 0.25; if (e < 1.6) continue;
+      const x = N.x0 + ((N.ccell[c] % N.cw) + 0.5) * 2 * N.cell, y = N.y0 + (((N.ccell[c] / N.cw) | 0) + 0.5) * 2 * N.cell;
+      const land = landOf(x, y); if (!LAND_POP[land]) continue;
+      if (Math.abs(Math.hypot(x / ra, y / rb) - 1) < 0.06) continue;       // the ring promenade has its own points
+      pts.push([x, y, land, rnd()]);
+    }
+    pts.sort((a, b) => a[3] - b[3]);
+    const kept = [];
+    for (const p of pts) {
+      if (kept.some((q) => Math.abs(q[0] - p[0]) < 14 && Math.abs(q[1] - p[1]) < 14 && Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) continue;
+      kept.push(p); addWalk(p[0], p[1], p[2], 0.9, 'land');
     }
   }
   // the gate: arrivals appear and departures leave beyond the turnstiles
@@ -220,7 +245,7 @@ export function buildSites(N, manifest, poiData, rnd) {
   for (const s of sites) if (s.slots.length === 0) s.open = false;
 
   // ── hubs: greedy clusters of open sites (radius HUB_R), each gets a global flow field ──
-  const HUB_R = 34;
+  const HUB_R = 40;
   const hubs = [];
   const order = sites.filter((s) => s.open).sort((a, b) => (a.kind === 'gate') - (b.kind === 'gate') || a.x - b.x);
   for (const s of order) {
@@ -233,10 +258,23 @@ export function buildSites(N, manifest, poiData, rnd) {
     const src = new Set();
     for (const id of H.sites) for (const k of sites[id].slots) { const c = nearestCell(N, S.ax[k], S.ay[k], 2); if (c >= 0) src.add(c); }
     H.src = [...src];
+    // the window of the local fields of this hub's sites: every source of the hub plus a margin (coarse cells)
+    let I0 = 1e9, J0 = 1e9, I1 = -1e9, J1 = -1e9;
+    for (const c of H.src) { const K = N.ccell[c], I = K % N.cw, J = (K / N.cw) | 0; if (I < I0) I0 = I; if (I > I1) I1 = I; if (J < J0) J0 = J; if (J > J1) J1 = J; }
+    const M = 14; H.win = { I0: I0 - M, J0: J0 - M, I1: I1 + M + 1, J1: J1 + M + 1 };
   }
   return { sites, slots: S, hubs, railSites, gate, stats, comp, main };
 }
 
+function distPoly(poly, x, y) {
+  let best = 1e9;
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length], ex = x2 - x1, ey = y2 - y1;
+    const t = Math.max(0, Math.min(1, ((x - x1) * ex + (y - y1) * ey) / (ex * ex + ey * ey || 1)));
+    best = Math.min(best, Math.hypot(x - x1 - ex * t, y - y1 - ey * t));
+  }
+  return best;
+}
 function polarR(poly, phi) {
   const dx = Math.cos(phi), dy = Math.sin(phi); let best = 0;
   for (let i = 0; i < poly.length; i++) {

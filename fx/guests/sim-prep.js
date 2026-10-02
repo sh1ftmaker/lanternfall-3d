@@ -6,8 +6,8 @@ import { buildSites } from './sim-poi.js';
 
 export function mulberry(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-// half-size (coarse cells = metres) of a site's local field window: covers every point of the site's hub (radius 34 m)
-export const LOCAL_HALF = 72;
+// a site's local field covers its hub's window (all the hub's sources + a margin); this half-size is the fallback
+export const LOCAL_HALF = 88;
 
 export function prepare(nav, manifest, pois, seed = 1) {
   const t0 = now();
@@ -32,7 +32,8 @@ export function localField(N, P, siteId) {
     }
     if (c >= 0) src.push(c);
   }
-  return field(N, src, { I0: I - LOCAL_HALF, J0: J - LOCAL_HALF, I1: I + LOCAL_HALF, J1: J + LOCAL_HALF });
+  const w = P.hubs[s.hub] && P.hubs[s.hub].win;
+  return field(N, src, w || { I0: I - LOCAL_HALF, J0: J - LOCAL_HALF, I1: I + LOCAL_HALF, J1: J + LOCAL_HALF });
 }
 
 function now() { return (typeof performance !== 'undefined' ? performance : Date).now(); }
