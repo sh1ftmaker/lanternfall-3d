@@ -33,7 +33,7 @@ export function init(S) {
     for (const [bx, by, bw, bh] of [[-W / 2, H / 2, T, H], [W / 2, H / 2, T, H], [0, H, W + T, T], [0, 0.04, W + T, T], [0, H / 2, W, T * 0.6]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, T), wood); m.position.set(bx, by, 0); grp.add(m); }
     game.v3(x, y, z, grp.position); grp.rotation.y = yaw - Math.PI / 2; game.scene.add(grp);
     const glow = game.props.glow({ x, y, z: z + 1.3, color: [0.8, 0.55, 0.28], size: 5 });
-    return { grp, paper, wood, glow, set(o) { paper.opacity = 0.75 * o; wood.opacity = o; glow.sprite.material.opacity = o; }, remove() { game.scene.remove(grp); paper.dispose(); wood.dispose(); glow.remove(); } };
+    return { grp, paper, wood, glow, set(o) { paper.opacity = 0.75 * o; wood.opacity = o; glow.sprite.material.opacity = o; }, remove() { game.scene.remove(grp); grp.traverse((o) => o.geometry && o.geometry.dispose()); paper.dispose(); wood.dispose(); glow.remove(); } };
   }
   function dropReturn() { if (!ret) return; ret.it.remove(); ret.fr.remove(); ret = null; }
   function placeReturn(back, at) {                                              // `at`: where the visitor was put (known, not read back: Wick takes a moment to arrive)

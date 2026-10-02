@@ -138,7 +138,7 @@ export function init(game) {
     if (!race) return; const r = race; race = null;
     for (const m of [r.mA, r.mB]) { scene.remove(m.grp); m.mat.dispose(); m.bmat.dispose(); m.glow.remove(); }
     for (const s of r.ghost.sp) s.remove();
-    if (r.pole) for (const m of r.pole) m.userData.remove();
+    if (r.pole) for (const m of r.pole) { m.userData.remove(); m.geometry.dispose(); }
     game.track('trials', null); countEl.classList.remove('on');
   }
   function cancel(why, say) { if (!race) return; end(why); if (say) game.toast('Race called off.', { ms: 1800 }); }
