@@ -42,7 +42,7 @@ Benches, chairs, bleacher tiers.
 
 | key | meaning |
 |---|---|
-| `x`, `y`, `z` | centre of the seat surface, `z` = top of the seat (hip height of a sitter; the seat height above the floor is `z - nav height at (ax, ay)`, usually 0.42–0.50 m; Meridian's plaza benches are only 0.10 m high, they are modelled that way) |
+| `x`, `y`, `z` | centre of the seat surface, `z` = top of the seat (hip height of a sitter; see seat heights below) |
 | `yaw` | direction a sitter faces (away from the backrest; for backless benches the side with knee room / walkable ground) |
 | `cap` | number of seats: seat `k` (0..cap-1) sits at `(x, y) + r * ((k + 0.5) / cap - 0.5) * len`, where `r = (sin yaw, -cos yaw)` (the sitter's right) |
 | `len` | usable length along the bench (m) |
@@ -132,6 +132,12 @@ sample with bilinear filtering (cell centres as above).
 
 Meaning: the baked irradiance (light before albedo, moon EXCLUDED: the viewer adds moonlight itself) arriving at the
 ground where a guest stands. To light a guest like the park's surfaces: `colour = albedo * hdr (+ the viewer's moon
-term) + emission`. Values: median 0.05, 90th percentile 0.14, 99th 0.33 (max channel) on walkable cells.
+term) + emission`. Values (max channel) on walkable cells: median 0.059, 90th percentile 0.17, 99th 0.40.
 
-Level A (ground) only: on the few upper-level cells (bridges, decks) the grid holds the ground below.
+Level A (ground) only: on the few upper-level cells (870 m² of bridges and decks) the grid holds the ground below.
+RGB is quantized in steps of 4/255 and M on a 64-step log ladder (decodes with the formula above; it compresses
+better). Up-facing ground triangles at the walk height only (down-facing slabs carry a placeholder light in the bake).
+
+A guest is vertical, the grid measures light on the ground. Measured against the baked light of vertical faces
+0.6-1.6 m up nearby, the ratio vertical / ground has a median of 1.05 over 200 random walk cells (quartiles 0.64 and
+1.9) and 1.09 on the Shore Promenade lamp posts, so the grid is used as is; multiply by ~1.0, not more.
