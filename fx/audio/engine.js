@@ -393,7 +393,7 @@ export function createAudio(opts) {
         }
         s.pos.y += 1.6; s.vel.copy(t.v);
       } else if (f === 'carousel') {
-        const a = time * 0.24 * (getFx()?.animated?.uniforms?.uFxMotion?.value ?? 1);
+        const a = -time * 0.24 * (getFx()?.animated?.uniforms?.uFxMotion?.value ?? 1);
         s.pos.set(CAROUSEL.x + 3.5 * Math.cos(a), 3.2, CAROUSEL.z + 3.5 * Math.sin(a));
       } else if (f === 'punt') {
         const g = water && water.boat && water.boat.grp; if (!g) { s.d = 1e9; continue; }
