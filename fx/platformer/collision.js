@@ -128,11 +128,14 @@ export function createCollision({ park, lodMeshes, manifest, nav, flipDown = tru
   const BED_Y = water - 4.0;
   // gatherSteps: a generator that yields whenever `budgetMs` of work is done (the caller resumes it next frame);
   // gather(): the same, run to the end at once.
+  // buffers travel to the worker and come back (recycle()), so a reload does not allocate megabytes each time
+  const pool = [];
+  function recycle(ab) { if (ab && ab.byteLength && pool.length < 3) pool.push(new Int32Array(ab)); }
   function gather(cx, cz, R = 30) { const it = gatherSteps(cx, cz, R, Infinity); let r; do r = it.next(); while (!r.done); return r.value; }
   function* gatherSteps(cx, cz, R = 30, budgetMs = 3) {
     const t0 = performance.now(); let tS = t0, work = 0;
-    const out = []; let n = 0;
-    let buf = new Int32Array(11 * 65536);
+    let n = 0;
+    let buf = pool.pop() || new Int32Array(11 * 65536);
     const emit = (type, terrain, x1, y1, z1, x2, y2, z2, x3, y3, z3) => {
       if ((n + 1) * 11 > buf.length) { const b2 = new Int32Array(buf.length * 2); b2.set(buf); buf = b2; }
       const o = n * 11; buf[o] = type & 0xffff; buf[o + 1] = terrain;
@@ -200,10 +203,10 @@ export function createCollision({ park, lodMeshes, manifest, nav, flipDown = tru
       const x1 = x0 + 4, z1 = z0 + 4;
       emit(0, TERRAIN_WATER, x0, BED_Y, z1, x1, BED_Y, z1, x1, BED_Y, z0); emit(0, TERRAIN_WATER, x0, BED_Y, z1, x1, BED_Y, z0, x0, BED_Y, z0); counts.bed += 2;
     }
-    const packed = buf.slice(0, n * 11);
+    const packed = buf;
     active += performance.now() - tS;
     st.lastGather = { ms: Math.round(active * 10) / 10, wall: Math.round((performance.now() - t0)), count: n, ...counts, cx, cz, R };
     return { packed, count: n, stats: st.lastGather };
   }
-  return { prepareSteps, gather, gatherSteps, stats: st, inReach, lakeContains: (x, z) => lake.length > 2 && inPoly(lake, x, -z), bedY: BED_Y, waterY: water, bounds: { X0, X1, Z0, Z1 } };
+  return { prepareSteps, gather, gatherSteps, recycle, stats: st, inReach, lakeContains: (x, z) => lake.length > 2 && inPoly(lake, x, -z), bedY: BED_Y, waterY: water, bounds: { X0, X1, Z0, Z1 } };
 }

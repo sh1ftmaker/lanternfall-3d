@@ -44,8 +44,9 @@ export async function createPlatformer(ctx) {
   const once = (type) => new Promise((res, rej) => { waiters[type] = res; setTimeout(() => rej(new Error('platformer worker: no ' + type)), 30000); });
   worker.onmessage = (e) => {
     const m = e.data;
-    if (m.type === 'state') { S.pending = false; S.states.set(m.seq, m.s); S.latest = Math.max(S.latest, m.seq); S.camFrac = m.cam; S.tickMs = m.tickMs; for (const k of S.states.keys()) if (k < m.seq - 4) S.states.delete(k); return; }
-    if (m.type === 'loaded') { S.loads++; S.lastLoad = m; S.events.push(`load #${S.loads}: ${m.count} surfaces, ${m.ms} ms (+${m.rayMs} ms rays)`); if (S.events.length > 6) S.events.shift(); }
+    if (m.type === 'state') { S.pending = false; S.states.set(m.seq, m.s);
+      if (api.test.trace) { const q = m.s; api.test.trace.push({ seq: m.seq, t: +S.t.toFixed(3), x: q.pos[0] / UNITS, y: q.pos[1] / UNITS, z: q.pos[2] / UNITS, vy: q.vel[1] * 30 / UNITS, fwd: q.fwd * 30 / UNITS, act: q.action, anim: q.animID, fr: q.animFrame, floor: q.floorY / UNITS, face: q.faceAngle, n: S.window ? S.window.stats.count : 0 }); } S.latest = Math.max(S.latest, m.seq); S.camFrac = m.cam; S.tickMs = m.tickMs; for (const k of S.states.keys()) if (k < m.seq - 4) S.states.delete(k); return; }
+    if (m.type === 'loaded') { if (m.back) col.recycle(m.back); m.back = null; S.loads++; S.lastLoad = m; S.events.push(`load #${S.loads}: ${m.count} surfaces, ${m.ms} ms (+${m.rayMs} ms rays)`); if (S.events.length > 6) S.events.shift(); }
     if (m.type === 'error') { console.warn('platformer worker:', m.message); }
     const w = waiters[m.type]; if (w) { delete waiters[m.type]; w(m); }
   };
@@ -128,7 +129,9 @@ export async function createPlatformer(ctx) {
     const cp = Math.cos(C.pitch), off = tmpV.set(Math.sin(C.yaw) * cp, Math.sin(C.pitch), Math.cos(C.yaw) * cp);
     camera.position.copy(C.target).addScaledVector(off, C.distNow);
     // stay above the lake surface (the mirror needs the camera above it)
-    if (col.lakeContains(camera.position.x, camera.position.z) && camera.position.y < col.waterY + 0.35) camera.position.y = col.waterY + 0.35;
+    // (and well above it while swimming: the floating lanterns would fill the view)
+    const minY = col.waterY + (swim ? 1.7 : 0.35);
+    if (col.lakeContains(camera.position.x, camera.position.z) && camera.position.y < minY) camera.position.y = minY;
     look.copy(C.target); look.y = C.target.y + (head.y - C.target.y) * 0.7 - 0.15;      // keep a jumping lamplighter in frame
     camera.lookAt(look);
     return off;
@@ -136,7 +139,10 @@ export async function createPlatformer(ctx) {
   // ── per frame ──
   let lastFrameMs = 0;
   const api = {
-    get active() { return S.active; }, S, col, character: ch, animator: anim, input, worker,
+    get active() { return S.active; }, S, col, character: ch, animator: anim, input, worker, view,
+    // test hooks (fx/platformer/TESTING.md): scripted input instead of the devices, a state trace, placement
+    test: { input: null, trace: null },
+    teleport(x, y, z, face = 0) { loadWindow(x, y, z, true); worker.postMessage({ type: 'teleport', x: x * UNITS, y: y * UNITS, z: z * UNITS, yaw: face, action: 0x0100088C }); S.states.clear(); S.latest = -1; S.posted = 0; S.acc = 0; S.pending = false; S.cam.init = false; },
     stats: () => ({ loads: S.loads, lastLoad: S.lastLoad, window: S.window && S.window.stats, tickMs: S.tickMs, prepMs: col.stats.prepMs, kept: col.stats.kept, frameMs: lastFrameMs, respawns: S.respawns }),
     // spawn at the walker's position (Blender frame x, y; yaw about +z)
     enter(at) {
@@ -169,7 +175,12 @@ export async function createPlatformer(ctx) {
     update(dt) {
       if (!S.active) return;
       const t0 = performance.now(); S.t += dt;
-      const inp = input.read(dt);
+      let inp;
+      if (api.test.input) {      // scripted: { mx, my } camera-relative, or { world: [dx, dz] } in three.js x / z; the camera holds still
+        inp = { mx: 0, my: 0, a: false, b: false, z: false, orbitX: 0, orbitY: 0, zoom: 0, dragging: false, device: 'test', ...api.test.input(S.t, view) };
+        S.cam.lastUser = S.t;
+        // inp.world is turned into a stick below, against the same camera direction the tick sends
+      } else inp = input.read(dt);
       // fixed 30 Hz ticks in the worker; never more than one in flight
       S.acc += dt;
       if (S.acc > STEP * 4) S.acc = STEP * 4;
@@ -180,8 +191,11 @@ export async function createPlatformer(ctx) {
         const camDX = camera.position.x - px, camDZ = camera.position.z - pz, cl = Math.hypot(camDX, camDZ) || 1;
         const water = col.lakeContains(px, pz) ? Math.round(col.waterY * UNITS) : -100000;
         const cp = Math.cos(C.pitch), cam = [px * UNITS, (py + 1.15) * UNITS, pz * UNITS, (px + Math.sin(C.yaw) * cp * C.dist) * UNITS, (py + 1.15 + Math.sin(C.pitch) * C.dist) * UNITS, (pz + Math.cos(C.yaw) * cp * C.dist) * UNITS];
+        const lx = camDX / cl, lz = camDZ / cl;
+        let mx = inp.mx, my = inp.my;
+        if (inp.world) { const [dx, dz] = inp.world; my = -(dx * lx + dz * lz); mx = dx * lz - dz * lx; }   // forward = -camLook, right = (lz, -lx)
         worker.postMessage({ type: 'tick', seq: ++S.posted, water, cam,
-          input: { camLookX: camDX / cl, camLookZ: camDZ / cl, stickX: -inp.mx, stickY: inp.my, a: inp.a ? 1 : 0, b: inp.b ? 1 : 0, z: inp.z ? 1 : 0 } });
+          input: { camLookX: lx, camLookZ: lz, stickX: -mx, stickY: my, a: inp.a ? 1 : 0, b: inp.b ? 1 : 0, z: inp.z ? 1 : 0 } });
         S.pending = true;
       }
       const v = S.latest > 0 ? sample(S.posted - 1 + S.acc / STEP) : null;

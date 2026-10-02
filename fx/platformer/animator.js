@@ -164,6 +164,7 @@ const CROUCH = { ...P0, py: -0.33, lean: 0.38, lLf: 1.05, lRf: 0.95, lLk: 1.75, 
 const TUCK = { ...P0, lean: 0.45, lLf: 1.7, lRf: 1.7, lLk: 2.3, lRk: 2.3, aLf: 1.2, aLb: 1.8, aRf: 1.0, aRb: 1.5, poleT: 0.2, nod: -0.4, py: 0.2 };
 const JAB = { ...P0, lean: 0.25, twist: -0.35, aRf: 1.45, aRb: 0.05, aRo: 0.05, poleT: 1.5, poleS: -0.05, grip: 0.4, lLf: 0.45, lLk: 0.3, lRf: -0.3, aLf: -0.3, aLo: 0.4, pz: 0.08 };
 const SWING = { ...P0, lean: 0.2, twist: 0.55, aRf: 1.35, aRo: -0.3, aRb: 0.15, poleT: 1.45, poleS: -0.9, grip: 0.4, lRf: 0.45, lRk: 0.3, lLf: -0.25, aLo: 0.6 };
+const ON_BACK = { ...P0, py: -0.7, pp: -1.5, pz: -0.4, lean: -0.1, nod: 0.3, aLf: 1.2, aLo: 1.3, aLb: 0.3, aRf: 0.8, aRo: 1.0, poleT: 1.5, poleS: 1.0, lLf: 0.4, lRf: 0.7, lLk: 0.5, lRk: 1.0 };
 const DIVE = { ...P0, pp: 1.35, lean: 0.05, aLf: 2.9, aLo: 0.05, aLb: 0.05, aRf: 2.9, aRb: 0.05, poleT: 1.5, lLf: -0.15, lRf: -0.05, lLk: 0.2, lRk: 0.35, nod: -1.0, cape: 0.8 };
 const BELLY = { ...DIVE, py: -0.62, pp: 1.5, nod: -1.1, lLk: 0.1, lRk: 0.2 };
 const SEAT = { ...P0, py: -0.58, lean: -0.35, lLf: 1.5, lRf: 1.5, lLk: 0.15, lRk: 0.2, lLa: 0.4, lRa: 0.4, aLf: -0.6, aLo: 0.5, aLb: 0.4, aRf: 0.6, aRo: 0.5, poleT: -0.6, nod: 0.25 };
@@ -269,7 +270,7 @@ export function createAnimator(THREE) {
     rotAbout(L[B.shinR], PIVOT[B.shinR], p.lRk, 0, 0);
     rotAbout(L[B.footR], PIVOT[B.footR], p.lRa, 0, 0);
     // pole: absolute tilt (relative to the chest) = poleT forward, poleS sideways; compensate the right arm's bends
-    rotAbout(L[B.pole], PIVOT[B.pole], (p.aRf + p.aRb) - p.poleT, p.poleY, p.aRo * 1 - p.poleS);
+    rotAbout(L[B.pole], PIVOT[B.pole], (p.aRf + p.aRb) + p.poleT, p.poleY, p.aRo + p.poleS);
     L[B.pole].multiply(tmp.makeTranslation(0, -p.grip, 0));
     rotAbout(L[B.cape], PIVOT[B.cape], -Math.min(1.35, 0.12 + st.cape * 0.75 + (p.swim ? 0.3 : 0)) + 0.04 * Math.sin(st.t * 3.1), 0, 0.05 * Math.sin(st.t * 2.3));
     rotAbout(L[B.hoodTip], PIVOT[B.hoodTip], -0.15 - st.hood * 0.6 + 0.05 * Math.sin(st.t * 2.7), 0.08 * Math.sin(st.t * 1.9), 0);

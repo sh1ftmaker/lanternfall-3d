@@ -208,7 +208,7 @@ const HALO_VS = /* glsl */`
   void main(){ vec4 mv = viewMatrix * vec4(uLantern, 1.0); float d = max(-mv.z, 0.1); mv.xyz *= (d - min(0.3, d * 0.5)) / d; mv.xy += position.xy * uSize; vQ = position.xy; gl_Position = projectionMatrix * mv; }`;
 const HALO_FS = /* glsl */`
   uniform vec3 uLanternCol; uniform float uFlicker; varying vec2 vQ;
-  void main(){ float d2 = dot(vQ, vQ); if (d2 > 1.0) discard; vec3 c = uLanternCol * exp(-d2 * 5.0) * (1.0 - d2) * 0.55 * uFlicker; gl_FragColor = vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
+  void main(){ float d2 = dot(vQ, vQ); if (d2 > 1.0) discard; vec3 c = uLanternCol * exp(-d2 * 5.0) * (1.0 - d2) * 0.42 * uFlicker; gl_FragColor = vec4(c, dot(c, vec3(0.2126, 0.7152, 0.0722)));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -248,7 +248,7 @@ export function createCharacter({ THREE, scene, surface, guests, manifest }) {
     uMoonOn: surface.uniforms.uMoonOn, uMoon: surface.uniforms.uMoon, uMoonCol: surface.uniforms.uMoonCol, uFog: surface.uniforms.uFog, uFogD: surface.uniforms.uFogD,
     uAmb: { value: 1.6 }, uRim: { value: 0.55 },
     uLantern: { value: new THREE.Vector3() }, uLanternCol: { value: new THREE.Vector3(1.0, 0.62, 0.28) }, uLanternK: { value: 0.11 }, uFlicker: { value: 1 },
-    uSize: { value: 0.42 }, uGround: { value: new THREE.Vector3() }, uR: { value: 2.6 }, uPoolK: { value: 0.07 }, uShadowK: { value: 0.55 },
+    uSize: { value: 0.3 }, uGround: { value: new THREE.Vector3() }, uR: { value: 2.6 }, uPoolK: { value: 0.07 }, uShadowK: { value: 0.55 },
   };
   const mat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: FS });
   const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.name = 'pf-character'; mesh.matrixAutoUpdate = false;

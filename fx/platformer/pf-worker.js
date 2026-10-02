@@ -58,8 +58,10 @@ self.onmessage = async (e) => {
       const t0 = performance.now();
       sm.loadSurfaces(m.packed, m.count);
       loadMs = performance.now() - t0;
+      const old = ray && ray.P;
       buildRayGrid(m.packed, m.count);
-      post({ type: 'loaded', seq: m.seq, count: m.count, ms: Math.round(loadMs * 10) / 10, rayMs: Math.round((performance.now() - t0 - loadMs) * 10) / 10, memory: sm.memoryBytes });
+      // the previous window's buffer goes back to the main thread for reuse (the current one stays for camera rays)
+      post({ type: 'loaded', seq: m.seq, count: m.count, ms: Math.round(loadMs * 10) / 10, rayMs: Math.round((performance.now() - t0 - loadMs) * 10) / 10, memory: sm.memoryBytes, back: old ? old.buffer : null }, old ? [old.buffer] : []);
     } else if (m.type === 'spawn' || m.type === 'teleport') {
       if (id < 0) id = sm.create(m.x, m.y, m.z);
       sm.setPosition(id, m.x, m.y, m.z); sm.setVelocity(id, 0, 0, 0); sm.setForwardVel(id, 0);
