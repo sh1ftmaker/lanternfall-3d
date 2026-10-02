@@ -22,6 +22,7 @@
 //              the Rose Maze: whole diamond and its centre) and the lake rail
 //   trips      leaders' trips to a goal: completed per minute, mean walked length / straight distance, mean speed made
 //              good (straight / time), abandoned per minute (goal changed while far from it)
+//   (the adaptive level-of-detail budget is off by default so that runs are repeatable; --adapt turns on the Worker's 2 ms)
 //   cost       update() ms per step: mean, p50, p99, max (Node; the Worker runs the same code), local-field pump ms
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { gunzipSync, deflateSync, crc32 } from 'node:zlib';
@@ -94,11 +95,11 @@ const GC = 2, GW = Math.ceil(W * NV.cell / GC), GH = Math.ceil(H * NV.cell / GC)
 function run(scen) {
   const crowd = createCrowd({ nav, manifest, pois, count: COUNT, max: Math.ceil(Math.max(COUNT, 400) * 1.7), seed: 1, sync: true, manualLocal: true, ground });
   if (!crowd.ready) throw new Error('not ready: ' + crowd.debug.error);
-  crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: 2.0, ...(process.env.PARAMS ? JSON.parse(process.env.PARAMS) : {}) });     // the Worker's budget (sim-worker.js)
+  crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: args.includes('--adapt') ? 2.0 : 1e9, ...(process.env.PARAMS ? JSON.parse(process.env.PARAMS) : {}) });     // the Worker's budget (sim-worker.js)
   const dbg = crowd.debug, A = dbg.arrays, ST = dbg.ST, CAP = crowd.count, D = dbg.D, sites = D.P.sites, S = D.P.slots;
   const { X, Y, Z, STT, SITE, SLOT, LEAD, ANI } = A, DSPD = A.WANT || A.DSPD;      // the speed wanted before avoidance (older sims: after)
   const dt = 1 / FPS, steps = Math.round(MIN * 60 * FPS), warm = Math.round(WARM * 60 * FPS), every = Math.round(FPS / 2);
-  const ms = [], pump = [];
+  const ms = [], pump = [], cpu = [];
   // per-agent tracking
   const HIST = 41, hx = new Float32Array(CAP * HIST), hy = new Float32Array(CAP * HIST), hs = new Uint8Array(CAP * HIST);   // 0.5 s samples, 20 s
   let hp = 0, nsamp = 0;
@@ -116,10 +117,10 @@ function run(scen) {
   let t = 0;
   for (let f = 0; f < steps; f++) {
     if (scen === 'fall') { const want = f >= 8 * 60 * FPS && f < 12 * 60 * FPS; if (want !== hushOn) { hushOn = want; crowd.setParams({ hush: want }); } }
-    const t0 = performance.now(); crowd.update(dt, t, focus); const t1 = performance.now(); dbg.pumpLocal(1); const t2 = performance.now();
+    const c0 = process.threadCpuUsage(), t0 = performance.now(); crowd.update(dt, t, focus); const t1 = performance.now(), c1 = process.threadCpuUsage(); dbg.pumpLocal(1); const t2 = performance.now();
     t += dt;
     const measuring = f >= warm;
-    if (measuring) { ms.push(t1 - t0); pump.push(t2 - t1); }
+    if (measuring) { ms.push(t1 - t0); pump.push(t2 - t1); cpu.push((c1.user + c1.system - c0.user - c0.system) / 1000); }
     if (f === warm) { ghost0 = dbg.ev.ghost; repick0 = dbg.ev.repick || 0; }
     // trips: path length every step for leaders
     for (let i = 0; i < CAP; i++) {
@@ -230,7 +231,7 @@ function run(scen) {
     density: { median: q(dM, 0.5), p95: q(d95, 0.5), maxMedian: q(dMax, 0.5), maxMax: Math.max(...dMax), crowdShare: +(acc.crowdShare / n).toFixed(3), crowdShareWalkers: +(acc.crowdWalk / n).toFixed(3) },
     poi, regions,
     trips: { perMin: +(trips.done / mins).toFixed(1), meanLen: +(trips.len / Math.max(1, trips.done)).toFixed(1), detour: +(trips.ratio / Math.max(1, trips.ratioN)).toFixed(3), speedMadeGood: +(trips.straight / Math.max(1e-6, trips.time)).toFixed(3), meanTime: +(trips.time / Math.max(1, trips.done)).toFixed(1), abandonedPerMin: +(trips.abandoned / mins).toFixed(1) },
-    cost: { mean: +mean.toFixed(3), p50: +q(ms, 0.5).toFixed(3), p99: +q(ms, 0.99).toFixed(3), max: +ms[ms.length - 1].toFixed(2), pumpMean: +pm.toFixed(3) },
+    cost: { lowHalf: +(ms.slice(0, ms.length >> 1).reduce((a, b) => a + b, 0) / (ms.length >> 1)).toFixed(3), mean: +mean.toFixed(3), p50: +q(ms, 0.5).toFixed(3), p99: +q(ms, 0.99).toFixed(3), max: +ms[ms.length - 1].toFixed(2), pumpMean: +pm.toFixed(3), cpuMean: +(cpu.reduce((a, b) => a + b, 0) / cpu.length).toFixed(3), cpuP50: +q(cpu, 0.5).toFixed(3) },
     ev: { ...dbg.ev },
   };
   writeFileSync(`${OUT}/${TAG}-${scen}.json`, JSON.stringify(res, null, 1));
@@ -266,5 +267,5 @@ for (const c of crops) {
 }
 if (+opt('minutes', 20) > 0) for (const s of SCEN) {
   const T = Date.now(), r = run(s);
-  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn}/${r.regions.mazecore.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
+  console.log(`${TAG} ${s}: stuck5 ${(r.stuck5 * 100).toFixed(2)}% stuck20 ${(r.stuck20 * 100).toFixed(2)}% over ${r.overlapsOther}/${r.overlapsParty} pass ${r.passesPerMin}/min ghost ${r.ghostPerMin}/min dens med ${r.density.median} p95 ${r.density.p95} max ${r.density.maxMax} crowd ${r.density.crowdShare}/${r.density.crowdShareWalkers} tavern ${r.regions.tavern.entriesPerMin}/min (${r.regions.tavern.meanIn}) court ${r.regions.courtyard.meanIn} maze ${r.regions.maze.meanIn}/${r.regions.mazecore.meanIn} trips ${r.trips.perMin}/min detour ${r.trips.detour} vmg ${r.trips.speedMadeGood} aband ${r.trips.abandonedPerMin}/min giveup ${r.giveUpPerMin}/min cost ${r.cost.mean}/${r.cost.p99} ms cpu ${r.cost.cpuMean}/${r.cost.cpuP50} ms (${((Date.now() - T) / 1000).toFixed(0)} s)`);
 }
