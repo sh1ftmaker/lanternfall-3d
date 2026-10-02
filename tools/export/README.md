@@ -26,3 +26,17 @@ its sign wall open; the East Gate's wing fences run on to the perimeter wall (th
 and its two middle turnstile lanes are one open 3.8 m way. Parts re-baked: core, transit, rosewick, lantern-row,
 brinewatch, guildhollow, frostmere. In `pack.py` the walk grid now counts face-down ground slabs from -0.03 m as floor
 and fills floorless seam cells (see `fill_nav_holes`); the nav format is unchanged.
+
+`park-lands.diff`: the changes four land agents made to the park source on 2026-10-02 for room to move. Rosewick: the
+Rose Maze has 11 cells of 3.07 m (were 13 of 2.6 m; paths 2.7 m) with benches in the secret garden and in dead ends.
+Lantern Row: Market Street's stalls stand 0.7 m nearer the houses (a 5.2 m lane), the Night Market's back-to-back
+rows have a 4 m opening every 17 m, its first row and the maypole moved to clear two pinches. Guildhollow: benches and
+two stalls in the castle bailey, the Training Yard's south tiers shortened. Meridian: the Neon Arcade's cabinet rows
+3.2 m apart with a cross aisle. Brinewatch: the Brine & Barrel's north door has a ramp (its steps closed it to guests),
+doorways are 3.15 m high and the east porch roof higher (the third-person camera), wall sconces replace the hanging
+lanterns, smaller tables stand against the walls. All nine parts re-baked.
+
+`build.py` is the one command now (see its header): `--draft` for geometry work (no Cycles, about a minute for one
+land, three for all), the default tier for final data, `--full` from scratch. The whole park at final quality took
+11 minutes on 2026-10-02 (bake 497 s with two Blenders at once, pack 133 s); the old serial bake and pack took about 26.
+Guest data afterwards: `GUESTS_NPZ=<cache>/npz python tools/guests/build.py`.
