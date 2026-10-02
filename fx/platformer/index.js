@@ -123,11 +123,14 @@ export async function createPlatformer(ctx) {
       let d = ((behind - C.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       if (Math.abs(d) < 2.6) C.yaw += d * Math.min(1, dt * 0.55 * Math.min(1, sp / 6));
     }
-    // collision: the worker casts head -> wanted camera each tick; pull in fast, ease back out
+    // collision: the worker casts head -> wanted camera each tick. A blocked view first lifts the camera (low walls,
+    // railings, benches), then pulls it in fast; both ease back when clear
     const want = C.dist, frac = S.camFrac ?? 1;
-    const lim = frac < 1 ? Math.max(0.9, want * frac - 0.35) : want;
-    C.distNow += (lim - C.distNow) * (1 - Math.exp(-dt * (lim < C.distNow ? 18 : 2.5)));
-    const cp = Math.cos(C.pitch), off = tmpV.set(Math.sin(C.yaw) * cp, Math.sin(C.pitch), Math.cos(C.yaw) * cp);
+    C.lift = Math.min(0.75, Math.max(0, (C.lift || 0) + (frac < 0.85 ? dt * 1.6 : -dt * 0.5)));
+    const lim = frac < 1 ? Math.max(1.4, want * frac - 0.35) : want;
+    C.distNow += (lim - C.distNow) * (1 - Math.exp(-dt * (lim < C.distNow ? 10 : 2.5)));
+    const pitch = Math.min(1.3, C.pitch + C.lift);
+    const cp = Math.cos(pitch), off = tmpV.set(Math.sin(C.yaw) * cp, Math.sin(pitch), Math.cos(C.yaw) * cp);
     camera.position.copy(C.target).addScaledVector(off, C.distNow);
     // stay above the lake surface (the mirror needs the camera above it)
     // (and well above it while swimming: the floating lanterns would fill the view)
@@ -191,7 +194,7 @@ export async function createPlatformer(ctx) {
         const px = last ? last.pos[0] / UNITS : walk.x, py = last ? last.pos[1] / UNITS : walk.z, pz = last ? last.pos[2] / UNITS : -walk.y;
         const camDX = camera.position.x - px, camDZ = camera.position.z - pz, cl = Math.hypot(camDX, camDZ) || 1;
         const water = col.lakeContains(px, pz) ? Math.round(col.waterY * UNITS) : -100000;
-        const cp = Math.cos(C.pitch), cam = [px * UNITS, (py + 1.15) * UNITS, pz * UNITS, (px + Math.sin(C.yaw) * cp * C.dist) * UNITS, (py + 1.15 + Math.sin(C.pitch) * C.dist) * UNITS, (pz + Math.cos(C.yaw) * cp * C.dist) * UNITS];
+        const cpi = Math.min(1.3, C.pitch + (C.lift || 0)), cp = Math.cos(cpi), cam = [px * UNITS, (py + 1.15) * UNITS, pz * UNITS, (px + Math.sin(C.yaw) * cp * C.dist) * UNITS, (py + 1.15 + Math.sin(cpi) * C.dist) * UNITS, (pz + Math.cos(C.yaw) * cp * C.dist) * UNITS];
         const lx = camDX / cl, lz = camDZ / cl;
         let mx = inp.mx, my = inp.my;
         if (inp.world) { const [dx, dz] = inp.world; my = -(dx * lx + dz * lz); mx = dx * lz - dz * lx; }   // forward = -camLook, right = (lz, -lx)
