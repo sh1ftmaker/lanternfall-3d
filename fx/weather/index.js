@@ -70,14 +70,14 @@ export function createWeather(opts) {
     if (!patched) patched = shade.patch();
     const isIdle = idle();
     if (isIdle && wasIdle) return;                                   // Clear and settled: nothing runs, nothing is drawn
-    wasIdle = isIdle;
     if (!isIdle && opts.isReady()) ensureCover();
     const scale = (Q.fx ? Q.fx.scale : 1) * (Q.hd ? 1 : 0.6) * (degrade >= 4 ? 0.5 : degrade >= 2 ? 0.75 : 1);
     if (now.rain > 0 || now.snow > 0) precip ||= createPrecip({ scene, camera, uTime, cover, mobile });
     if (precip) precip.update({ rainAmt: now.rain, snowAmt: now.snow, wind: now.wind, scale, motion: !reduceMotion });
-    shade.update(dt, time, now, { reduceMotion, state, wxFog: FOGC[state] });
-    if (audio) audio.update(dt, time, now, shade);
-    else if (!audioLoading && !isIdle && opts.getSound && opts.getSound()) audioLoading = import('./audio.js').then((m) => { audio = m.createWeatherAudio({ ...opts, cover, getEngine: opts.getSound }); }).catch((e) => console.warn('weather: no sound', e));
+    const quiet = shade.update(dt, time, now, { reduceMotion, state, wxFog: FOGC[state] });
+    const hush = audio ? audio.update(dt, time, now, shade) : true;
+    wasIdle = isIdle && quiet && hush;                              // a flash, the fog colour or the sound still settling
+    if (!audio && !audioLoading && !isIdle && opts.getSound && opts.getSound()) audioLoading = import('./audio.js').then((m) => { audio = m.createWeatherAudio({ ...opts, cover, getEngine: opts.getSound }); }).catch((e) => console.warn('weather: no sound', e));
   }
 
   /* the settings row (a radio group like "Picture") */

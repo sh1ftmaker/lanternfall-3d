@@ -83,7 +83,7 @@ const SKY_CODE = /* glsl */`
 
 export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG, uTime }) {
   const U = { uTime, uWx: { value: new THREE.Vector4() }, uWxSky: { value: new THREE.Vector3(0.012, 0.013, 0.022) }, uWxFlash: { value: new THREE.Vector3() }, uCovOn: { value: 0 } };
-  const done = [];
+  const done = [], orig = new Map();          // material -> its shader before patching (tests: unpatch())
   // fx/surface.js
   {
     const m = surface.material; let fs = m.fragmentShader;
@@ -91,7 +91,7 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
     if (fs.includes(fogLine) && /void main\(\)\{/.test(fs)) {
       fs = fs.replace(/void main\(\)\{/, SURF_DECL + '\n      void main(){');
       fs = fs.replace(fogLine, 'if (uWx.x + uWx.y + uWx.z > 0.0) col = wxSurface(col);       // weather (fx/weather/shade.js)\n        ' + fogLine);
-      Object.assign(m.uniforms, U, cover.uniforms); m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
+      orig.set(m, ['surface', m.fragmentShader]); Object.assign(m.uniforms, U, cover.uniforms); m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
     }
   }
   // the sky dome (app.js), after fx/sky.js has patched it or not
@@ -104,7 +104,7 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
     const tail = /col = mix\(col, hor \* 0\.55, smoothstep\(0\.0, -0\.12, d\.y\)\);/;
     if (!tail.test(fs) || !fs.includes('vec2 cuv')) { sky = { material: null }; return; }
     fs = fs.replace(/void\s+main\s*\(\s*\)\s*\{/, (s) => SKY_DECL + '\n    ' + s).replace(tail, (s) => SKY_CODE + s);
-    Object.assign(m.uniforms, SU); m.fragmentShader = fs; m.needsUpdate = true; done.push('sky');
+    orig.set(m, ['sky', null]); Object.assign(m.uniforms, SU); m.fragmentShader = fs; m.needsUpdate = true; done.push('sky');
   }
   patchSky();
   // fx/water.js (created once the manifest is in: patched in the first update after that, before its first render)
@@ -123,7 +123,7 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
       .replace(skyLine, 'else bg = mix((skyCol(R, uMoon) * 2.0 + skyCol(Ra, uMoon) + skyCol(Rb, uMoon)) * 0.25, uWxSky, uWx.y * 0.85);')
       .replace(glitLine, 'float md = max(dot(R, uMoon), 0.0) * (1.0 - 0.2 * uWx.y);')
       .replace(fogLine, 'if (uWx.z > 0.0) col += vec3(0.30, 0.33, 0.42) * uWx.z * F;\n        ' + fogLine);
-    Object.assign(m.uniforms, WU); m.fragmentShader = fs; m.needsUpdate = true; done.push('water');
+    orig.set(m, ['water', m.fragmentShader]); Object.assign(m.uniforms, WU); m.fragmentShader = fs; m.needsUpdate = true; done.push('water');
     wBase = { wind: m.uniforms.uWind.value, rough: m.uniforms.uRough.value };
   }
 
@@ -147,7 +147,7 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
     U.uCovOn.value = cover.ready ? 1 : 0;
     // lightning: only in Storm, only with motion allowed, at most one every ~8 s
     let fl = 0;
-    if (now.storm > 0.5 && !reduceMotion) {
+    if (now.storm > 0.5) {                     // with Reduce motion the storm still rolls (thunder) but never flashes
       L.next -= dt;
       if (L.next <= 0) {
         L.next = 8 + Math.random() * 14; L.t = 0; L.amp = 0.6 + 0.4 * Math.random(); L.dist = 350 + Math.random() * 1600; L.seq++;
@@ -155,6 +155,7 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
         L.last = { seq: L.seq, time, dist: L.dist, dir: L.dir.clone(), amp: L.amp };
       }
     } else L.next = Math.max(L.next, 4);
+    // (fl stays 0 with Reduce motion: see below)
     if (L.t >= 0) { L.t += dt; fl = reduceMotion ? 0 : flash(L.t) * L.amp * Math.min(1, now.storm); if (L.t > 3) L.t = -1; }
     const fk = fl * Math.min(1, 900 / L.dist);
     // surface
@@ -182,9 +183,12 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
     FOG.copy(fogCol);
     const fx = getFx && getFx();
     if (fx && fx.mist && fx.mist.userData.density) { const u = fx.mist.userData.density; if (u.base === undefined) u.base = u.value; u.value = u.base * now.mist; }
+    return L.t < 0 && fogCol.equals(fogCol0);
   }
   // the lake and the sky are patched as soon as they exist (also in Clear, where the additions are switched off), so
   // the first change of weather does not recompile them
   const patch = () => { if (!water) patchWater(); if (!sky) patchSky(); return !!water; };
-  return { update, patch, done, U, SU, WU, lightning: L };
+  // (the sky is patched by fx/sky.js too, possibly later: only our insertions are taken out of it)
+  const unpatch = (only) => { for (const [m, [n, f]] of orig) if (!only || only === n) { m.fragmentShader = f !== null ? f : m.fragmentShader.replace(SKY_DECL + '\n    ', '').replace(SKY_CODE, ''); m.needsUpdate = true; orig.delete(m); } };
+  return { update, patch, unpatch, done, U, SU, WU, lightning: L };
 }
