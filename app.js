@@ -20,6 +20,7 @@ import { createGuests } from './fx/guests/render.js';      // guests hook (fx/gu
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
 import { createGame } from './fx/game/core.js';            // game hook: things to do in the park (fx/game/, modules in fx/game/<name>/)
 import { createWeather } from './fx/weather/index.js';  // weather hook: Clear / Mist / Rain / Storm / Snow (fx/weather/)
+import { createDayUniforms, DN_DECL, DN_LAMP, DN_SKY } from './fx/game/daynight/uniforms.js';   // game hook: daynight (dusk to night from the clock; all at night values by default)
 import { createCull } from './fx/cull/index.js';          // culling hook: per-camera frustum culling of chunks + forest cells (fx/cull/)
 
 const DATA = 'data/';
@@ -174,19 +175,24 @@ const glCtx = watchContext(renderer, { onRestored() {
 const uTime = { value: 0 };
 // Surface material (fx/surface.js): baked light + per-pixel procedural detail + shadow-mapped moonlight.
 // '#nodetail' and '#noshadow' turn those parts off.
-const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile });
+const DN = createDayUniforms();                                  // game hook: daynight
+const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile, DN });
 const bakedMat = surface.material;
 if (/nodetail/.test(location.hash)) surface.uniforms.uDetail.value = 0;
 const glassMat = new THREE.ShaderMaterial({
-  uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
+  uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, ...DN },
   vertexShader: /* glsl */`
-    attribute vec4 aCol; varying vec4 vCol; varying float vDist;
-    void main(){ vCol = vec4(aCol.rgb * aCol.rgb, aCol.a);
+    attribute vec4 aCol; varying vec4 vCol; varying float vDist; varying vec2 vXZ;
+    void main(){ vCol = vec4(aCol.rgb * aCol.rgb, aCol.a); vXZ = (modelMatrix * vec4(position, 1.0)).xz;
       vec4 mv = modelViewMatrix * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
   fragmentShader: /* glsl */`
-    uniform vec3 uFog; uniform float uFogD; varying vec4 vCol; varying float vDist;
+    uniform vec3 uFog; uniform float uFogD; varying vec4 vCol; varying float vDist; varying vec2 vXZ;
+    ${DN_DECL}
+    ${DN_LAMP}
     void main(){ float f = 1.0 - exp(-vDist * vDist * uFogD);
-      gl_FragColor = vec4(mix(vCol.rgb * 1.4, uFog, f), vCol.a);
+      vec3 gc = vCol.rgb * 1.4;
+      if (uDay > 0.0) { float lk = dnLamp(vXZ); gc = gc * lk + uGlassSky * (1.0 - lk); }      // game hook: daynight (windows light up with the lamps; dark glass shows the sky)
+      gl_FragColor = vec4(mix(gc, uFog, f), vCol.a);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
@@ -196,13 +202,15 @@ const glassMat = new THREE.ShaderMaterial({
 
 /* ───────────────────────── sky ───────────────────────── */
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.ShaderMaterial({
-  uniforms: { uTime, uMoon: { value: MOON } },
+  uniforms: { uTime, uMoon: { value: MOON }, ...DN },
   vertexShader: /* glsl */`
     varying vec3 vDir;
     void main(){ vDir = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 100.0, 1.0); p.z = p.w * 0.99995; gl_Position = p; }`,
   fragmentShader: /* glsl */`
     precision highp float;
     uniform float uTime; uniform vec3 uMoon; varying vec3 vDir;
+    ${DN_DECL}
+    ${DN_SKY}
     float h1(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
     float vnoise(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(mix(h1(i), h1(i + vec3(1,0,0)), f.x), mix(h1(i + vec3(0,1,0)), h1(i + vec3(1,1,0)), f.x), f.y),
@@ -219,22 +227,23 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
     void main(){
       vec3 d = normalize(vDir);
       float h = clamp(d.y, -0.2, 1.0);
-      vec3 zen = vec3(0.007, 0.010, 0.036), mid = vec3(0.030, 0.036, 0.105), hor = vec3(0.075, 0.062, 0.145);
+      vec3 zen = uSkyZen, mid = uSkyMid, hor = uSkyHor;                                   // game hook: daynight (the night values unless the clock says dusk)
       vec3 col = mix(hor, mid, smoothstep(0.0, 0.16, h)); col = mix(col, zen, smoothstep(0.10, 0.62, h));
-      col += vec3(0.060, 0.034, 0.016) * exp(-max(h, 0.0) * 13.0);                      // warm park glow on the horizon
+      col += uSkyGlow * exp(-max(h, 0.0) * 13.0);
+      if (uDay > 0.0) col += dnSunSky(d, h);                      // warm park glow on the horizon
       // moon
       float md = dot(d, uMoon); float ang = acos(clamp(md, -1.0, 1.0));
-      float disc = smoothstep(0.0215, 0.0195, ang);
+      float disc = smoothstep(0.0215, 0.0195, ang) * uMoonAmt;
       vec3 mref = normalize(cross(uMoon, vec3(0.0, 1.0, 0.0))); vec3 mup = cross(mref, uMoon);
       vec2 muv = vec2(dot(d, mref), dot(d, mup)) / 0.021;
       float crater = 0.72 + 0.28 * fbm(vec3(muv * 2.6, 3.0)) - 0.22 * smoothstep(0.5, 0.2, length(muv - vec2(0.25, 0.2)) + 0.25 * vnoise(vec3(muv * 5.0, 1.0)));
       float limb = sqrt(max(1.0 - dot(muv, muv), 0.0));
-      col += vec3(0.56, 0.66, 0.92) * (0.050 * exp(-ang * 9.0) + 0.22 * exp(-ang * 42.0));
+      col += vec3(0.56, 0.66, 0.92) * (0.050 * exp(-ang * 9.0) + 0.22 * exp(-ang * 42.0)) * uMoonAmt;
       // milky way + stars
       vec3 gn = normalize(vec3(0.35, 0.42, -0.84));
       float band = exp(-pow(dot(d, gn) * 3.4, 2.0));
       float dust = fbm(d * 5.5 + 3.0);
-      col += vec3(0.034, 0.036, 0.062) * band * (0.35 + 1.5 * dust * dust) * smoothstep(-0.02, 0.3, h);
+      col += vec3(0.034, 0.036, 0.062) * band * (0.35 + 1.5 * dust * dust) * smoothstep(-0.02, 0.3, h) * uStar;
       float st = stars(d, 150.0, 0.045 + 0.05 * band) + 0.55 * stars(d.zxy, 310.0, 0.07 + 0.09 * band * dust);
       vec3 tint = mix(vec3(1.0, 0.86, 0.72), vec3(0.74, 0.86, 1.0), h1(floor(d * 150.0) + 5.0));
       // clouds: thin moonlit wisps
@@ -242,10 +251,12 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
       float cl = fbm(vec3(cuv * 1.25 + vec2(uTime * 0.004, uTime * 0.0015), 7.0));
       float cloud = smoothstep(0.50, 0.86, cl) * smoothstep(0.02, 0.22, h);
       float veil = 1.0 - 0.8 * cloud;
-      col += tint * st * 1.25 * smoothstep(0.015, 0.14, h) * veil * (1.0 - disc);
+      col += tint * st * 1.25 * smoothstep(0.015, 0.14, h) * veil * (1.0 - disc) * uStar;
       col += cloud * (vec3(0.018, 0.022, 0.046) + vec3(0.11, 0.13, 0.20) * exp(-ang * 3.2));
       col = mix(col, vec3(1.10, 1.14, 1.22) * crater * (0.45 + 0.75 * limb), disc * (1.0 - 0.55 * cloud));
+      if (uDay > 0.0) col += cloud * uSunGlow * 0.5;                                         // game hook: daynight (clouds catch the sunset)
       col = mix(col, hor * 0.55, smoothstep(0.0, -0.12, d.y));
+      if (uDay > 0.0) col += uSkyLift * smoothstep(-0.02, 0.05, d.y);                    // game hook: daynight (a weather deck, which hides all of the above, is lit by the dusk)
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -418,13 +429,15 @@ function buildLanterns(f32, count) {
 function buildForest(u8, list) {
   const f32 = (span) => new Float32Array(u8.buffer, u8.byteOffset + span[0], span[1] / 4);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uMoon: { value: MOON }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 } },
+    uniforms: { uMoon: { value: MOON }, uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, ...DN },
     vertexShader: /* glsl */`
       attribute vec3 aCol; uniform vec3 uMoon; varying vec3 vCol; varying float vDist;
+      ${DN_DECL}
       void main(){ mat4 im = instanceMatrix; vec3 n = normalize(mat3(im) * normal);
         float l = 0.085 + 0.36 * max(dot(n, uMoon), 0.0) + 0.05 * (n.y * 0.5 + 0.5);
         float tone = 0.8 + 0.4 * fract(sin(dot(im[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
         vCol = aCol * l * tone * vec3(0.62, 0.74, 1.0);
+        if (uDay > 0.0) vCol += aCol * tone * (uSunCol * max(dot(n, uSunDir), 0.0) + mix(uAmbGnd, uAmbSky, n.y * 0.5 + 0.5) + uAmbGlow * max(dot(n, normalize(vec3(uSunDir.x, 0.0, uSunDir.z) + vec3(1e-5))), 0.0));   // game hook: daynight
         vec4 mv = modelViewMatrix * im * vec4(position, 1.0); vDist = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: /* glsl */`
       uniform vec3 uFog; uniform float uFogD; varying vec3 vCol; varying float vDist;
@@ -505,7 +518,7 @@ async function load() {
     surface.uniforms.uMoonOn.value = 1;
   }
   initRail(manifest.rail.a, manifest.rail.b); depth.addRail(manifest.rail.a, manifest.rail.b, manifest.rail.top);
-  fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
+  fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, DN, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
   FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
   const exU8 = await fetchBin(ex.file.file);
@@ -950,9 +963,10 @@ const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mo
 const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTime, mobile, reduceMotion, FOG, DATA, fetchBin,
   getPark: () => park, getWater: () => fxWater, getFx: () => FX.fxState(), manifest: () => manifest, getMode: () => mode, getWalk: () => walk, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
 // ── game hook ── (fx/game/core.js + modules): quests, the evening clock, rides; '#no-game'; window.__park.game
+const dayFog = { pre() {}, post() {} };                       // game hook: daynight replaces these (fx/game/daynight/index.js)
 const game = createGame({ THREE, scene, camera, renderer, Q, walk, uTime, mobile, coarse, places, sound, weather, DATA, fetchBin, setMode, gotoPlace, nearestPlace,
   getNav: () => nav, getManifest: () => manifest, getMode: () => mode, getGuests: () => guests, getPlatformer: () => pf, getPark: () => park, getTrains: () => trains, getWater: () => fxWater,
-  getFx: () => FX.fxState(), reduceMotion: () => reduceMotion, isClean: () => clean, setClean, surface, FOG, MOON });
+  getFx: () => FX.fxState(), reduceMotion: () => reduceMotion, isClean: () => clean, setClean, surface, FOG, MOON, DN, dayFog });
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -1042,7 +1056,8 @@ function frame() {
   game.frame(dt, time);                                                       // game hook: after the walker / lamplighter has moved                                                 // platformer hook: leaves it when the mode changes
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
-  weather.update(dt, time);                                 // weather hook: before the lake (rain splats) and the render
+  dayFog.pre(); weather.update(dt, time); dayFog.post();    // game hook: daynight (the dusk fog colour is added after the weather's)
+  // weather hook: before the lake (rain splats) and the render
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
