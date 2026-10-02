@@ -112,6 +112,9 @@ export function createSession(game) {
     else if (game.player.wick && WICK_KEYS.test(e.code) && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   btn.addEventListener('click', () => end('button'));
+  // a place chip during a ride: get off at once and let the chip take the visitor there (the walker moved, the ride kept
+  // the camera, and on getting off the visitor was put back where they boarded)
+  document.addEventListener('click', (e) => { if (cur && e.target.closest && e.target.closest('.chip')) finish('mode'); }, true);
   // app.js re-derives the near plane every frame from the distance to the park's geometry (fx/depth.js), which knows
   // nothing of the boat's canopy or the carousel: over open water it rose to 0.8 m and cut the canopy and its posts.
   // While riding, cap it the way the guests and Wick do (the walk floor of 0.22 m still applies).
