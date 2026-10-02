@@ -238,5 +238,6 @@ export function synthKey(ctx, key, seed = 1) {
   if (kind === 'music') return rmsNorm(music(ctx, arg, seed), -20);
   if (kind === 'emit') return rmsNorm(emitterLoop(ctx, arg, seed), -21);
   if (kind === 'crowd') return rmsNorm(crowd(ctx, +arg, seed), -24);
+  if (kind === 'tone') { const ab = ctx.createBuffer(1, SR, SR), d = ab.getChannelData(0); for (let i = 0; i < SR; i++) d[i] = 0.5 * Math.sin(TAU * Math.round(+arg) * i / SR); return ab; }   // tests: whole cycles per loop
   return oneshot(ctx, arg, seed);
 }

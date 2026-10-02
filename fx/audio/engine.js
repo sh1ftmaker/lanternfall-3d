@@ -1,7 +1,7 @@
 // Lanternfall 3D: the spatial audio engine. Web Audio API directly; the listener is the camera.
 //
 //   createAudio({ THREE, camera, manifest, DATA, Q, getMode, getWalk, getTrains, fx, crowd?, getTour?, getWater?,
-//                 ctx?, elements?, mobile?, stream?, synth? })
+//                 getCrowd?, getGround?, ctx?, elements?, mobile?, stream?, synth?, offline? })
 //   -> { enable(), disable(), enabled, setVolume(v), setMusic(b), setAmbience(b), update(dt, time), play(name, pos?),
 //        setCrowd(crowd), setGround(grid), dispose(), debug }
 //
@@ -40,8 +40,8 @@ function placeholderSpec(lands) {
   const MUSIC_AT = { guildhollow: [-181.8, 28.8, 2], frostmere: [-164.2, 100.1, 2], meridian: [16.5, 145.4, 2], wanderers: [190.8, 67.3, 3],
     brinewatch: [122.8, -24.8, 2.5], 'lantern-row': [26.0, -176.3, 3], rosewick: [-100.8, -62.8, 2] };
   const zones = [];
-  for (const l of lands) zones.push({ id: l.id, land: l.id, bed: { synth: 'bed:' + l.id, gain: 0.5 }, music: MUSIC_AT[l.id] ? { synth: 'music:' + l.id, gain: 0.55, pos: MUSIC_AT[l.id], ref: 14, max: 190 } : undefined });
-  for (const k of ['lake', 'gate', 'gap', 'sky']) zones.push({ id: k, land: k, bed: { synth: 'bed:' + k, gain: 0.5 } });
+  for (const l of lands) zones.push({ id: l.id, land: l.id, bed: { synth: 'bed:' + l.id, gain: 0.6 }, music: MUSIC_AT[l.id] ? { synth: 'music:' + l.id, gain: 0.55, pos: MUSIC_AT[l.id], ref: 14, max: 190 } : undefined });
+  for (const k of ['lake', 'gate', 'gap', 'sky']) zones.push({ id: k, land: k, bed: { synth: 'bed:' + k, gain: 0.6 } });
   const E = (id, kind, pos, ref, max, gain = 0.6, extra = {}) => ({ id, synth: 'emit:' + kind, pos, ref, max, gain, loop: true, ...extra });
   const emitters = [
     E('fountain-rosewick', 'fountain', [-79.6, -72.4, 1], 4, 45), E('fountain-wanderers', 'fountain', [153.4, 57.1, 1], 4, 45),
@@ -90,10 +90,10 @@ export function createAudio(opts) {
   const st = { enabled: false, volume: 0.8, music: true, ambience: true, ready: false, loading: false, specFrom: 'none', bytes: 0, decoded: 0, err: null };
   let ctx = opts.ctx || null, N = null, spec = null, zoner = null, density = null, ground = null;
   const sources = [], assets = new Map(), oneshotPool = [];
-  const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), first: true };
+  const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), pf: new THREE.Vector3(0, 0, -1), w: 0, slowFor: 0, hrtfOk: true, cutUntil: 0, first: true };
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
-  let solo = null, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
+  let solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
   const shellSeen = new Float64Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
@@ -106,10 +106,12 @@ export function createAudio(opts) {
     const lim = ctx.createDynamicsCompressor();        // safety limiter (the built-in has a few ms of look-ahead)
     lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.12;
     N.comp = comp; N.lim = lim;
-    for (const b of [N.amb, N.music, N.fx, N.ui]) b.connect(N.mix);
+    // cut stage after the positional buses: a 30 ms dip hides listener teleports (HRTF kernels jumping) like a film cut
+    N.cut = g(1); N.music.connect(N.cut); N.fx.connect(N.cut);
+    for (const b of [N.amb, N.cut, N.ui]) b.connect(N.mix);
     N.mix.connect(comp); comp.connect(lim); lim.connect(N.out); N.out.connect(ctx.destination);
     // reverb: music + effects feed the send; two generated rooms (one on phones)
-    N.music.connect(N.send); N.fx.connect(N.send);
+    N.cut.connect(N.send);
     N.revS = g(0); N.revL = g(0);
     const cs = ctx.createConvolver(); cs.normalize = false; cs.buffer = S.impulse(ctx, mobile ? 1.2 : 0.9, { bright: 0.85, predelay: 0.006 });
     N.send.connect(N.revS); N.revS.connect(cs); cs.connect(N.mix); N.convS = cs;
@@ -320,9 +322,28 @@ export function createAudio(opts) {
     camera.updateMatrixWorld();
     const e = camera.matrixWorld.elements;
     L.p.set(e[12], e[13], e[14]); L.f.set(-e[8], -e[9], -e[10]).normalize(); L.u.set(e[4], e[5], e[6]).normalize(); L.r.set(e[0], e[1], e[2]).normalize();
-    if (L.first || dt <= 0) { L.prev.copy(L.p); L.v.set(0, 0, 0); L.first = false; }
-    else { tmp.subVectors(L.p, L.prev).divideScalar(dt); if (tmp.length() > 400) tmp.set(0, 0, 0); L.v.lerp(tmp, Math.min(1, dt * 6)); L.prev.copy(L.p); }
+    let jump = false;
+    if (L.first || dt <= 0) { L.prev.copy(L.p); L.pf.copy(L.f); L.v.set(0, 0, 0); L.first = false; snap = true; }
+    else {
+      tmp.subVectors(L.p, L.prev); const step = tmp.length(), turn = Math.acos(clamp(L.f.dot(L.pf), -1, 1));
+      jump = step > 6 + 40 * dt || turn > 0.2;                               // a teleport or a cut (or a whip pan), not motion
+      L.whip = turn / dt > 4;
+      tmp.divideScalar(dt); if (jump || tmp.length() > 400) tmp.set(0, 0, 0); L.v.lerp(tmp, Math.min(1, dt * 6));
+      L.w += ((jump ? 0 : turn / dt) - L.w) * Math.min(1, dt * 8);              // angular speed, rad/s
+      L.prev.copy(L.p); L.pf.copy(L.f);
+    }
+    // Chrome's HRTF panner is clean for steady motion but crackles on fast swings; fast flights use equal-power
+    const fast = L.v.length() > 14 || L.w > 2.2 || L.whip;
+    if (fast) L.slowFor = 0; else L.slowFor += dt;
+    L.hrtfOk = L.slowFor > 1.2;
     const lis = ctx.listener;
+    if (jump && L.modern) {
+      const c = N.cut.gain; c.cancelScheduledValues(now); c.setValueAtTime(c.value, now); c.linearRampToValueAtTime(0, now + 0.025); c.setValueAtTime(0, now + 0.11); c.linearRampToValueAtTime(1, now + 0.2);
+      for (const [prm, v] of [[lis.positionX, L.p.x], [lis.positionY, L.p.y], [lis.positionZ, L.p.z], [lis.forwardX, L.f.x], [lis.forwardY, L.f.y], [lis.forwardZ, L.f.z], [lis.upX, L.u.x], [lis.upY, L.u.y], [lis.upZ, L.u.z]]) { prm.cancelScheduledValues(now); prm.setValueAtTime(v, now + 0.032); }
+      L.cutUntil = now + 0.04; D.cuts = (D.cuts || 0) + 1;
+      return;
+    }
+    if (now < L.cutUntil) return;
     if (L.modern) {
       const t = 0.02;
       lis.positionX.setTargetAtTime(L.p.x, now, t); lis.positionY.setTargetAtTime(L.p.y, now, t); lis.positionZ.setTargetAtTime(L.p.z, now, t);
@@ -377,8 +398,12 @@ export function createAudio(opts) {
     }
     const gx = fx, gy = -fz;
     const w = zoner.weights(gx, gy); D.zone = w; D.focus = [gx, gy]; D.h = h;
-    const A = mode === 'walk' ? 0 : smoothstep(30, 110, h); D.A = A;                  // aerial: the park becomes one far sound
-    const sky = Math.sqrt(smoothstep(22, 120, h)) * (mode === 'walk' ? 0 : 1);
+    // aerial factor: the park becomes one far sound with height. Eased (~1.2 s) so the tour's hops between lands
+    // (the camera rises ~40 m for two seconds) swell the sky a little instead of pumping the whole mix
+    const A0 = mode === 'walk' ? 0 : smoothstep(40, 135, h);
+    aer += (A0 - aer) * (A0 > aer ? Math.min(1, dt / 1.2) : Math.min(1, dt / 0.8)); if (snap || mode === 'walk') aer = A0; snap = false;
+    const A = aer; D.A = A;
+    const sky = smoothstep(0.05, 1, A) ** 0.75;
     const dens = density.at(mode === 'walk' ? L.p.x : gx, mode === 'walk' ? -L.p.z : gy, dt); D.density = dens;
     // music: distance + focus floor, then the loudest ducks the rest
     let gmax = 0;
@@ -421,7 +446,7 @@ export function createAudio(opts) {
       if (!a.stream && a.state !== 'ready') { request(a, -s.target); continue; }
       n++;
       s.chosen = true;
-      if (s.positional) { s.hrtfWant = posRank < HRTF_N || (!!(s.ch && s.ch.hrtf) && posRank < HRTF_N + 2); posRank++; }   // hysteresis: rarely swapped
+      if (s.positional) { s.hrtfWant = L.hrtfOk && (posRank < HRTF_N || (!!(s.ch && s.ch.hrtf) && posRank < HRTF_N + 2)); posRank++; }   // hysteresis: rarely swapped
       if (!s.playing) startVoice(s, now);
     }
     let active = 0;
@@ -438,7 +463,7 @@ export function createAudio(opts) {
     const ch = s.ch, tau = s.kind === 'bed' || s.kind === 'crowd' ? 0.35 : s.kind === 'music' ? 0.25 : 0.1;
     if (now >= s.swapUntil) ch.gain.gain.setTargetAtTime(s.target, now, now - s.started < 0.05 ? 0.15 : tau);
     if (s.positional) {
-      setPannerPos(ch.panner, s.pos.x, s.pos.y, s.pos.z, now);
+      if (now < L.cutUntil) setPannerPos(ch.panner, s.pos.x, s.pos.y, s.pos.z, L.cutUntil - 0.008, 0.001); else setPannerPos(ch.panner, s.pos.x, s.pos.y, s.pos.z, now);
       let cut = airCut(s.d); if (s.kind === 'music' && s.duck !== undefined) cut = Math.min(cut, 1200 + 18000 * s.duck * s.duck);
       ch.filter.frequency.setTargetAtTime(cut, now, 0.15);
       if (s.doppler && s.node && s.node.playbackRate) {     // manual Doppler: f' = f c / (c + v_r), v_r > 0 moving apart
@@ -446,11 +471,11 @@ export function createAudio(opts) {
         const vr = clamp(tmp2.subVectors(s.vel, L.v).dot(tmp), -25, 25);
         s.dop = C / (C + vr); s.node.playbackRate.setTargetAtTime(s.rate * s.dop, now, 0.12);
       }
-      if (s.swapAt && now >= s.swapAt) { ch.hrtf = !ch.hrtf; ch.panner.panningModel = ch.hrtf ? 'HRTF' : 'equalpower'; s.swapAt = 0; s.swapUntil = 0; }
+      if (s.swapAt && now >= s.swapAt) { ch.hrtf = !ch.hrtf; ch.panner.panningModel = ch.hrtf ? 'HRTF' : 'equalpower'; s.swapAt = 0; s.swapUntil = now + 0.03; }   // resume after the kernels settle
       else if (ch.hrtf !== s.hrtfWant && !s.swapAt) {                         // HRTF <-> equal-power: only after a second, with a dip
-        if (!s.hrtfSince) s.hrtfSince = time;
-        else if (time - s.hrtfSince > 1.5 && now >= s.swapUntil) {
-          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.008); s.swapUntil = 1e9; s.swapAt = now + 0.045;
+        if (!s.hrtfSince) s.hrtfSince = time || 1e-6;
+        if (time - s.hrtfSince >= (L.hrtfOk ? 1.5 : 0) && now >= s.swapUntil) {
+          const g = ch.gain.gain; g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + 0.03); s.swapUntil = 1e9; s.swapAt = now + 0.04;
           s.hrtfSince = 0;
         }
       } else s.hrtfSince = 0;
@@ -478,7 +503,7 @@ export function createAudio(opts) {
         const dl = pad.distanceTo(L.p) / C, db_ = tmp.set(burst.x, burst.y, burst.z).distanceTo(L.p) / C;
         const late = time - (tb - FLIGHT);                     // frames can come late: the launch was this long ago
         if (late < dl + 0.5) play('firework_launch', pad, { delay: dl - late, gain: 0.55 });
-        play('firework_burst', tmp.clone(), { delay: (tb - time) + db_, gain: 0.9 });
+        play('firework_burst', tmp.clone(), { delay: (tb - time) + db_, gain: 0.7 });
       }
     }
     // lanterns leave the Spire gallery in waves every 12.5 s (fx/lanterns.js: PERIOD 300 s / 24 waves), each over ~5.6 s
@@ -568,7 +593,12 @@ export function createAudio(opts) {
     voices(dt, now);
     events(dt, now, mode);
     pump();
-    if ((memTimer -= dt) < 0) { memTimer = 2; if (mobile) releaseMemory(); background(); }
+    if ((memTimer -= dt) < 0) {
+      memTimer = 2; if (mobile) releaseMemory(); background();
+      // late wiring: the guests' crowd state and ground grid, when the app provides getters for them
+      if (opts.getCrowd) { const c = opts.getCrowd(); if (c && c.state && !density.live) density.setCrowd(c); }
+      if (opts.getGround && !ground) { const g = opts.getGround(); if (g && g.data) ground = g; }
+    }
   }
   // while suspended keep the fireworks' slot record current so nothing old is played on resume
   const wantTrack = true;
@@ -656,6 +686,8 @@ export function createAudio(opts) {
       voices: () => sources.filter((s) => s.playing && !s.stopAt).map((s) => ({ id: s.id, kind: s.kind, zone: s.zone, db: +db(s.target).toFixed(1), d: s.positional ? +s.d.toFixed(1) : null, hrtf: s.ch && s.ch.hrtf, dop: s.dop ? +s.dop.toFixed(4) : undefined, x: s.pos.x, z: s.pos.z })),
       latency: () => ctx ? { base: ctx.baseLatency, output: ctx.outputLatency, rate: ctx.sampleRate, state: ctx.state } : null,
       loaded: () => { let n = 0, r = 0; for (const a of assets.values()) { n++; if (a.state === 'ready' || a.stream) r++; } return { assets: n, ready: r, bytes: st.bytes, decodedMB: +(st.decoded / 1048576).toFixed(1) }; },
+      // tests: a looped pure tone at a Blender-frame point (clicks show up as broadband energy around it)
+      addTone(pos, freq = 441, gain = 0.5) { const s = addSource('emitter', { id: 'test-tone', synth: 'tone:' + freq, pos, gain, ref: 10, max: 2000, loop: true }, 'test'); return s.id; },
       distGain, play: (n, p, o = {}) => play(n, p, { ...o, force: true }), get solo() { return solo; }, set solo(r) { solo = r ? new RegExp(r) : null; },
     },
   };
