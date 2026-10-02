@@ -59,10 +59,10 @@ export function init(game) {
       if (wrapping && S !== 'none') { L.userData.setFall('thin', now()); thinUntil = now() + 60; }
       else if (S !== 'none' && !(S === 'thin' && !jump)) { L.userData.setFall('none', now()); thinUntil = 0; }
       else if (S === 'thin' && jump && !wrapping) { L.userData.setFall('none', now()); thinUntil = 0; }
-    } else if (S === 'none' || S === 'thin') {
-      if (jump) { const into = t - FALL; if (into < 4) L.userData.setFall('fall', now() - into / FALL_RATE); else L.userData.setFall('classic', now()); }
-      else L.userData.setFall('fall', now());
-    } else if (jump && S === 'fall' && t - FALL >= 4) L.userData.setFall('classic', now());
+    } else if (jump) {                                           // a jump into the fall: to its start = released afresh, later = already full
+      const into = t - FALL;
+      if (into < 4) L.userData.setFall('fall', now() - into / FALL_RATE); else if (S !== 'classic') L.userData.setFall('classic', now());
+    } else if (S === 'none' || S === 'thin') L.userData.setFall('fall', now());
     const f = fireworks(); if (f) f.userData.finale = inFall && t >= END - 6 && game.player.mode !== 'tour';
   }
 
@@ -93,13 +93,14 @@ export function init(game) {
   game.on('camera', applyRun);
   game.on('mode', ({ mode }) => {
     const was = tour; tour = mode === 'tour';
-    if (tour && !was) { if (!(clock.t === FALL || (clock.t >= HUSH_END && clock.t < END))) { wrapping = false; clock.set(FALL + 10); } }
+    if (tour && !was) { hush.stop();  if (!(clock.t === FALL || (clock.t >= HUSH_END && clock.t < END))) { wrapping = false; clock.set(FALL + 10); } }
     applyRun(); track(true); if (game.journal.isOpen) game.journal.refresh();
   });
   game.on('frame', ({ dt }) => {
     clock.rate = rateAt(clock.t);
     if (clock.t >= END) { wrapping = true; clock.set(START); wrapping = false; }
     if (thinUntil && now() > thinUntil) { thinUntil = 0; const L = lanternMesh(); if (L && L.userData.fallState === 'thin') L.userData.setFall('none', now()); }
+    if (hush.on && (clock.t >= HUSH_END || clock.t < FALL)) hush.stop();
     hush.frame(dt);
     story.frame(dt);
     track(false);

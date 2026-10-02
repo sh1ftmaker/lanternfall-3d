@@ -48,6 +48,7 @@ export const PARAMS = {
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 6 / 10 frames
   integrateNear: 25, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
   budget: 0.4,                       // ms per frame: the LOD distances shrink (down to 40 %) while the sim costs more
+  hush: false,                       // game hook: clock: the silent four minutes: walkers inside the lake ring stop and face the Spire
   bias: null,                        // game hook: clock: where the evening draws people: { lands: { id: k }, pts: [{ x, y, r, k }], rail: k } (weights on picking a goal; null = none)
 };
 
@@ -820,6 +821,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     if (dt <= 0) return;
     const st = STT[i], N = D.N, p = params;
     if (st === ST.SETTLE || st === ST.UNSETTLE) { AVX[i] = AVY[i] = 0; settleStep(i, dt); return; }
+    if (p.hush && (st === ST.GO || st === ST.FOLLOW || st === ST.PAUSE || st === ST.WAIT) && X[i] * X[i] + Y[i] * Y[i] < 14884) { DSPD[i] = 0; DYAW[i] = Math.atan2(-Y[i], -X[i]); }   // game hook: clock
     if (st === ST.ACT || st === ST.QUEUE) { faceSlot(i, dt); return; }
     // turn toward the desired heading (rate-limited, smoothed); slow down for sharp turns; never walk backwards
     const diff = wrapA(DYAW[i] - YAW[i]);
