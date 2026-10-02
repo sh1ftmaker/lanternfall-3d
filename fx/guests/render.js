@@ -101,7 +101,7 @@ const BODY_FS = /* glsl */`
   void main(){
     vec3 dx = dFdx(vW), dy = dFdy(vW); vec3 n = normalize(cross(dx, dy));
     vec3 V = normalize(cameraPosition - vW); if (dot(n, V) < 0.0) n = -n;
-    float hemi = 0.62 + 0.38 * n.y;
+    float hemi = 0.7 + 0.3 * n.y;
     vec3 light = vGL * hemi * uAmb + uMoonCol * (max(dot(n, uMoon), 0.0) * vSh * uMoonOn * uMoonK);
     vec3 col = vAlb * light;
     float fr = 1.0 - max(dot(n, V), 0.0); fr = fr * fr * fr;
@@ -230,22 +230,22 @@ const SHADOW_VS = /* glsl */`
     int anim = int(s1.y + 0.5);
     vec3 base = vec3(s0.x, s0.z, -s0.y);
     if (anim == 4) base.y -= 0.44 * g.h;
-    vec2 d = -normalize(uMoon.xz); vec2 pp = vec2(-d.y, d.x);
-    float h = g.h, L = 1.5 * h * length(uMoon.xz) / max(uMoon.y, 0.2);
-    float u0 = -0.6 * h, u1 = L + 0.25 * h, wv = 0.6 * h;
+    vec2 d = -normalize(uMoon.xz); vec2 pp = vec2(d.y, -d.x);       // (d, pp) keeps the quad facing up
+    float h = g.h, L = 1.6 * h * length(uMoon.xz) / max(uMoon.y, 0.2);       // h: height scale (1 = 1.72 m)
+    float u0 = -0.75 * h, u1 = L + 0.25 * h, wv = 0.7 * h;
     float u = mix(u0, u1, position.x * 0.5 + 0.5), v = position.y * wv;
     vec3 w = base + vec3(d.x * u + pp.x * v, 0.03, d.y * u + pp.y * v);
     vL = vec2(u, v) / h; vMoonLen = L / h;
     vec3 gl = groundLight(s0.xy); float lg = dot(gl, vec3(0.3, 0.5, 0.2)), lm = dot(uMoonCol, vec3(0.3, 0.5, 0.2)) * uMoonOn;
     float sh = uMoonOn > 0.5 ? moonShadow(base + vec3(0.0, 1.0, 0.0)) : 0.0;
     float dist = length(w - cameraPosition), fog = exp(-dist * dist * uFogD);
-    vK = vec3(mix(0.2, 0.62, smoothstep(0.015, 0.3, lg)), 0.55 * sh * lm / (lm + lg * 1.5 + 1e-4), anim == 4 ? 0.0 : 1.0) * fog;
+    vK = vec3(mix(0.45, 0.8, smoothstep(0.015, 0.3, lg)), 0.55 * sh * lm / (lm + lg * 1.5 + 1e-4), anim == 4 ? 0.0 : 1.0) * fog;
     gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
   }`;
 const SHADOW_FS = /* glsl */`
   varying vec2 vL; varying vec3 vK; varying float vMoonLen;
   void main(){
-    float b = exp(-dot(vL, vL) * 9.0);                                    // r ~ 0.33 h
+    float b = exp(-dot(vL * vec2(1.0, 1.25), vL * vec2(1.0, 1.25)) * 3.2);   // ~0.55 m soft footprint
     float t = clamp(vL.x / vMoonLen, 0.0, 1.0);
     float ds = length(vec2(vL.x - t * vMoonLen, vL.y));
     float m = smoothstep(0.17, 0.06, ds) * (1.0 - 0.7 * t) * smoothstep(-0.05, 0.12, vL.x) * vK.z;
@@ -336,7 +336,7 @@ export function createGuests(opts) {
     count: mobile ? 400 : 1500,           // stand-in crowd size
     lod0Px: mobile ? 42 : 34,             // projected height (CSS px) above which the full mesh is drawn
     lod1Px: 7.5, impPx: 1.4,              // ... the cheap mesh, the impostor card; below: only glowing items
-    blend: 0.35, amb: 1.0, rim: 0.55, moonK: 1.0, minDot: mobile ? 1.4 : 1.6, density: 1,
+    blend: 0.35, amb: 1.6, rim: 0.6, moonK: 1.0, minDot: mobile ? 1.4 : 1.6, density: 1,
   }, Q.guests || {});
   { const m = /guests=(\d+)/.exec(hash); if (m) cfg.count = +m[1]; }
   Q.guests = cfg;
@@ -400,6 +400,26 @@ export function createGuests(opts) {
   for (const k in M) group.add(M[k]);
   scene.add(group);
   let mainCam = opts.camera || null;
+  // GPU timing of the guest draws (EXT_disjoint_timer_query_webgl2): guests.prof(true), read guests.profResult()
+  const prof = { on: false, gl: null, ext: null, pending: [], acc: {}, frames: 0, cur: null };
+  function profBegin(r, name) {
+    if (!prof.on || prof.cur) return;
+    if (!prof.gl) { prof.gl = r.getContext(); prof.ext = prof.gl.getExtension('EXT_disjoint_timer_query_webgl2'); }
+    if (!prof.ext) return;
+    const q = prof.gl.createQuery(); prof.gl.beginQuery(prof.ext.TIME_ELAPSED_EXT, q); prof.cur = [name, q];
+  }
+  function profEnd() { if (!prof.cur) return; prof.gl.endQuery(prof.ext.TIME_ELAPSED_EXT); prof.pending.push([...prof.cur, prof.frames]); prof.cur = null; }
+  function profPoll() {
+    if (!prof.on || !prof.gl) return;
+    prof.frames++;
+    const gl = prof.gl, dis = gl.getParameter(prof.ext.GPU_DISJOINT_EXT), keep = [];
+    for (const e of prof.pending) {
+      if (!gl.getQueryParameter(e[1], gl.QUERY_RESULT_AVAILABLE)) { keep.push(e); continue; }
+      if (!dis) { const f = (prof.acc[e[2]] ||= {}); f[e[0]] = (f[e[0]] || 0) + gl.getQueryParameter(e[1], gl.QUERY_RESULT) / 1e6; }
+      gl.deleteQuery(e[1]);
+    }
+    prof.pending = keep;
+  }
   // per pass: main view draws everything, the lake mirror only the shore prefix, cube captures nothing
   for (const k in M) {
     const o = M[k], g = o.geometry;
@@ -409,8 +429,10 @@ export function createGuests(opts) {
       if (rt && (rt.isWebGLCubeRenderTarget || rt.isCubeRenderTarget)) n = 0;
       else if (mainCam && cam !== mainCam) n = k === 'shadow' ? 0 : o.userData.nm;
       g.instanceCount = n;
+      if (prof.on && n > 0) profBegin(r, k + (mainCam && cam !== mainCam ? '-mirror' : ''));
       if (k === 'glow') { const h = rt ? (rt.scissorTest ? rt.scissor.w : rt.height) : r.domElement.height; U.uScale.value = h * 0.5 * cam.projectionMatrix.elements[5]; }
     };
+    o.onAfterRender = () => { if (prof.cur) profEnd(); };
   }
 
   // per-guest renderer state
@@ -419,7 +441,7 @@ export function createGuests(opts) {
   const seedOf = new Float32Array(MAXG).fill(-1), hOf = new Float32Array(MAXG), glowOf = new Uint8Array(MAXG);
   const buckets = { lod0: new Float32Array(MAXG), lod1: new Float32Array(MAXG), imp: new Float32Array(MAXG), glow: new Float32Array(MAXG), shadow: new Float32Array(MAXG) };
   const tmp = { lod0: new Float32Array(MAXG), lod1: new Float32Array(MAXG), imp: new Float32Array(MAXG), glow: new Float32Array(MAXG), shadow: new Float32Array(MAXG) };
-  const stats = { count: 0, lod0: 0, lod1: 0, imp: 0, glow: 0, shadow: 0, mirror: 0, cpuMs: 0, nearest: Infinity, tris: 0, lightGrid: false, standIn: false };
+  const stats = { count: 0, lod0: 0, lod1: 0, imp: 0, glow: 0, shadow: 0, mirror: 0, cpuMs: 0, simMs: 0, nearest: Infinity, tris: 0, lightGrid: false, standIn: false };
 
   // lake shore grid: guests here can show up in the lake's mirror (4 m cells, within 14 m of the lake polygon)
   const lake = manifest.lake || [], W0 = manifest.water_z ?? -0.8;
@@ -472,7 +494,9 @@ export function createGuests(opts) {
     camera = mainCam;
     if (!st.visible || !ensureCrowd() || !camera) { for (const k in M) { M[k].visible = false; } return; }
     const time = uTime.value;
-    if (ownCrowd) crowd.update(dt, time, { x: camera.position.x, y: -camera.position.z, z: camera.position.y });
+    profPoll();
+    if (ownCrowd) { const ts = performance.now(); crowd.update(dt, time, { x: camera.position.x, y: -camera.position.z, z: camera.position.y }); stats.simMs = stats.simMs * 0.95 + (performance.now() - ts) * 0.05; }
+    const tr0 = performance.now();
     const n = Math.min(crowd.count, MAXG), S = crowd.state;
     const lim = Math.floor(n * st.density);
     pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm, THREE.WebGLCoordinateSystem, camera.reversedDepth);
@@ -537,7 +561,7 @@ export function createGuests(opts) {
     if (lookDirty) tLook.needsUpdate = true;
     stats.count = lim; stats.nearest = nearest; stats.tris = tris;
     if (opts.depth) opts.depth.cap = nearest < 30 ? Math.max(0.05, 0.5 * nearest) : Infinity;
-    stats.cpuMs = stats.cpuMs * 0.95 + (performance.now() - t0c) * 0.05;
+    stats.cpuMs = stats.cpuMs * 0.95 + (performance.now() - tr0) * 0.05;
     lastT = time;
   }
 
@@ -558,7 +582,13 @@ export function createGuests(opts) {
     tState.dispose(); tLook.dispose(); if (U.tLight.value) U.tLight.value.dispose();
     if (opts.depth) opts.depth.cap = Infinity;
   }
-  return { update, setVisible, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
+  function profResult() {
+    const per = {}; const fr = Object.keys(prof.acc).map(Number).sort((a, b) => a - b).slice(3, -2);
+    for (const f of fr) { const row = prof.acc[f]; let sum = 0; for (const [k, v] of Object.entries(row)) { (per[k] ||= []).push(v); sum += v; } (per.total ||= []).push(sum); }
+    const out = {}; for (const [k, a] of Object.entries(per)) { a.sort((x, y) => x - y); out[k] = +a[a.length >> 1].toFixed(3); }
+    out.frames = fr.length; return out;
+  }
+  return { update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
     get crowd() { return crowd; }, setCrowd(c) { crowd = c; ownCrowd = false; stats.standIn = false; seedOf.fill(-1); cur.fill(255); },
     get visible() { return st.visible; } };
 }
