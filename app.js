@@ -101,7 +101,9 @@ function buildComposer() {
     fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => fxWater && fxWater.mesh, focus: () => camLook, tour: () => mode === 'tour' });
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
-  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...depthTargetOptions(THREE, renderer, size.x, size.y) });
+  const dopt = depthTargetOptions(THREE, renderer, size.x, size.y);
+  if (Q.photo && Q.photo.depth && !dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);   // game hook: photo (focus blur reads depth)
+  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...dopt });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.10, 0.35, 1.8);
@@ -116,6 +118,7 @@ function buildComposer() {
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, 1.14);
         vec2 q = vUv - 0.5; c *= 1.0 - 0.32 * dot(q, q);                              // soft vignette
         gl_FragColor = vec4(c, 1.0); }` }));
+  if (Q.photo && Q.photo.build) Q.photo.build({ renderer, scene, camera, size, mobile }, composer);   // game hook: photo (one last pass while photo mode needs it)
   prof.wrapComposer(composer);
 }
 function disposeComposer() {      // EffectComposer.dispose() frees only its own two targets: the passes hold the rest
@@ -1048,6 +1051,7 @@ function frame() {
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
   // canvas, additive lanterns and beams would be tone-mapped one by one and clip to white. Direct only without HDR targets.
   if (Q.bloom || Q.hdr) { if (bloomPass) bloomPass.enabled = Q.bloom; composer.render(dt); } else { prof.seg('direct'); renderer.render(scene, camera); prof.seg(null); }
+  if (Q.afterRender) Q.afterRender();                      // game hook: photo (reads the drawing buffer before it is presented)
   prof.poll();
   adapt(dt * 1000);
 }
