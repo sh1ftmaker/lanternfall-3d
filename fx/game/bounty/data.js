@@ -34,7 +34,7 @@ export const SPOTS = {
 
 // Eight stamp posts. `wick`: needs the lamplighter's moves (roof, stall roof) or a swim.
 export const STAMPS = {
-  brinewatch: { wx: 109.5, wy: -67.7, z: 3.02, wick: true, clue: 'A roof by the quay at the west end of the wharf. Jump, then grab the edge.' },
+  brinewatch: { wx: 109.5, wy: -67.7, z: 3.02, wick: true, clue: "Climb aboard the boat on the Boatwright's slipway, at the west end of the wharf." },
   guildhollow: { wx: -120, wy: -5, z: 3.27, wick: true, clue: 'Up on a striped stall roof on the Guild Fair Midway.' },
   frostmere: { wx: -149, wy: 101.3, z: 2.98, wick: true, clue: 'On the snowy stall roofs of the Frost Fair.' },
   spire: { wx: 8.5, wy: 0, z: 0.6, wick: true, clue: 'Swim out to the Spire island, as the lamplighter.' },

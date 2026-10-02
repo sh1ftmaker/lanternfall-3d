@@ -38,7 +38,53 @@ Land-local to world: `world = centre + x * (sin phi, -cos phi) + y * (cos phi, s
 Every position below is checked with `game.ground()` by `tools/game/bounty.test.mjs` and by screenshots; roofs and the
 Spire island are off the walk grid on purpose (Wick only).
 
-POSITIONS_TABLE
+| Thing | x | y | z | walk grid |
+|---|---|---|---|---|
+| Bounty Board (use point, in front of the board; board at brinewatch local (2, 9)) | 170.9 | -63 | 0.13 | 0.13 |
+| Reward counter hut (use point) | 165.4 | -70.8 | 0.13 | 0.13 |
+| Strength bell platform, Guild Fair Midway | -131 | 8.9 | 0.5 | 0.42 |
+| Strength bell tower foot (glow climbs from here) | -131 | 10.1 | 0.1 | off grid |
+| Lost & Found counter (front, lakeward), the kiosk in the Wanderers' Hall grounds at wanderers local (33, -8) | 167.3 | 24.5 | 0.11 | 0.11 |
+| Returned-things shelf plank (we add it above the back shelves; first slot, z = plank height) | 171.8 | 29.3 | 3.1 | off grid |
+| Signing Tables letter tray | 165.3 | 87 | 0.2 | 0.2 |
+| Brine & Barrel bar (cider) | 138.2 | -29 | 0.7 | 0.7 |
+| Ferry master's log, tavern deck table | 133.2 | -22 | 0.7 | 0.7 |
+| Cruise dock (jetty) | 76.3 | -41.6 | 0.12 | 0.12 |
+| Frostmere gatekeeper, Snowbound Gate | -107.2 | 99.3 | 0.12 | 0.12 |
+| Shrine of Wishes candle | 48.5 | -157 | 1.95 | 1.95 |
+| Pip's balloon (hangs 2.6 m above the ground) | 50.1 | -141.8 | 0.11 | 0.11 |
+| Pip, foot of the Pavilion of Wings | -123.7 | -124.2 | 0.45 | 0.45 |
+| The busker's bow, Blossom Lane | -154 | -101.8 | 0.11 | 0.11 |
+| The busker, Moonlit Promenade | -113.8 | -124.6 | 0.06 | 0.06 |
+
+Stamp posts (grid: off grid means a roof or the island, Wick only):
+
+| Land | x | y | z | walk grid |
+|---|---|---|---|---|
+| brinewatch: boat on the Boatwright's slipway (Wick) | 109.5 | -67.7 | 3.02 | off grid |
+| wanderers: Hall east nave | 185.9 | 38 | 0.2 | 0.2 |
+| meridian: monorail platform, upper level (grid layer at z 10) | 46.8 | 118.2 | 10 | 0.12 |
+| frostmere: Frost Fair stall roof (Wick) | -149 | 101.3 | 2.98 | off grid |
+| guildhollow: Midway stall roof (Wick) | -120 | -5 | 3.27 | off grid |
+| rosewick: Rose Maze east exit | -113.9 | -146.5 | 0.11 | 0.11 |
+| lantern-row: ghost-story stage | 24.8 | -177.2 | 2.06 | 2.06 |
+| spire: Spire island (swim, Wick) | 8.5 | 0 | 0.6 | off grid |
+
+Lost things:
+
+| Thing | x | y | z | walk grid |
+|---|---|---|---|---|
+| mitten | -101.1 | 69.1 | 0.06 | 0.06 |
+| crown | -93.8 | -152.4 | 0.12 | 0.12 |
+| sword | -214 | 3 | 0.12 | 0.12 |
+| ticket | 35.5 | 114.9 | 0.12 | 0.12 |
+| cap | 107.1 | -32.8 | 0.13 | 0.13 |
+| tag | 39.1 | -153.6 | 0.09 | 0.09 |
+| net | -133.2 | -113.9 | 0.45 | 0.45 |
+| postcard | 284 | 6 | 0.12 | 0.12 |
+
+
+Notes: the Lost & Found in the park's Blender source is a kiosk in the Wanderers' Hall *grounds* (wanderers local (33, -8), lakeward of the Hall), not inside it; the desk and shelf are placed there. Roof posts only show their prompt when you are at the post's height (so a swing from the ground does not count). The Spire post cannot be reached in first person.
 
 ## Events emitted
 

@@ -195,7 +195,7 @@ export function init(game) {
   let cardMode = '', cardAt = null;
   const closeCard = () => { card.hidden = true; cardMode = ''; };
   card.querySelector('.sheet-close').addEventListener('click', closeCard);
-  addEventListener('keydown', (e) => { if (e.code === 'Escape' && !card.hidden) { e.stopPropagation(); e.preventDefault(); closeCard(); } }, true);
+  addEventListener('keydown', (e) => { if (e.code === 'Escape' && !card.hidden) { e.stopImmediatePropagation(); e.preventDefault(); closeCard(); } }, true);
   card.addEventListener('keydown', (e) => e.stopPropagation());
   const openCard = (mode, at) => { cardMode = mode; cardAt = at; card.hidden = false; renderCard(); };
   const nice = (d) => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -301,6 +301,7 @@ export function init(game) {
     o.prop.parts.flag.material.color.copy(c).multiplyScalar(on ? 1 : 0.38); o.glow.set({ color: on ? [c.r * 2.4, c.g * 2.4, c.b * 2.4] : [0.9, 0.7, 0.4] });
   }
   function flourish(p, land) {
+    if (game.reduceMotion) return;
     const c = new T.Color(landHex(land)), m = new T.MeshBasicMaterial({ color: new T.Color(c.r * 2, c.g * 2, c.b * 2), transparent: true, blending: T.AdditiveBlending, depthWrite: false, fog: false, side: T.DoubleSide });
     const ring = new T.Mesh(ringGeo, m); game.v3(p.x, p.y, p.z + 0.1, ring.position); game.scene.add(ring); fx.push({ ring, m, t: 0 });
   }
@@ -364,7 +365,7 @@ export function init(game) {
       const s = STAMPS[land], [x, y] = world(lands, s), p = { x, y, z: s.z ?? game.ground(x, y) ?? 0.1 };
       const prop = art.build('post', { x, y, z: p.z, yaw: (hashStr(land) % 628) / 100, color: landHex(land) }), glow = game.props.glow({ x, y, z: p.z + 2.0, color: [0.9, 0.7, 0.4], size: 1.4 });
       glints.push({ g: glow, base: 0.9, ph: Math.random() * 6, c: null });
-      posts[land] = { prop, glow, p, it: game.interact({ id: 'stamp-' + land, x, y, z: p.z, r: 2.4, label: () => (S.stamps[land] ? 'Look at the stamp' : 'Stamp the passport'), use: () => stamp(land) }) };
+      posts[land] = { prop, glow, p, it: game.interact({ id: 'stamp-' + land, x, y, z: p.z, r: 2.4, label: () => (S.stamps[land] ? 'Look at the stamp' : 'Stamp the passport'), use: () => stamp(land), show: s.wick && land !== 'spire' ? () => Math.abs(game.player.z - p.z) < 1.5 : undefined }) };
       paintPost(land);
     }
   }
