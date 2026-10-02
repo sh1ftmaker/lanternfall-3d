@@ -15,3 +15,9 @@ Saved state (key `lamps`): `lit` [ids "land:k"], `read` [1-5], `done` [land ids]
 Hash tokens: none (`#no-lamps` from the core).
 Test hooks: `game.modules.lamps.lightAllBut(land, id)`, `.lightAll(exceptId)`, `.light(lamp)`, `.byId`, `.railPoints()`.
 Test: `node tools/game/lamps.test.mjs [url]` (puppeteer-core beside it; SHOTS=dir).
+
+## Finishing-wave notes
+- The tavern lamp now stands at the hearth (139.75, -16.1); the note says "where the embers can hear it".
+- The tracker line follows a land only once it has held for 3 s, and only where a dark lamp is within 60 m or you have lit one.
+- The wish prompt has `priority: -1` and is not offered within 3 m (you or the rail spot) of another module's prompt.
+- Saves are filtered field by field on load (`lit`, `read`, `done`, `wishes`, flags).
