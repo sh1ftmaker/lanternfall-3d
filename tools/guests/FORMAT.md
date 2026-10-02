@@ -58,7 +58,7 @@ benches with `land: "meridian"` and `z < 0.3`).
 |---|---|
 | `x`, `y`, `z` | where the first customer stands (walkable, 0.35-1.2 m in front of the counter edge) |
 | `yaw` | facing the counter |
-| `cap` | number of queue places (0.7 m apart) that fit in a straight walkable line behind the first customer, 1..8 |
+| `cap` | number of queue places (0.7 m apart) that fit in a straight walkable line behind the first customer, 1..8; where something stands across the way within 12 m (the far side of a market aisle), the line stops 0.8 m short of the middle of the gap, so a queue never closes a lane |
 | `qyaw` | direction the queue extends from the first customer (away from the counter; = `yaw + PI`) |
 | `qlen` | length of that line in m (`(cap - 1) * 0.7`); queue place `k` is at `(x, y) + k * 0.7 * (cos qyaw, sin qyaw)` |
 | `name` | e.g. "Night Market stall", "Cider stand", "Guild Fair Midway stall", "Snack kiosk", "Arcade cabinet" |

@@ -383,6 +383,34 @@ raw = b"".join(extras); gz = gzip.compress(raw, 9); open(os.path.join(OUT, "extr
 ex_meta["file"] = dict(file="extras.bin", bytes=len(gz), raw=len(raw)); manifest["extras"] = ex_meta
 
 # ───────────── walk-mode navigation grid ─────────────
+def fill_nav_holes(hA, A, occ, inpark, NB, passes=2):
+    """(crowd-geo) Walk-grid cells with no floor sample at all, inside ground walkable on (nearly) all sides at one
+    height, and with nothing in the column from 0.15 m to 1.95 m above that floor: seams between two pavings (the grass
+    verge between the Shore Promenade's kerb and the lands, a downward-facing strip), 0.5 m cracks the sampling missed.
+    They get the mean height of their walkable neighbours. Posts, bollards, rails and anything else standing there keep
+    the cell blocked, and a cell needs 6 of its 8 neighbours walkable within 0.2 m of each other."""
+    Hh, Ww = hA.shape; total = 0
+    for _ in range(passes):
+        P = np.pad(hA.astype(np.int64), 1); K = np.pad(A, 1, constant_values=9999)
+        nbh = np.stack([P[1 + dy:Hh + 1 + dy, 1 + dx:Ww + 1 + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx], -1)
+        nbk = np.stack([K[1 + dy:Hh + 1 + dy, 1 + dx:Ww + 1 + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx], -1)
+        valid = nbh > 0
+        hi = np.where(valid, nbh, 0).max(-1); lo = np.where(valid, nbh, 1 << 30).min(-1)
+        cand = (hA == 0) & inpark & (valid.sum(-1) >= 6) & (hi - lo <= 20)
+        J, I = np.nonzero(cand)
+        if not len(J): break
+        kk = np.where(nbk[J, I] < 9999, nbk[J, I], 0).max(-1)
+        ok = np.ones(len(J), bool)
+        for d in range(1, 14):
+            ok &= occ[J, I, np.clip(kk + d, 0, NB - 1)] == 0
+        J, I, kk = J[ok], I[ok], kk[ok]
+        if not len(J): break
+        v = valid[J, I]
+        hA[J, I] = np.round(np.where(v, nbh[J, I], 0).sum(-1) / v.sum(-1)).astype(hA.dtype); A[J, I] = kk
+        total += len(J)
+    return hA, total
+
+
 def build_nav():
     from scipy import ndimage
     X0, X1, Y0, Y1, CS = -275.0, 345.0, -225.0, 225.0, 0.5
@@ -400,7 +428,9 @@ def build_nav():
             Pb = P[s:s + 200000]; nb = n[s:s + 200000]; nz = N[s:s + 200000, 2]; zc = Pb.mean(1)[:, 2]
             # floors face up (bake.py orients faces to their open side), so slab undersides below ground are not floors;
             # ground-level slabs whose winding ended up facing down (Brinewatch's cobbles) still count
-            up = (nz > 0.72) | ((nz < -0.72) & (zc > 0.02) & (zc < 0.35))
+            # (crowd-geo) from -0.03 m (was 0.02): the terrain's grass at z 0, where the bake turned it face-down under the
+            # edges of pavings (the verge at the shore kerb, the gate forecourt's corners), left floorless seams in the grid
+            up = (nz > 0.72) | ((nz < -0.72) & (zc > -0.03) & (zc < 0.35))
             idx = np.repeat(np.arange(len(Pb)), nb)
             u = rng.random(len(idx), dtype=np.float32); v = rng.random(len(idx), dtype=np.float32)
             fl = u + v > 1; u = np.where(fl, 1 - u, u); v = np.where(fl, 1 - v, v)
@@ -441,6 +471,8 @@ def build_nav():
         z = Z0 + (Kc + (s - 1) / 254.0) * ZB
         return np.where(has, np.round((z + 2.0) * 100).astype(np.int64) + 1, 0).astype(np.uint16)
     hA, hB = height(A), height(B)
+    hA, nfill = fill_nav_holes(hA, A, anyv.reshape(H, W, NB), inpark, NB)
+    log("nav: filled %d floorless seam cells" % nfill)
     planes = []
     for h in (hA, hB):
         dlt = np.diff(h.astype(np.int32), axis=1, prepend=0).astype(np.int32) & 0xFFFF
