@@ -27,7 +27,7 @@ const TAU = Math.PI * 2;
 const PATH = new Int32Array(16);
 const HB = 8191, hb = (x, y) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) & HB;
 const clrByte = (N, x, y) => { const i = ((x - N.x0) / N.cell) | 0, j = ((y - N.y0) / N.cell) | 0; return (i < 0 || j < 0 || i >= N.W || j >= N.H) ? 0 : N.clr[j * N.W + i]; };
-const MIN_D = 0.42, LOCAL_MAX = 512, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
+const MIN_D = 0.42, LOCAL_MAX = 768, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
 // centre of the most open fine cell of a coarse cell
 const fineX = (N, c) => N.x0 + ((N.cfine[c] % N.W) + 0.5) * N.cell, fineY = (N, c) => N.y0 + (((N.cfine[c] / N.W) | 0) + 0.5) * N.cell;
 const wrapA = (a) => { if (a > Math.PI) { a -= TAU; if (a > Math.PI) a = ((a + Math.PI) % TAU) - Math.PI; } else if (a < -Math.PI) { a += TAU; if (a < -Math.PI) a = ((a - Math.PI) % TAU) + Math.PI; } return a; };
@@ -147,16 +147,31 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
     const run = () => { if (disposed) return; try { startSim(prepare(nav, manifest, pois, seed, groundGrid)); } catch (err) { debug.error = String(err && err.stack || err); } };
     if (sync) run(); else setTimeout(run, 0);
   };
-  function trimLocal() {                // forget the least recently used local fields beyond LOCAL_MAX
-    while (local.size > LOCAL_MAX) {
-      let old = -1, ou = 2147483647; for (const [k, v] of local) if (v && LUSE[k] < ou) { ou = LUSE[k]; old = k; }
-      if (old < 0) break; local.delete(old);
-    }
+  // Local fields: computed on request (one per Worker step, nearest requests first is not needed: they are cheap), kept
+  // while used. Pending requests never count against the cache, and a field is only forgotten when it has not been
+  // used for a few seconds (before, a full cache evicted every new field at once and the guests waiting for it stood
+  // still for good).
+  let localN = 0;
+  function trimLocal() {
+    if (localN <= LOCAL_MAX) return;
+    const cut = frameNo - 180, old = [];
+    for (const [k, v] of local) if (v && LUSE[k] < cut) old.push(k);
+    old.sort((a, b) => LUSE[a] - LUSE[b]);
+    for (let q = 0; q < old.length && localN > LOCAL_MAX * 0.85; q++) { local.delete(old[q]); localN--; }
   }
   function requestLocal(site) {
     if (local.has(site)) { LUSE[site] = frameNo; return; }
     local.set(site, null); LUSE[site] = frameNo;
     pendingLocal.push(site);
+  }
+  function pumpOne() {                  // compute the oldest pending field still wanted; false when none was pending
+    while (pendingLocal.length) {
+      const s = pendingLocal.shift();
+      if (!local.has(s) || local.get(s)) continue;
+      if (LUSE[s] < frameNo - 600) { local.delete(s); continue; }       // nobody asked for it for 10 s
+      local.set(s, localField(D.N, D.P, s)); localN++; trimLocal(); return true;
+    }
+    return false;
   }
 
   // ── agents (struct of arrays) ──
@@ -452,7 +467,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       if (isFinite(f.x)) { focus.vx = dt > 0 ? (f.x - focus.x) / dt : 0; focus.vy = dt > 0 ? (f.y - focus.y) / dt : 0; if (Math.abs(focus.vx) > 30 || Math.abs(focus.vy) > 30) focus.vx = focus.vy = 0; focus.x = f.x; focus.y = f.y; focus.z = f.z || 0; }
     }
     // local fields computed on the main thread (no Worker): one per frame
-    if (pendingLocal.length && !manualLocal) { const s = pendingLocal.shift(); if (local.has(s)) { local.set(s, localField(D.N, D.P, s)); trimLocal(); } }
+    if (pendingLocal.length && !manualLocal) pumpOne();
     // population changes
     if (crowd.active < crowd.want && !reduceMotion && (frameNo % 7 === 0)) populate(Math.min(crowd.want, crowd.active + 4), false);
     if (crowd.active > crowd.want + 2 && frameNo % 5 === 0) shrink();
@@ -1012,7 +1027,7 @@ function localCrowd({ nav, manifest, pois = null, count = 1200, seed = 1, reduce
       }
       return { pairs, inside };
     },
-    pumpLocal(n = 1e9) { while (n-- > 0 && pendingLocal.length) { const s = pendingLocal.shift(); if (local.has(s)) { local.set(s, localField(D.N, D.P, s)); trimLocal(); } } },   // tests: the Worker's job, outside the timed frame
+    pumpLocal(n = 1e9) { while (n-- > 0 && pumpOne()); },   // tests: the Worker's job, outside the timed frame
     countStates() { const c = {}; const names = Object.keys(ST); for (let i = 0; i < CAP; i++) { if (STT[i] === ST.OFF) continue; const n = names[STT[i]]; c[n] = (c[n] || 0) + 1; } return c; },
   });
   if (groundP) groundP.then((g) => { groundGrid = g; if (!disposed) start(); }); else start();
