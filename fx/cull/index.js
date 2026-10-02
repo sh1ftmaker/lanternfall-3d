@@ -13,7 +13,8 @@
 //     so the draw-call count stays 1-3 per species while the trees out of view are not submitted. The trees drawn are
 //     exactly the ones drawn before for any forest fraction (Q.forest / adapt()): the buffer is laid out as
 //     [the drawn trees, by cell][the rest], re-laid on setFraction().
-// Occlusion culling was measured and is not done; see tools/culling/README.md for the numbers.
+// Occlusion culling (ideal ID-buffer bound, depth pre-pass, three-mesh-bvh ray casts) was measured and is not done:
+// tools/culling/README.md has the numbers.
 export function createCull({ THREE, renderer, scene, camera, park, on = true }) {
   const st = { on, chunks: 0, visible: 0, tris: 0, forestTris: 0, forestCells: 0, forestCellsVisible: 0, forestDraws: 0, ms: 0, renders: 0 };
   const fr = new THREE.Frustum(), pm = new THREE.Matrix4(), PAD = 0.1;
