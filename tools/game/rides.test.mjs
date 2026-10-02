@@ -136,9 +136,9 @@ async function run(mobile, fp) {
     const dev = Math.max(...poses.map((p) => Math.max(...p.horses.map((h, i) => Math.hypot(h[0] - p.riders[i][0], h[2] - p.riders[i][2]) + Math.abs(h[1] - p.riders[i][1])))));
     check(tag + ' twelve riders, visible', poses[0].n === 12 && poses[0].vis, poses[0].n);
     check(tag + ' riders on their horses (matrix = horse pose, within one frame)', dev < 0.5, +dev.toFixed(3));
-    // they really turn: the angle of rider 0 about the carousel centre advances by 0.24 rad/s, and the height moves
+    // they really turn: the angle of rider 0 about the carousel centre advances by 0.24 rad/s (CAROUSEL_MOTION.spin, either sign), and the height moves
     const ang = (p) => Math.atan2(p.riders[0][2] - 125.18, p.riders[0][0] + 135.04); let da = ang(poses[2]) - ang(poses[0]); da = ((da + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    const dt = poses[2].t - poses[0].t; check(tag + ' riders turn with the carousel', Math.abs(da / dt - 0.24) < 0.03, +(da / dt).toFixed(3));
+    const dt = poses[2].t - poses[0].t; check(tag + ' riders turn with the carousel', Math.abs(Math.abs(da / dt) - 0.24) < 0.03, +(da / dt).toFixed(3));
     check(tag + ' riders rise and fall', new Set(poses.map((p) => p.riders[0][1].toFixed(2))).size === 3, poses.map((p) => +p.riders[0][1].toFixed(2)));
     await ev('__rel()');
     await standAt(car.x, car.y, 0.7, Math.atan2(cy - car.y, cx - car.x));

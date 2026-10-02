@@ -8,7 +8,7 @@ import { buildFigure, figureMaterial, COATS } from './figure.js';
 const SADDLE = 2.62;                // height of the seat above the ground, at the top of a horse's back (measured from the baked mesh; deck at 0.5)
 const BACK = 0.12;                   // the rider sits this far behind the horse's middle (the saddle is aft of the shoulders)
 const OUTER_R = 8.15, INNER_R = 6.25;
-const FACE = 1;                      // +1: the horses face the way the carousel turns (increasing shader angle)
+const FACE = -1;                     // the horses face decreasing shader angle (anticlockwise in the Blender frame), which is the way the carousel turns
 const RIDE_S = 60;
 
 export function createCarousel(game, session, { count }) {

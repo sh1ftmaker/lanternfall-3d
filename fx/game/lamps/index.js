@@ -114,13 +114,14 @@ export function init(game) {
   }
 
   /* ── floaters: small paper lanterns (celebration bursts, the finale, your wish, past wishes hanging over the lake) ── */
-  const FN = 240, fl = { x: new Float32Array(FN), y: new Float32Array(FN), z: new Float32Array(FN), vz: new Float32Array(FN), age: new Float32Array(FN).fill(1e9), life: new Float32Array(FN), s: new Float32Array(FN), seed: new Float32Array(FN), hang: new Uint8Array(FN), delay: new Float32Array(FN) };
+  const FN = 240, fl = { x: new Float32Array(FN), y: new Float32Array(FN), z: new Float32Array(FN), vz: new Float32Array(FN), age: new Float32Array(FN).fill(1e9), life: new Float32Array(FN), s: new Float32Array(FN), seed: new Float32Array(FN), hang: new Uint8Array(FN), delay: new Float32Array(FN), slow: new Uint8Array(FN), dx: new Float32Array(FN), dy: new Float32Array(FN) };
   const flM = mk(new THREE.CylinderGeometry(0.2, 0.15, 0.34, 6).translate(0, 0.17, 0), new THREE.MeshBasicMaterial({ fog: false }), FN); flM.count = 0; let flTop = 0, flBusy = 0;
+  let wishGlow = null;
   const hide = (i) => { tmp.position.set(0, -1e4, 0); tmp.scale.setScalar(0.0001); tmp.updateMatrix(); flM.setMatrixAt(i, tmp.matrix); };
   for (let i = 0; i < FN; i++) hide(i);
-  function floater(x, y, z, { vz = 2, life = 14, s = 1, c = [1.5, 0.9, 0.4], hang = 0, delay = 0 } = {}) {
+  function floater(x, y, z, { vz = 2, life = 14, s = 1, c = [1.5, 0.9, 0.4], hang = 0, delay = 0, slow = 0, dir = [0, 0] } = {}) {
     let i = -1; for (let k = 0; k < FN; k++) if (fl.age[k] >= fl.life[k] && !fl.hang[k]) { i = k; break; } if (i < 0) return -1;
-    fl.x[i] = x; fl.y[i] = y; fl.z[i] = z; fl.vz[i] = vz; fl.age[i] = -delay; fl.life[i] = life; fl.s[i] = s; fl.seed[i] = Math.random() * 100; fl.hang[i] = hang;
+    fl.x[i] = x; fl.y[i] = y; fl.z[i] = z; fl.vz[i] = vz; fl.age[i] = -delay; fl.life[i] = life; fl.s[i] = s; fl.seed[i] = Math.random() * 100; fl.hang[i] = hang; fl.slow[i] = slow; fl.dx[i] = dir[0]; fl.dy[i] = dir[1];
     flM.setColorAt(i, col.setRGB(c[0], c[1], c[2])); flM.instanceColor.needsUpdate = true; flTop = Math.max(flTop, i + 1); flM.count = flTop; flBusy++; return i;
   }
   function stepFloaters(dt, time) {
@@ -131,9 +132,13 @@ export function init(game) {
       let s = fl.s[i], x = fl.x[i], y = fl.y[i], z = fl.z[i];
       if (fl.hang[i]) { z += Math.sin(time * 0.7 + fl.seed[i]) * 0.18; x += Math.sin(time * 0.31 + fl.seed[i] * 2) * 0.4; s *= Math.min(1, a * 0.8); busy++; top = i + 1; }
       else {
-        if (a >= fl.life[i]) { hide(i); continue; } busy++; top = i + 1;
-        const k = a * fl.vz[i]; z = fl.z[i] + k; x += Math.sin(a * 0.5 + fl.seed[i]) * 2.2 + a * 0.35; y += Math.cos(a * 0.4 + fl.seed[i] * 1.7) * 1.6;
-        s *= Math.min(1, a * 1.2) * Math.min(1, (fl.life[i] - a) / 3);
+        if (a >= fl.life[i]) { hide(i); if (fl.slow[i] && wishGlow) wishGlow.set({ visible: false }); continue; } busy++; top = i + 1;
+        // it starts exactly where it was put (the sway is measured from its own starting phase); a slow one (your wish) is
+        // held a moment, lifts gently from the hands and only then picks up speed and drifts out over the water
+        const sl = fl.slow[i], t = sl ? Math.max(0, a - 0.9) : a, k = sl ? fl.vz[i] * t * t / (t + 5) : a * fl.vz[i], sw = sl ? Math.min(1, t / 6) : 1, amp = sl ? 0.4 : 1; z = fl.z[i] + k;
+        x += (Math.sin(a * 0.5 + fl.seed[i]) - Math.sin(fl.seed[i])) * 2.2 * sw * amp + (sl ? fl.dx[i] * 0.9 : 0.35) * t * sw; y += (Math.cos(a * 0.4 + fl.seed[i] * 1.7) - Math.cos(fl.seed[i] * 1.7)) * 1.6 * sw * amp + (sl ? fl.dy[i] * 0.9 * t * sw : 0);
+        s *= (sl ? Math.min(1, 0.35 + a * 1.4) : Math.min(1, a * 1.2)) * Math.min(1, (fl.life[i] - a) / 3);
+        if (sl && wishGlow) wishGlow.set({ x, y, z: z + 0.3, size: 0.85 * s, visible: true });
       }
       tmp.position.set(x, z, -y); tmp.rotation.set(0, a * 0.3 + fl.seed[i], 0); tmp.scale.setScalar(Math.max(s, 0.0001)); tmp.updateMatrix(); flM.setMatrixAt(i, tmp.matrix);
     }
@@ -207,8 +212,10 @@ export function init(game) {
   function release() {
     const text = winp.value.trim().slice(0, 80); if (!text) { winp.focus(); return; }
     const w = { t: Date.now(), text }; st.wishes.unshift(w); st.wishes = st.wishes.slice(0, 12); persist(); closeWish();
-    const p = railAt || game.player, yaw = railAt ? railAt.yaw : game.player.yaw;
-    floater(p.x + Math.cos(yaw) * 1.4, p.y + Math.sin(yaw) * 1.4, (p.z || 0) + 1.1, { vz: 3.2, life: 30, s: 1.5, c: [3, 1.7, 0.6] });
+    // from the visitor's own hands: just in front of them on the lake side, at chest height, with its own glow
+    const me = game.player, yaw = railAt ? railAt.yaw : me.yaw, p = me;
+    wishGlow ||= game.props.glow({ x: 0, y: 0, z: 0, color: [1.1, 0.65, 0.28], size: 1.5, visible: false });
+    floater(me.x + Math.cos(yaw) * 0.75, me.y + Math.sin(yaw) * 0.75, (me.z || 0) + 1.25, { vz: 0.9, life: 70, s: 2.0, c: [2.4, 1.45, 0.55], slow: 1, dir: [Math.cos(yaw), Math.sin(yaw)] });
     game.sound?.('lantern_release', game.v3(p.x, p.y, 1.5)); game.toast('<b>Released.</b> It rises over the water and joins the others.', { ms: 5200, tone: 'good' }); game.emit('lamps:wish', { text, t: w.t }); game.journal.refresh();
   }
   winp.addEventListener('input', () => { wn.textContent = winp.value.length + ' / 80'; });

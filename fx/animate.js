@@ -7,7 +7,7 @@ import * as THREE from 'three';
 // Rosewick land-local (0, 26) in three coordinates (Blender (-135.04, -125.18) -> three (x, -y)).
 export const CAROUSEL = { x: -135.04, z: 125.18, r: 10.65, y0: 0.5 };
 // game hook: rides — the carousel's motion, shared with the riders (fx/game/rides/carousel.js) so they stay locked to the horses
-export const CAROUSEL_MOTION = { spin: 0.24, bob: 0.22, rate: 1.7, phase: 2.4 };        // rad/s, m, rad/s, rad per horse index
+export const CAROUSEL_MOTION = { spin: -0.24, bob: 0.22, rate: 1.7, phase: 2.4 };        // rad/s (negative: the way the horses face, rz = a + 90 deg in the park source), m, rad/s, rad per horse index
 export const horseAngleDeg = (ring, k) => (ring === 'outer' ? k * 22.5 - 0.8 : (k - 0.5) * 30 - 7.9);   // Blender-frame angle of horse k (inner k = n + 0.5)
 
 const GLSL = /* glsl */`

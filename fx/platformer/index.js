@@ -228,7 +228,7 @@ export async function createPlatformer(ctx) {
         if (inp.world) { const [dx, dz] = inp.world; my = -(dx * lx + dz * lz); mx = dx * lz - dz * lx; }   // forward = -camLook, right = (lz, -lx)
         const btn = inp.device === 'test' ? inp : input.take(inp);
         worker.postMessage({ type: 'tick', seq: ++S.posted, water, cam,
-          input: { camLookX: lx, camLookZ: lz, stickX: -mx, stickY: my, a: btn.a ? 1 : 0, b: btn.b ? 1 : 0, z: btn.z ? 1 : 0 } });
+          input: { camLookX: lx, camLookZ: lz, stickX: last && (last.action & ACT_GROUP.mask) === ACT_GROUP.submerged ? mx : -mx, stickY: my, a: btn.a ? 1 : 0, b: btn.b ? 1 : 0, z: btn.z ? 1 : 0 } });      // in water the library turns by the raw stick, with the other sign
         S.pending = true;
       }
       const v = S.latest > 0 ? sample(S.posted - DELAY + S.acc / STEP) : null;
