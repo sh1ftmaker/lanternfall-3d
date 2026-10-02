@@ -1,5 +1,5 @@
-"""Weather sounds for fx/weather/audio.js, all synthesised here (no recordings): rain on paving, rain on the lake, rain
-drumming on a roof heard from under it, wind, and three thunder rolls. Periodic loops (FFT noise, circular impulse
+"""Weather sounds for fx/weather/audio.js: rain on paving, rain on the lake, rain drumming on a roof heard from under
+it and three thunder rolls are synthesised here; the wind is a CC0 recording (wind(), AUDIO_SRC). Periodic loops (FFT noise, circular impulse
 trains and convolution), so they loop without a seam; encoded like the other beds (AAC, 0.5 s pre/post-roll, loop
 points [0.5, 0.5 + length]).
 
@@ -103,8 +103,15 @@ def rain_roof(L):
     return rms_norm(x, -26)
 
 
+SRC = os.environ.get('AUDIO_SRC', '/tmp/claude-1000/-home-zalo/253e908b-4e3c-4d12-a43e-a8b3b88482f6/scratchpad/agents/sound-fix/src')
+
+
 def wind(L):
-    x = sfx.wind(L, 31, lo=50, hi=800, gust=0.85, whistle=0.06)
+    """Storm wind: a recording of heavy, gusting wind in big trees (Freesound 454358 by kyles, CC0; see
+    fx/audio/CREDITS.md), high-passed at 150 Hz (no rumble) and with its gusts made a third smaller, so they swell
+    rather than slam. The weather mixes it in at 0.5 x wind (Storm 1, Rain 0.15, Snow 0.2)."""
+    from lib import io as aio
+    x = aio.wind_loop(os.path.join(SRC, 'fs454358.mp3'), L, hpf=150, lpf=8000, search=(78, 182), tame=0.35)
     return rms_norm(x, -26.3)
 
 
@@ -117,7 +124,7 @@ def thunder(seed, dur=8.0):
         env += a * np.where(t > t0, np.exp(-(t - t0) / tau) * (1 - np.exp(-(t - t0) / 0.03)), 0)
     env += 0.35 * np.exp(-t / 2.6) * (1 - np.exp(-t / 0.4))
     jag = np.abs(filt(rng.normal(size=n), lp(14, 0.7))); jag = 0.55 + jag / jag.max()
-    body = filt(rng.normal(size=n), chain(lp(320, 0.7), lp(480, 0.7), hp(28)))
+    body = filt(rng.normal(size=n), chain(lp(320, 0.7), lp(480, 0.7), hp(40), hp(40)))   # no sub-sonic
     crack = filt(rng.normal(size=n), chain(hp(600), lp(3500))) * np.exp(-t / 0.12) * (t > 0.02) * rng.uniform(0.0, 0.35)
     x = body * env * jag + crack
     x *= np.minimum(1, (dur - t) / 1.5)                                   # fade to silence
@@ -129,6 +136,6 @@ if __name__ == '__main__':
     encode(rain_open(int(16 * SR)), 'rain_open', 64)
     encode(rain_lake(int(16 * SR)), 'rain_lake', 56)
     encode(rain_roof(int(14 * SR)), 'rain_roof', 48)
-    encode(wind(int(18 * SR)), 'wind', 48)
+    encode(wind(int(24 * SR)), 'wind', 48)
     for i, s in enumerate((41, 42, 43)):
         encode(thunder(s), f'thunder_{i + 1}', 48, loop=False)

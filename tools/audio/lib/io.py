@@ -83,6 +83,29 @@ def best_window(x, L, hop=None, avoid_db=8.0):
     return best * b
 
 
+def calm_window(x, L, thresh=10.0):
+    """Start index of the length-L window with the fewest stand-out events: 100 ms frames, third-octave bands above
+    200 Hz; a frame counts when a band carrying > 3 % of the energy is `thresh` dB over that band's median IN THE
+    WINDOW (an event is heard against the loop's own texture). A beep, a shout or a laugh in a loop is heard again
+    every lap; broadband steadiness (best_window) misses them."""
+    from scipy import signal as sg
+    m = x if x.ndim == 1 else x.mean(1)
+    hop = int(.1 * SR)
+    F, T, S = sg.spectrogram(m, SR, nperseg=2048, noverlap=2048 - hop)
+    edges = 200 * 2 ** (np.arange(0, 16) / 3)
+    B = np.array([S[(F >= a) & (F < b)].sum(0) for a, b in zip(edges[:-1], edges[1:])]) + 1e-20
+    Ld, share = 10 * np.log10(B), B / B.sum(0, keepdims=True)
+    nb = L // hop
+    best, bc = 0, 1e18
+    for i in range(0, max(1, Ld.shape[1] - nb), 5):
+        w = Ld[:, i:i + nb]
+        ex = np.where(share[:, i:i + nb] > .03, w - np.median(w, 1, keepdims=True), 0)
+        c = np.sum(np.maximum(0, ex.max(0) - thresh) ** 4)          # the loudest stand-out matters most
+        if c < bc:
+            best, bc = i, c
+    return min(best * hop, max(0, m.size - L))
+
+
 def make_loop(x, L, start=None, xfade=1.5):
     """Periodic loop of L samples from a recording: x[start:start+L], with the following `xfade` seconds
     equal-power crossfaded over the head, so the wrap continues the recording exactly."""
@@ -97,6 +120,42 @@ def make_loop(x, L, start=None, xfade=1.5):
         fi, fo = fi[:, None], fo[:, None]
     out[:C] = seg[:C] * fi + seg[L:L + C] * fo
     return out, start
+
+
+_wind = {}
+
+
+def wind_loop(path, L, hpf=180, lpf=7000, search=None, tame=0.5, xfade=2.0):
+    """A wind recording as a stereo periodic loop of L samples (level not set).
+    The rumble goes first (4th-order high-pass at `hpf`: below ~180 Hz small speakers distort and the master
+    compressor pumps), then the slow level swings are compressed (`tame`: 0 keeps the gusts, 0.5 halves their size
+    in dB, measured on a 1.5 s envelope), so a gust swells instead of jumping. The steadiest stretch inside `search`
+    (seconds) is looped with an equal-power crossfade. A mono recording gets its right channel from a different
+    stretch, which gives a natural, uncorrelated width."""
+    from scipy.ndimage import uniform_filter1d
+    from .dsp import lp
+    key = (path, hpf, lpf, tame)
+    if key not in _wind:
+        x = load(path)
+        mono_src = np.corrcoef(x[:, 0], x[:, 1])[0, 1] > 0.98
+        x = filt(x, chain(hp(hpf), hp(hpf), lp(lpf), lp(lpf * 1.2)))
+        if tame:
+            env = np.sqrt(uniform_filter1d(x.mean(1) ** 2, int(1.5 * SR), mode='nearest') + 1e-12)
+            g = uniform_filter1d((env / np.median(env)) ** (-tame), SR // 2, mode='nearest')
+            x = x * g[:, None]
+        _wind[key] = (x, mono_src)
+    x, mono_src = _wind[key]
+    C = int(xfade * SR)
+    a, b = (0, x.shape[0]) if search is None else (int(search[0] * SR), min(x.shape[0], int(search[1] * SR)))
+    seg = x[a:b]
+    s0 = best_window(seg, L + C)
+    if not mono_src:
+        return make_loop(seg, L, start=s0, xfade=xfade)[0]
+    lft, _ = make_loop(seg[:, 0], L, start=s0, xfade=xfade)
+    # the right ear: the steadiest stretch that does not overlap the left one
+    rest = np.concatenate([seg[:s0, 0], seg[s0 + L + C:, 0]]) if seg.shape[0] > 2 * (L + C) else np.roll(seg[:, 0], L // 2)
+    rgt, _ = make_loop(rest, L, start=best_window(rest, L + C), xfade=xfade)
+    return np.stack([lft, rgt], 1)
 
 
 # ------------------------------------------------------------------ writing / encoding

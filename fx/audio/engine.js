@@ -27,13 +27,13 @@ import * as S from './synth.js';
 import { makeZoner, reverbFor, groundType, makeDensity, smoothstep } from './space.js';
 
 const C = 343;                                   // speed of sound, m/s
-const MAKEUP = 1.33;                             // +2.5 dB: about -16 LUFS at the default volume (0.8) with content at its README levels
+const MAKEUP = 1.19;                             // +1.5 dB: about -17 LUFS at the default volume (0.8); 1 dB under the first mix, which drove the limiter
 const FLIGHT = 1.5;                              // fx/fireworks.js: seconds from launch to burst
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const db = (g) => (g > 1e-6 ? 20 * Math.log10(g) : -120);
 const blend3 = (v) => [v[0], v[2], -v[1]];      // Blender (x, y, z-up) -> three (x, y-up, z)
 const CAROUSEL = { x: -135.04, z: 125.18 };     // three coords (fx/animate.js)
-const ONESHOT_RANGE = { firework_burst: [40, 1400], firework_launch: [25, 600], lantern_release: [30, 300], splash: [12, 260], bell: [45, 900],
+const ONESHOT_RANGE = { firework_burst: [40, 1400], firework_launch: [25, 600], lantern_release: [20, 190], splash: [12, 260], bell: [45, 900],
   owl: [12, 170], laughter: [6, 90], coin: [2, 22] };
 
 // Placeholder content in the audio.json format, `synth` instead of `file` (the engine synthesises those).
@@ -560,7 +560,7 @@ export function createAudio(opts) {
       if (def.schedule === 'quarter') {
         let due = false;
         if (tour >= 0) { const q = 158 / 4, a = Math.floor(lastTour / q), b = Math.floor(tour / q); due = lastTour >= 0 && (b !== a); }
-        else { if (!quarterNext) quarterNext = time + 60; if (time >= quarterNext) { due = true; quarterNext = time + 60; } }
+        else { if (!quarterNext) quarterNext = time + 60; if (time >= quarterNext) { due = true; quarterNext = time + 150 + 60 * Math.random(); } }   // outside the tour: every 2.5-3.5 min, not every minute
         if (due) shoot(s);
         continue;
       }
