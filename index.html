@@ -56,6 +56,7 @@ body.clean .hud,body.clean .pill,body.clean .sheet{opacity:0;pointer-events:none
 body.clean .hud>*{pointer-events:none}
 #btn-show{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 14px);right:max(16px,env(safe-area-inset-right,0px));opacity:.22;transition:opacity .2s}
 #btn-show:hover,#btn-show:focus-visible{opacity:.9}
+#btn-show[hidden]{display:none}
 .bottom{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:flex;flex-direction:column;gap:10px;align-items:stretch}
 .caption{align-self:flex-start;max-width:min(430px,100%);padding:12px 16px 13px;border-left:3px solid var(--land);background:linear-gradient(90deg,rgba(13,11,38,.74),rgba(13,11,38,.5));text-shadow:0 1px 8px rgba(7,6,26,.8);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:0 12px 12px 0;transition:opacity .5s,transform .5s;pointer-events:none}
