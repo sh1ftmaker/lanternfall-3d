@@ -1,0 +1,1989 @@
+{
+ "announce_1": {
+  "bytes": 21107,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/announce_1.m4a",
+  "group": "announce",
+  "loop": null,
+  "lufs": -17.37,
+  "seconds": 3.4,
+  "sources": [],
+  "true_peak": -4.92
+ },
+ "anvil_1": {
+  "bytes": 3013,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/anvil_1.m4a",
+  "group": "anvil",
+  "loop": null,
+  "lufs": -14.72,
+  "seconds": 0.297,
+  "sources": [
+   270588
+  ],
+  "true_peak": -3.99
+ },
+ "anvil_2": {
+  "bytes": 10655,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/anvil_2.m4a",
+  "group": "anvil",
+  "loop": null,
+  "lufs": -20.54,
+  "seconds": 1.6,
+  "sources": [],
+  "true_peak": -3.99
+ },
+ "anvil_3": {
+  "bytes": 10920,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/anvil_3.m4a",
+  "group": "anvil",
+  "loop": null,
+  "lufs": -20.4,
+  "seconds": 1.6,
+  "sources": [],
+  "true_peak": -3.98
+ },
+ "anvil_4": {
+  "bytes": 10896,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/anvil_4.m4a",
+  "group": "anvil",
+  "loop": null,
+  "lufs": -20.35,
+  "seconds": 1.6,
+  "sources": [],
+  "true_peak": -3.84
+ },
+ "bed_brinewatch": {
+  "bytes": 149034,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574).",
+  "file": "beds/bed_brinewatch.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   17.5
+  ],
+  "lufs": -24.0,
+  "seconds": 17.0,
+  "sources": [
+   31574,
+   843246
+  ],
+  "src_wrap": 0.152,
+  "true_peak": -2.99
+ },
+ "bed_frostmere": {
+  "bytes": 164712,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Wind over snow with a faint whistle; the crowd heard muffled (low-passed) behind it.",
+  "file": "beds/bed_frostmere.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   19.5
+  ],
+  "lufs": -24.0,
+  "seconds": 19.0,
+  "sources": [
+   461060
+  ],
+  "src_wrap": 0.097,
+  "true_peak": -9.43
+ },
+ "bed_gap": {
+  "bytes": 165092,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Green gaps and woods: crickets (522299), a breeze in leaves, wind.",
+  "file": "beds/bed_gap.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   19.5
+  ],
+  "lufs": -24.0,
+  "seconds": 19.0,
+  "sources": [
+   522299
+  ],
+  "src_wrap": 0.091,
+  "true_peak": -12.63
+ },
+ "bed_gate": {
+  "bytes": 156606,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), soft air.",
+  "file": "beds/bed_gate.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   18.5
+  ],
+  "lufs": -24.07,
+  "seconds": 18.0,
+  "sources": [
+   741283,
+   848976
+  ],
+  "src_wrap": 0.278,
+  "true_peak": -2.99
+ },
+ "bed_guildhollow": {
+  "bytes": 140238,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Courtyard evening crowd (741283) + torches crackling (483692).",
+  "file": "beds/bed_guildhollow.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   16.5
+  ],
+  "lufs": -24.0,
+  "seconds": 16.0,
+  "sources": [
+   483692,
+   741283
+  ],
+  "src_wrap": 0.271,
+  "true_peak": -9.52
+ },
+ "bed_lake": {
+  "bytes": 148792,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices.",
+  "file": "beds/bed_lake.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   17.5
+  ],
+  "lufs": -24.0,
+  "seconds": 17.0,
+  "sources": [
+   352356
+  ],
+  "src_wrap": 0.046,
+  "true_peak": -4.08
+ },
+ "bed_lantern-row": {
+  "bytes": 140686,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "A bustling night market walked through (752436) with chimes tuned to the park's pentatonic.",
+  "file": "beds/bed_lantern-row.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   16.5
+  ],
+  "lufs": -24.0,
+  "seconds": 16.0,
+  "sources": [
+   752436
+  ],
+  "src_wrap": 0.181,
+  "true_peak": -6.84
+ },
+ "bed_meridian": {
+  "bytes": 140338,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Plaza crowd (848976) and a low electric hum under the neon.",
+  "file": "beds/bed_meridian.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   16.5
+  ],
+  "lufs": -24.0,
+  "seconds": 16.0,
+  "sources": [
+   848976
+  ],
+  "src_wrap": 0.322,
+  "true_peak": -6.63
+ },
+ "bed_rosewick": {
+  "bytes": 156975,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "Gardens: a fountain (618285), crickets (522299) and a soft distant murmur (546676, low-passed).",
+  "file": "beds/bed_rosewick.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   18.5
+  ],
+  "lufs": -24.0,
+  "seconds": 18.0,
+  "sources": [
+   522299,
+   546676,
+   618285
+  ],
+  "src_wrap": 0.051,
+  "true_peak": -12.46
+ },
+ "bed_sky": {
+  "bytes": 172928,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "From the sky: wind and a distant low-passed blend of the whole park.",
+  "file": "beds/bed_sky.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   20.5
+  ],
+  "lufs": -24.0,
+  "seconds": 20.0,
+  "sources": [
+   461060,
+   848976
+  ],
+  "src_wrap": 0.222,
+  "true_peak": -10.41
+ },
+ "bed_wanderers": {
+  "bytes": 156539,
+  "cat": "bed",
+  "channels": 2,
+  "doc": "A big cavernous convention-hall murmur (451600).",
+  "file": "beds/bed_wanderers.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   18.5
+  ],
+  "lufs": -24.0,
+  "seconds": 18.0,
+  "sources": [
+   451600
+  ],
+  "src_wrap": 0.407,
+  "true_peak": -11.99
+ },
+ "brine_shanty": {
+  "bytes": 228218,
+  "cat": "music",
+  "channels": 1,
+  "doc": "The Brine & Barrel: 'Drunken Sailor' (traditional, public domain) arranged in E dorian at 144 bpm:\n    concertina lead with oom-pah chords and a stomping drum, then a fiddle takes the tune. 16 bars.",
+  "file": "music/brine_shanty.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   27.166667
+  ],
+  "lufs": -20.0,
+  "seconds": 26.667,
+  "sources": [],
+  "src_wrap": 0.004,
+  "true_peak": -6.03
+ },
+ "carousel_organ": {
+  "bytes": 343657,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Pavilion of Wings: a band-organ waltz (q = 144) on the full theme: pipe melody doubled by glockenspiel,\n    oom-pah-pah bass and chord pipes, bass drum on 1 and a light snare. 32 bars = 40 s.",
+  "file": "music/carousel_organ.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   40.5
+  ],
+  "lufs": -20.0,
+  "seconds": 40.0,
+  "sources": [],
+  "src_wrap": 0.009,
+  "true_peak": -6.35
+ },
+ "chimes_loop": {
+  "bytes": 44327,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/chimes_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.5
+  ],
+  "lufs": -24.0,
+  "seconds": 13.0,
+  "sources": [],
+  "src_wrap": 0.0,
+  "true_peak": -10.05
+ },
+ "clappers_1": {
+  "bytes": 11020,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/clappers_1.m4a",
+  "group": "clappers",
+  "loop": null,
+  "lufs": -20.79,
+  "seconds": 1.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "clappers_2": {
+  "bytes": 11004,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/clappers_2.m4a",
+  "group": "clappers",
+  "loop": null,
+  "lufs": -21.07,
+  "seconds": 1.6,
+  "sources": [],
+  "true_peak": -2.9
+ },
+ "creak_1": {
+  "bytes": 5822,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/creak_1.m4a",
+  "group": "creak",
+  "loop": null,
+  "lufs": -23.02,
+  "seconds": 0.631,
+  "sources": [],
+  "true_peak": -5.93
+ },
+ "creak_2": {
+  "bytes": 7644,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/creak_2.m4a",
+  "group": "creak",
+  "loop": null,
+  "lufs": -23.71,
+  "seconds": 0.994,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "creak_3": {
+  "bytes": 6993,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/creak_3.m4a",
+  "group": "creak",
+  "loop": null,
+  "lufs": -23.43,
+  "seconds": 0.763,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "creak_4": {
+  "bytes": 6065,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/creak_4.m4a",
+  "group": "creak",
+  "loop": null,
+  "lufs": -22.18,
+  "seconds": 0.651,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "creak_loop": {
+  "bytes": 101916,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/creak_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.5
+  ],
+  "lufs": -24.94,
+  "seconds": 13.0,
+  "sources": [
+   500143
+  ],
+  "src_wrap": 0.323,
+  "true_peak": -2.96
+ },
+ "crowd_dense": {
+  "bytes": 115610,
+  "cat": "bed",
+  "channels": 2,
+  "doc": null,
+  "file": "beds/crowd_dense.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.5
+  ],
+  "lufs": -24.0,
+  "seconds": 13.0,
+  "sources": [
+   546676
+  ],
+  "src_wrap": 1.009,
+  "true_peak": -9.33
+ },
+ "crowd_murmur": {
+  "bytes": 148588,
+  "cat": "bed",
+  "channels": 2,
+  "doc": null,
+  "file": "beds/crowd_murmur.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   17.5
+  ],
+  "lufs": -24.0,
+  "seconds": 17.0,
+  "sources": [
+   848976
+  ],
+  "src_wrap": 0.019,
+  "true_peak": -8.0
+ },
+ "crowd_sparse": {
+  "bytes": 132050,
+  "cat": "bed",
+  "channels": 2,
+  "doc": null,
+  "file": "beds/crowd_sparse.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   15.5
+  ],
+  "lufs": -24.0,
+  "seconds": 15.0,
+  "sources": [
+   461060
+  ],
+  "src_wrap": 0.347,
+  "true_peak": -9.2
+ },
+ "dice_1": {
+  "bytes": 7308,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/dice_1.m4a",
+  "group": "dice",
+  "loop": null,
+  "lufs": -31.19,
+  "seconds": 0.968,
+  "sources": [
+   629982
+  ],
+  "true_peak": -5.86
+ },
+ "dice_2": {
+  "bytes": 9538,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/dice_2.m4a",
+  "group": "dice",
+  "loop": null,
+  "lufs": -26.89,
+  "seconds": 1.3,
+  "sources": [],
+  "true_peak": -5.82
+ },
+ "dice_3": {
+  "bytes": 10449,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/dice_3.m4a",
+  "group": "dice",
+  "loop": null,
+  "lufs": -29.73,
+  "seconds": 1.3,
+  "sources": [],
+  "true_peak": -5.86
+ },
+ "door_01": {
+  "bytes": 23413,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_01.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -12.81,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_02": {
+  "bytes": 23394,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_02.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -16.54,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.96
+ },
+ "door_03": {
+  "bytes": 23285,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_03.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -16.04,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_04": {
+  "bytes": 23573,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_04.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -13.14,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_05": {
+  "bytes": 23411,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_05.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -14.16,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_06": {
+  "bytes": 23491,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_06.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -15.97,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.98
+ },
+ "door_07": {
+  "bytes": 23394,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_07.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -18.84,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.58
+ },
+ "door_08": {
+  "bytes": 23177,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_08.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -15.16,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.93
+ },
+ "door_09": {
+  "bytes": 23352,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_09.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -16.94,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.98
+ },
+ "door_10": {
+  "bytes": 23191,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_10.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -13.1,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_11": {
+  "bytes": 22936,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_11.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -12.99,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "door_12": {
+  "bytes": 23677,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/door_12.m4a",
+  "group": "door",
+  "loop": null,
+  "lufs": -13.66,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "fanfare_1": {
+  "bytes": 38101,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/fanfare_1.m4a",
+  "group": "fanfare",
+  "loop": null,
+  "lufs": -15.84,
+  "seconds": 6.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.99
+ },
+ "firework_burst_1": {
+  "bytes": 26510,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_burst_1.m4a",
+  "group": "firework_burst",
+  "loop": null,
+  "lufs": -22.94,
+  "seconds": 4.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.99
+ },
+ "firework_burst_2": {
+  "bytes": 26500,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_burst_2.m4a",
+  "group": "firework_burst",
+  "loop": null,
+  "lufs": -22.72,
+  "seconds": 4.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.99
+ },
+ "firework_burst_3": {
+  "bytes": 26281,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_burst_3.m4a",
+  "group": "firework_burst",
+  "loop": null,
+  "lufs": -20.67,
+  "seconds": 4.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.99
+ },
+ "firework_burst_4": {
+  "bytes": 26481,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_burst_4.m4a",
+  "group": "firework_burst",
+  "loop": null,
+  "lufs": -25.07,
+  "seconds": 4.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.83
+ },
+ "firework_burst_5": {
+  "bytes": 26454,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_burst_5.m4a",
+  "group": "firework_burst",
+  "loop": null,
+  "lufs": -26.68,
+  "seconds": 4.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.91
+ },
+ "firework_launch_1": {
+  "bytes": 14671,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_launch_1.m4a",
+  "group": "firework_launch",
+  "loop": null,
+  "lufs": -28.84,
+  "seconds": 2.2,
+  "sources": [],
+  "true_peak": -3.99
+ },
+ "firework_launch_2": {
+  "bytes": 14684,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_launch_2.m4a",
+  "group": "firework_launch",
+  "loop": null,
+  "lufs": -28.56,
+  "seconds": 2.2,
+  "sources": [],
+  "true_peak": -3.99
+ },
+ "firework_launch_3": {
+  "bytes": 14666,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/firework_launch_3.m4a",
+  "group": "firework_launch",
+  "loop": null,
+  "lufs": -29.17,
+  "seconds": 2.2,
+  "sources": [],
+  "true_peak": -3.99
+ },
+ "footstep_grass_1": {
+  "bytes": 2809,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_grass_1.m4a",
+  "group": "footstep_grass",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.284,
+  "sources": [
+   521587
+  ],
+  "true_peak": -7.45
+ },
+ "footstep_grass_2": {
+  "bytes": 2404,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_grass_2.m4a",
+  "group": "footstep_grass",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.211,
+  "sources": [
+   521587
+  ],
+  "true_peak": -4.94
+ },
+ "footstep_grass_3": {
+  "bytes": 2497,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_grass_3.m4a",
+  "group": "footstep_grass",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.229,
+  "sources": [
+   521587
+  ],
+  "true_peak": -3.97
+ },
+ "footstep_grass_4": {
+  "bytes": 2522,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_grass_4.m4a",
+  "group": "footstep_grass",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.234,
+  "sources": [
+   521587
+  ],
+  "true_peak": -6.6
+ },
+ "footstep_grass_5": {
+  "bytes": 2554,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_grass_5.m4a",
+  "group": "footstep_grass",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.224,
+  "sources": [
+   521587
+  ],
+  "true_peak": -5.12
+ },
+ "footstep_gravel_1": {
+  "bytes": 2919,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_gravel_1.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "sources": [],
+  "true_peak": -8.75
+ },
+ "footstep_gravel_2": {
+  "bytes": 2800,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_gravel_2.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "sources": [],
+  "true_peak": -9.65
+ },
+ "footstep_gravel_3": {
+  "bytes": 2700,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_gravel_3.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "sources": [],
+  "true_peak": -10.16
+ },
+ "footstep_gravel_4": {
+  "bytes": 2855,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_gravel_4.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "sources": [],
+  "true_peak": -7.43
+ },
+ "footstep_gravel_5": {
+  "bytes": 2840,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_gravel_5.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "sources": [],
+  "true_peak": -9.05
+ },
+ "footstep_snow_1": {
+  "bytes": 4149,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_snow_1.m4a",
+  "group": "footstep_snow",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.496,
+  "sources": [
+   613849
+  ],
+  "true_peak": -8.69
+ },
+ "footstep_snow_2": {
+  "bytes": 3243,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_snow_2.m4a",
+  "group": "footstep_snow",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.346,
+  "sources": [
+   613849
+  ],
+  "true_peak": -8.5
+ },
+ "footstep_snow_3": {
+  "bytes": 3404,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_snow_3.m4a",
+  "group": "footstep_snow",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.382,
+  "sources": [
+   613849
+  ],
+  "true_peak": -8.9
+ },
+ "footstep_snow_4": {
+  "bytes": 3508,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_snow_4.m4a",
+  "group": "footstep_snow",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.382,
+  "sources": [
+   613849
+  ],
+  "true_peak": -9.84
+ },
+ "footstep_snow_5": {
+  "bytes": 3809,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_snow_5.m4a",
+  "group": "footstep_snow",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.427,
+  "sources": [
+   613849
+  ],
+  "true_peak": -10.04
+ },
+ "footstep_stone_1": {
+  "bytes": 1806,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_stone_1.m4a",
+  "group": "footstep_stone",
+  "loop": null,
+  "lufs": -27.02,
+  "seconds": 0.108,
+  "sources": [
+   521590
+  ],
+  "true_peak": -2.99
+ },
+ "footstep_stone_2": {
+  "bytes": 2189,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_stone_2.m4a",
+  "group": "footstep_stone",
+  "loop": null,
+  "lufs": -28.0,
+  "seconds": 0.193,
+  "sources": [
+   521590
+  ],
+  "true_peak": -2.98
+ },
+ "footstep_stone_3": {
+  "bytes": 1718,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_stone_3.m4a",
+  "group": "footstep_stone",
+  "loop": null,
+  "lufs": -27.34,
+  "seconds": 0.104,
+  "sources": [
+   521590
+  ],
+  "true_peak": -2.98
+ },
+ "footstep_stone_4": {
+  "bytes": 2359,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_stone_4.m4a",
+  "group": "footstep_stone",
+  "loop": null,
+  "lufs": -30.2,
+  "seconds": 0.196,
+  "sources": [
+   521590
+  ],
+  "true_peak": -2.99
+ },
+ "footstep_stone_5": {
+  "bytes": 2196,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_stone_5.m4a",
+  "group": "footstep_stone",
+  "loop": null,
+  "lufs": -29.49,
+  "seconds": 0.183,
+  "sources": [
+   521590
+  ],
+  "true_peak": -2.98
+ },
+ "footstep_wood_1": {
+  "bytes": 2734,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_wood_1.m4a",
+  "group": "footstep_wood",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.267,
+  "sources": [
+   543685
+  ],
+  "true_peak": -3.64
+ },
+ "footstep_wood_2": {
+  "bytes": 3128,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_wood_2.m4a",
+  "group": "footstep_wood",
+  "loop": null,
+  "lufs": -29.64,
+  "seconds": 0.33,
+  "sources": [
+   543685
+  ],
+  "true_peak": -2.99
+ },
+ "footstep_wood_3": {
+  "bytes": 1782,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_wood_3.m4a",
+  "group": "footstep_wood",
+  "loop": null,
+  "lufs": -28.12,
+  "seconds": 0.114,
+  "sources": [
+   543685
+  ],
+  "true_peak": -2.99
+ },
+ "footstep_wood_4": {
+  "bytes": 2708,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_wood_4.m4a",
+  "group": "footstep_wood",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.261,
+  "sources": [
+   543685
+  ],
+  "true_peak": -4.14
+ },
+ "footstep_wood_5": {
+  "bytes": 2639,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/footstep_wood_5.m4a",
+  "group": "footstep_wood",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.243,
+  "sources": [
+   543685
+  ],
+  "true_peak": -4.35
+ },
+ "fountain_loop": {
+  "bytes": 87683,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/fountain_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   11.5
+  ],
+  "lufs": -24.0,
+  "seconds": 11.0,
+  "sources": [
+   618285
+  ],
+  "src_wrap": 0.338,
+  "true_peak": -12.31
+ },
+ "frost_court": {
+  "bytes": 228380,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Ice and glass: celesta + glass harmonica on the theme in B minor colours, a hushed low string bed,\n    rare high glock sparkles. 72 bpm, 8 bars.",
+  "file": "music/frost_court.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   27.166667
+  ],
+  "lufs": -20.0,
+  "seconds": 26.667,
+  "sources": [],
+  "src_wrap": 0.25,
+  "true_peak": -6.6
+ },
+ "frost_drum": {
+  "bytes": 105106,
+  "cat": "emit",
+  "channels": 1,
+  "doc": "The Frost Fair's stern drum: a field-drum march cadence with bass drum, 72 bpm, 4 bars (13.3 s).",
+  "file": "fx/frost_drum.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.833333
+  ],
+  "lufs": -24.01,
+  "seconds": 13.333,
+  "sources": [],
+  "src_wrap": 0.001,
+  "true_peak": -2.89
+ },
+ "gate_welcome": {
+  "bytes": 301199,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Arrival: celesta + harp theme over warm strings, flute takes the B half; little glock 'lamp-lighting'\n    flourishes at phrase ends. 108 bpm, 16 bars.",
+  "file": "music/gate_welcome.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   36.055556
+  ],
+  "lufs": -20.0,
+  "seconds": 35.556,
+  "sources": [],
+  "src_wrap": 0.06,
+  "true_peak": -6.24
+ },
+ "ghost_hush": {
+  "bytes": 108923,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/ghost_hush.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   14.5
+  ],
+  "lufs": -24.0,
+  "seconds": 14.0,
+  "sources": [],
+  "src_wrap": 0.126,
+  "true_peak": -7.35
+ },
+ "guild_tavern": {
+  "bytes": 301123,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Tavern jig, 6/8 at dotted-quarter 108: hurdy-gurdy then recorder on the theme, lute 'bass-chord' strums,\n    a soft hurdy drone (D/A) and a frame drum. Grid unit = eighth note (324 per minute), 32 bars.",
+  "file": "music/guild_tavern.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   36.055556
+  ],
+  "lufs": -20.0,
+  "seconds": 35.556,
+  "sources": [],
+  "src_wrap": 0.026,
+  "true_peak": -6.68
+ },
+ "ice_chimes_1": {
+  "bytes": 25720,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ice_chimes_1.m4a",
+  "group": "ice_chimes",
+  "loop": null,
+  "lufs": -15.38,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -3.94
+ },
+ "ice_chimes_2": {
+  "bytes": 25895,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ice_chimes_2.m4a",
+  "group": "ice_chimes",
+  "loop": null,
+  "lufs": -15.21,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -3.98
+ },
+ "ice_chimes_3": {
+  "bytes": 25759,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ice_chimes_3.m4a",
+  "group": "ice_chimes",
+  "loop": null,
+  "lufs": -17.7,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -3.99
+ },
+ "kettle_1": {
+  "bytes": 25794,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/kettle_1.m4a",
+  "group": "kettle",
+  "loop": null,
+  "lufs": -20.8,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "kettle_2": {
+  "bytes": 25773,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/kettle_2.m4a",
+  "group": "kettle",
+  "loop": null,
+  "lufs": -21.38,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -5.94
+ },
+ "lake_hush": {
+  "bytes": 271724,
+  "cat": "music",
+  "channels": 1,
+  "doc": "The quiet heart: a wordless choir breathing through slow chords (no beat), a glass harmonica placing a\n    few theme notes far apart. 60 bpm grid, 8 chords x 4 s = 32 s.",
+  "file": "music/lake_hush.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   32.5
+  ],
+  "lufs": -20.0,
+  "seconds": 32.0,
+  "sources": [],
+  "src_wrap": 0.383,
+  "true_peak": -5.74
+ },
+ "lamplighter_1": {
+  "bytes": 16596,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lamplighter_1.m4a",
+  "group": "lamplighter",
+  "loop": null,
+  "lufs": -25.7,
+  "seconds": 2.4,
+  "sources": [],
+  "true_peak": -5.87
+ },
+ "lamplighter_2": {
+  "bytes": 16631,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lamplighter_2.m4a",
+  "group": "lamplighter",
+  "loop": null,
+  "lufs": -26.03,
+  "seconds": 2.4,
+  "sources": [],
+  "true_peak": -5.83
+ },
+ "lamplighter_3": {
+  "bytes": 16744,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lamplighter_3.m4a",
+  "group": "lamplighter",
+  "loop": null,
+  "lufs": -26.0,
+  "seconds": 2.4,
+  "sources": [],
+  "true_peak": -5.9
+ },
+ "lantern_market": {
+  "bytes": 228623,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Night market: koto on the theme (pentatonic as written) with grace notes, shamisen pulse on open fifths,\n    shakuhachi breathing long notes, a low bowed drone. 72 bpm, 8 bars (no Western chords).",
+  "file": "music/lantern_market.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   27.166667
+  ],
+  "lufs": -20.0,
+  "seconds": 26.667,
+  "sources": [],
+  "src_wrap": 0.552,
+  "true_peak": -4.14
+ },
+ "lantern_release_1": {
+  "bytes": 22915,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lantern_release_1.m4a",
+  "group": "lantern_release",
+  "loop": null,
+  "lufs": -19.63,
+  "seconds": 3.5,
+  "sources": [],
+  "true_peak": -5.95
+ },
+ "lantern_release_2": {
+  "bytes": 22769,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lantern_release_2.m4a",
+  "group": "lantern_release",
+  "loop": null,
+  "lufs": -19.85,
+  "seconds": 3.5,
+  "sources": [],
+  "true_peak": -5.84
+ },
+ "lantern_release_3": {
+  "bytes": 22650,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/lantern_release_3.m4a",
+  "group": "lantern_release",
+  "loop": null,
+  "lufs": -18.99,
+  "seconds": 3.5,
+  "sources": [],
+  "true_peak": -5.92
+ },
+ "meridian_signal": {
+  "bytes": 303508,
+  "cat": "music",
+  "channels": 1,
+  "doc": "Signal Plaza: warm synthwave at 108 bpm, B minor (Bm G D A), pulsing octave bass, gated pad, 16th arp,\n    drum machine; the theme enters on a soft saw lead in bars 5-12.",
+  "file": "music/meridian_signal.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   36.055556
+  ],
+  "lufs": -20.0,
+  "seconds": 35.556,
+  "sources": [],
+  "src_wrap": 1.07,
+  "true_peak": -4.84
+ },
+ "neon_hum": {
+  "bytes": 65893,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/neon_hum.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   8.5
+  ],
+  "lufs": -24.0,
+  "seconds": 8.0,
+  "sources": [],
+  "src_wrap": 0.213,
+  "true_peak": -17.17
+ },
+ "nightingale_1": {
+  "bytes": 19124,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_1.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.67,
+  "seconds": 2.922,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.99
+ },
+ "nightingale_2": {
+  "bytes": 22791,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_2.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -25.08,
+  "seconds": 3.475,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.98
+ },
+ "nightingale_3": {
+  "bytes": 9242,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_3.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -27.34,
+  "seconds": 1.316,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.97
+ },
+ "nightingale_4": {
+  "bytes": 15836,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_4.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.4,
+  "seconds": 2.362,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.82
+ },
+ "nightingale_5": {
+  "bytes": 11043,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_5.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -18.07,
+  "seconds": 1.604,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.99
+ },
+ "nightingale_6": {
+  "bytes": 19281,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/nightingale_6.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.81,
+  "seconds": 2.928,
+  "sources": [
+   521035
+  ],
+  "true_peak": -7.97
+ },
+ "oar_1": {
+  "bytes": 8453,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/oar_1.m4a",
+  "group": "oar",
+  "loop": null,
+  "lufs": -20.74,
+  "seconds": 1.4,
+  "sources": [],
+  "true_peak": -5.97
+ },
+ "oar_2": {
+  "bytes": 8195,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/oar_2.m4a",
+  "group": "oar",
+  "loop": null,
+  "lufs": -20.26,
+  "seconds": 1.4,
+  "sources": [],
+  "true_peak": -5.99
+ },
+ "oar_3": {
+  "bytes": 8552,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/oar_3.m4a",
+  "group": "oar",
+  "loop": null,
+  "lufs": -19.49,
+  "seconds": 1.4,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "owl_1": {
+  "bytes": 19628,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/owl_1.m4a",
+  "group": "owl",
+  "loop": null,
+  "lufs": -15.33,
+  "seconds": 3.002,
+  "sources": [
+   465697
+  ],
+  "src_wrap": null,
+  "true_peak": -3.99
+ },
+ "owl_2": {
+  "bytes": 6133,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/owl_2.m4a",
+  "group": "owl",
+  "loop": null,
+  "lufs": -15.63,
+  "seconds": 0.833,
+  "sources": [
+   745208
+  ],
+  "src_wrap": null,
+  "true_peak": -3.99
+ },
+ "owl_3": {
+  "bytes": 19342,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/owl_3.m4a",
+  "group": "owl",
+  "loop": null,
+  "lufs": -14.63,
+  "seconds": 2.953,
+  "sources": [
+   745208
+  ],
+  "src_wrap": null,
+  "true_peak": -3.99
+ },
+ "rosewick_waltz": {
+  "bytes": 228410,
+  "cat": "music",
+  "channels": 1,
+  "doc": "The Moonlit Promenade: a slow string waltz (3/4, q = 108) on the theme; violins lead, violas on 2 and 3,\n    cello on 1, harp rolls at phrase starts. 16 bars.",
+  "file": "music/rosewick_waltz.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   27.166667
+  ],
+  "lufs": -20.0,
+  "seconds": 26.667,
+  "sources": [],
+  "src_wrap": 0.327,
+  "true_peak": -7.13
+ },
+ "ship_bell_1": {
+  "bytes": 25969,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ship_bell_1.m4a",
+  "group": "ship_bell",
+  "loop": null,
+  "lufs": -13.8,
+  "seconds": 4.0,
+  "sources": [],
+  "true_peak": -2.94
+ },
+ "shrine_bell_1": {
+  "bytes": 39284,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/shrine_bell_1.m4a",
+  "group": "shrine_bell",
+  "loop": null,
+  "lufs": -18.04,
+  "seconds": 6.0,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "sizzle_loop": {
+  "bytes": 73366,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/sizzle_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   9.5
+  ],
+  "lufs": -24.05,
+  "seconds": 9.0,
+  "sources": [
+   783813
+  ],
+  "src_wrap": 0.253,
+  "true_peak": -2.69
+ },
+ "skate_1": {
+  "bytes": 7007,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/skate_1.m4a",
+  "group": "skate",
+  "loop": null,
+  "lufs": -21.23,
+  "seconds": 0.944,
+  "sources": [
+   593623
+  ],
+  "true_peak": -5.99
+ },
+ "skate_2": {
+  "bytes": 9826,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/skate_2.m4a",
+  "group": "skate",
+  "loop": null,
+  "lufs": -23.5,
+  "seconds": 1.406,
+  "sources": [
+   593623
+  ],
+  "true_peak": -5.8
+ },
+ "skate_3": {
+  "bytes": 6841,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/skate_3.m4a",
+  "group": "skate",
+  "loop": null,
+  "lufs": -20.92,
+  "seconds": 0.929,
+  "sources": [
+   593623
+  ],
+  "true_peak": -5.96
+ },
+ "skate_4": {
+  "bytes": 6520,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/skate_4.m4a",
+  "group": "skate",
+  "loop": null,
+  "lufs": -22.26,
+  "seconds": 0.87,
+  "sources": [
+   593623
+  ],
+  "true_peak": -5.93
+ },
+ "spire_bell_1": {
+  "bytes": 65599,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/spire_bell_1.m4a",
+  "group": "spire_bell",
+  "loop": null,
+  "lufs": -16.77,
+  "seconds": 10.0,
+  "sources": [],
+  "src_wrap": null,
+  "true_peak": -2.99
+ },
+ "splash_1": {
+  "bytes": 6548,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/splash_1.m4a",
+  "group": "splash",
+  "loop": null,
+  "lufs": -28.62,
+  "seconds": 0.9,
+  "sources": [],
+  "true_peak": -5.83
+ },
+ "splash_2": {
+  "bytes": 6658,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/splash_2.m4a",
+  "group": "splash",
+  "loop": null,
+  "lufs": -25.62,
+  "seconds": 0.9,
+  "sources": [],
+  "true_peak": -5.99
+ },
+ "splash_3": {
+  "bytes": 6654,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/splash_3.m4a",
+  "group": "splash",
+  "loop": null,
+  "lufs": -26.38,
+  "seconds": 0.9,
+  "sources": [],
+  "true_peak": -5.99
+ },
+ "splash_4": {
+  "bytes": 6500,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/splash_4.m4a",
+  "group": "splash",
+  "loop": null,
+  "lufs": -23.92,
+  "seconds": 0.9,
+  "sources": [],
+  "true_peak": -5.98
+ },
+ "station_chime_1": {
+  "bytes": 23349,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/station_chime_1.m4a",
+  "group": "station_chime",
+  "loop": null,
+  "lufs": -14.98,
+  "seconds": 3.6,
+  "sources": [],
+  "true_peak": -2.98
+ },
+ "strength_bell_1": {
+  "bytes": 18592,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/strength_bell_1.m4a",
+  "group": "strength_bell",
+  "loop": null,
+  "lufs": -19.96,
+  "seconds": 2.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "strength_bell_2": {
+  "bytes": 18276,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/strength_bell_2.m4a",
+  "group": "strength_bell",
+  "loop": null,
+  "lufs": -19.91,
+  "seconds": 2.6,
+  "sources": [],
+  "true_peak": -2.99
+ },
+ "taiko_loop": {
+  "bytes": 104796,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/taiko_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.833333
+  ],
+  "lufs": -24.0,
+  "seconds": 13.333,
+  "sources": [],
+  "src_wrap": 0.096,
+  "true_peak": -9.15
+ },
+ "torch_loop": {
+  "bytes": 73472,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/torch_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   9.5
+  ],
+  "lufs": -24.0,
+  "seconds": 9.0,
+  "sources": [
+   483692
+  ],
+  "src_wrap": 0.162,
+  "true_peak": -3.04
+ },
+ "train_loop": {
+  "bytes": 51504,
+  "cat": "emit",
+  "channels": 1,
+  "doc": null,
+  "file": "fx/train_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   6.5
+  ],
+  "lufs": -24.0,
+  "seconds": 6.0,
+  "sources": [],
+  "src_wrap": 0.078,
+  "true_peak": -9.73
+ },
+ "ui_click_1": {
+  "bytes": 1494,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ui_click_1.m4a",
+  "group": "ui_click",
+  "loop": null,
+  "lufs": -32.58,
+  "seconds": 0.06,
+  "sources": [],
+  "true_peak": -9.98
+ },
+ "ui_click_2": {
+  "bytes": 1498,
+  "cat": "oneshot",
+  "channels": 1,
+  "doc": null,
+  "file": "oneshots/ui_click_2.m4a",
+  "group": "ui_click",
+  "loop": null,
+  "lufs": -32.52,
+  "seconds": 0.06,
+  "sources": [],
+  "true_peak": -9.95
+ },
+ "wanderers_hall": {
+  "bytes": 228063,
+  "cat": "music",
+  "channels": 1,
+  "doc": "A great glass pavilion: soft flue organ on the theme harmony, glass harmonica melody high and slow,\n    distant choir; huge reverb. 72 bpm, 8 bars.",
+  "file": "music/wanderers_hall.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   27.166667
+  ],
+  "lufs": -20.0,
+  "seconds": 26.667,
+  "sources": [],
+  "src_wrap": 0.012,
+  "true_peak": -6.17
+ }
+}
