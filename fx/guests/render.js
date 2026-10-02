@@ -554,6 +554,7 @@ export function createGuests(opts) {
       const mirror = sh && inFrustum(x, 2 * W0 - cy, cz, rad);
       if (!vis && !mirror) continue;
       const dx = x - cpos.x, dy = cy - cpos.y, dz = cz - cpos.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dx * dx + dz * dz < 0.72 && Math.abs(dy) < 1.6) continue;      // never draw a guest the camera is standing inside (Walk spawns, tight lanes)
       const px = 1.75 * h * fpx / Math.max(d, 0.1);
       if (vis && d - 0.95 * h < nearest) nearest = d - 0.95 * h;
       const first = sh && mirror;

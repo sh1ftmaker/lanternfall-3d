@@ -530,14 +530,15 @@ async function load() {
       // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
-        guests = createGuests({ THREE, scene, crowd: null, standIn: HASH.has('guests-standin'), uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
+        const gWant = [...HASH].map((h) => /^guests=(\d+)$/.exec(h)).find(Boolean);
+        const gCount = gWant ? Math.min(+gWant[1], 4000) : (mobile ? 600 : 2400), gPool = Math.ceil(Math.max(gCount, 400) * 1.7);   // the simulation keeps spare pool entries
+        guests = createGuests({ THREE, scene, crowd: null, standIn: HASH.has('guests-standin'), max: gPool, uTime, Q, manifest, DATA, fetchBin, surface, mobile, renderer, camera, depth, nav, reduceMotion, focus });
         if (PREFS.guests === false) guests.setVisible(false);
         // the crowd simulation (fx/guests/sim.js, in a Worker) drives the guests; '#guests-standin' keeps the renderer's
         // built-in random walkers instead, '#guests=N' sets the crowd size
         if (!HASH.has('guests-standin')) import('./fx/guests/sim.js').then(async (S) => {
           const r = await fetch(DATA + 'guests.json' + dataTag).catch(() => null); const pois = r && r.ok ? await r.json().catch(() => null) : null;
-          const want = [...HASH].map((h) => /^guests=(\d+)$/.exec(h)).find(Boolean);
-          guests.setCrowd(S.createCrowd({ nav, manifest, pois, count: want ? +want[1] : (mobile ? 450 : 1600), seed: 1, reduceMotion, fetchBin }), { drive: true });
+          guests.setCrowd(S.createCrowd({ nav, manifest, pois, count: gCount, max: gPool, seed: 1, reduceMotion, fetchBin }), { drive: true });
         }).catch((e) => { console.warn('guests: no simulation, using the stand-in crowd', e); guests.allowStandIn(); });
       }
       ready = true; tourClock = 0; perf.n = -600; moonShadow();
