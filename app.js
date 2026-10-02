@@ -18,6 +18,7 @@ import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
+import { createWeather } from './fx/weather/index.js';  // weather hook: Clear / Mist / Rain / Storm / Snow (fx/weather/)
 
 const DATA = 'data/';
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
@@ -681,7 +682,7 @@ function setMode(m, opts = {}) {
   const prev = mode; mode = m;
   for (const k of ['tour', 'orbit', 'walk']) $('#m-' + k).setAttribute('aria-pressed', String(k === m));
   controls.enabled = m === 'orbit'; fly.on = false;
-  $('#stick').hidden = true; hopBtn.hidden = !(m === 'walk' && coarse);
+  $('#stick').hidden = true; hopBtn.hidden = !(m === 'walk' && coarse && !pfWant);
   if (m === 'tour') { startBlend(prev === 'walk' ? 3.5 : 2.6); lastShot = -1; baseFov = 52; }
   if (m === 'orbit') {
     baseFov = 52;
@@ -698,6 +699,7 @@ function setMode(m, opts = {}) {
     baseFov = 66;
     const g = opts.at || groundUnder();
     spawnWalk(g[0], g[1], opts.yaw);
+    if (pfWant) enterPlatformer();            // platformer hook: Walk is the lamplighter unless first person was chosen
   }
   camera.near = m === 'walk' ? 0.22 : 0.6; applyFov();
   showHint();
@@ -710,7 +712,7 @@ function groundUnder() {
 }
 function gotoPlace(p) {
   setCaption(p);
-  if (mode === 'walk') { spawnWalk(p.walk[0], p.walk[1], p.yaw); return; }
+  if (mode === 'walk') { spawnWalk(p.walk[0], p.walk[1], p.yaw); if (pfWant) enterPlatformer(); return; }
   if (mode === 'tour') { setMode('orbit', { keepTarget: true }); controls.target.copy(camLook); }
   fly.on = true; fly.t = 0; fly.dur = reduceMotion ? 0.01 : 2.2; fly.p0.copy(camera.position); fly.t0.copy(controls.target); fly.p1.copy(p.pos); fly.t1.copy(p.target);
   controls.enabled = false; idle = 0;
@@ -766,7 +768,7 @@ function walkTry(mx, my, zr) {
   if (walk.hop > 0 || walk.vh > 0) { walk.hop = Math.max(0, zr - h); if (!walk.hop) walk.vh = 0; }
   walk.z = h; return true;
 }
-function walkHop() { if (mode === 'walk' && walk.hop === 0 && walk.vh === 0) walk.vh = HOP_V; }
+function walkHop() { if (mode === 'walk' && walk.hop === 0 && walk.vh === 0 && !document.body.classList.contains('pf-on')) walk.vh = HOP_V; }
 // touch: a Hop button on the right, above the dock (outside the canvas, so it never takes the stick's or the look's touch)
 const hopBtn = document.createElement('button');
 hopBtn.type = 'button'; hopBtn.id = 'hop'; hopBtn.textContent = 'Hop'; hopBtn.title = 'Hop'; hopBtn.hidden = true;
@@ -928,7 +930,7 @@ settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQ
     { id: 'reduceMotion', label: 'Reduce motion', on: reduceMotion },
   ],
   onToggle(id, on) {
-    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (guests) guests.setReduceMotion(on); if (on) controls.autoRotate = false; return; }
+    if (id === 'reduceMotion') { reduceMotion = on; FX.fxMotion(Q, !on); if (guests) guests.setReduceMotion(on); weather.setReduceMotion(on); if (on) controls.autoRotate = false; return; }   // weather hook
     if (id === 'guests') { if (guests) guests.setVisible(on); return; }      // guests hook
     FX.fxSet(Q, id, on);
   } });
@@ -938,6 +940,9 @@ const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mo
   fx: () => FX.fxState(), getTour: () => (ready && mode === 'tour' ? tourClock % tourLen : -1), getWater: () => fxWater,
   getCrowd: () => (guests && guests.crowd && guests.crowd.state ? guests.crowd : null) });     // murmur follows the guests' local density
 /* ── end sound ── */
+// ── weather hook ── (fx/weather/): Clear is the untouched park; '#weather=rain' etc.; window.__park.weather
+const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTime, mobile, reduceMotion, FOG, DATA, fetchBin,
+  getPark: () => park, getWater: () => fxWater, getFx: () => FX.fxState(), manifest: () => manifest, getMode: () => mode, getWalk: () => walk, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -954,7 +959,7 @@ function adapt(ms) {
   perf.n++; if (perf.n < 90) return;                     // let shaders compile and uploads settle
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
-  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step);
+  perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step); weather.degrade(perf.step);   // weather hook
   // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
   // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
   if (perf.step === 1) {
@@ -1007,15 +1012,17 @@ function frame() {
       }
       camLook.copy(controls.target);
     } else if (mode === 'walk') {
-      updateWalk(dt);
+      if (pf && pf.active) pf.update(dt); else updateWalk(dt);       // platformer hook (fx/platformer/)
       walkLandTimer -= dt; if (walkLandTimer < 0) { walkLandTimer = 0.6; const p = nearestPlace(); if (p) setCaption(p); }
     }
   } else { camera.position.copy(B(150 + Math.sin(time * 0.1) * 30, -470, 250)); camera.lookAt(0, 8, 0); }
   if ((lodTick & 15) === 0) view.want = clean ? 0 : coveredBand();      // clean view: nothing covers the scene
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
+  if (pf) pf.frame(dt, mode);                                                 // platformer hook: leaves it when the mode changes
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
+  weather.update(dt, time);                                 // weather hook: before the lake (rain splats) and the render
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
@@ -1024,8 +1031,36 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { sound, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
+// ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
+// switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of
+// it is downloaded or built until Walk is first entered)
+const PF_KEY = 'lanternfall-walk';
+let pf = null, pfLoading = null, pfWant = !HASH.has('fp') && (() => { try { return localStorage.getItem(PF_KEY) !== 'fp'; } catch (e) { return true; } })();
+function platformer() {
+  if (!pfLoading) pfLoading = import('./fx/platformer/index.js').then((M) => M.createPlatformer({ THREE, scene, camera, renderer, park, lodMeshes, manifest, nav, depth, surface, walk, Q, mobile, coarse,
+    guests: () => guests, reduceMotion: () => reduceMotion, setMode, setFov: (f) => { if (f) { baseFov = f; applyFov(); } },
+    onEsc: () => { if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => setPlatformer(false),
+    status: (t) => { const p = $('#loadpill'); p.hidden = !t; if (t) p.textContent = t; },
+    hint: (t) => { hintEl.textContent = t; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 6500); } })).then((p) => (pf = p))
+    .catch((e) => { console.warn('platformer:', e); pfLoading = null; pfWant = false; $('#loadpill').hidden = true; if (mode === 'walk') hopBtn.hidden = !coarse; });
+  return pfLoading;
+}
+// (re)spawns the lamplighter where the walker stands; the last call wins while the module is still loading
+let pfEnterSeq = 0;
+function enterPlatformer() { const k = ++pfEnterSeq; platformer().then((p) => { if (p && k === pfEnterSeq && mode === 'walk' && pfWant) p.enter(); }); }
+function setPlatformer(on) {
+  if (!ready || !nav) return;
+  pfWant = on; try { localStorage.setItem(PF_KEY, on ? 'pf' : 'fp'); } catch (e) { /* private mode: not remembered */ }
+  if (!on) { if (pf && pf.active) pf.exit(); else if (mode === 'walk') hopBtn.hidden = !coarse; return; }   // exit() puts the walker where the lamplighter stood
+  if (mode !== 'walk') setMode('walk'); else { hopBtn.hidden = true; enterPlatformer(); }
+}
+const togglePlatformer = () => setPlatformer(!(mode === 'walk' && pfWant));
+$('#btn-pf').addEventListener('click', togglePlatformer);
+addEventListener('keydown', (e) => { if (e.code === 'KeyP' && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
+Object.defineProperty(window.__park, 'platformer', { get: () => pf });
+Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 frame();
 let loadFailed = false;
 load().catch(async (err) => {

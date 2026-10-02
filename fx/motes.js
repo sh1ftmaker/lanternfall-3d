@@ -1,7 +1,8 @@
 // Air that moves: snow over Frostmere Keep ("always the first night of winter"), cherry-blossom petals drifting
 // through Rosewick Gardens and Lantern Row, fireflies over Rosewick's lawns and the green gaps between the lands.
 // One THREE.Points draw call. Particles live in two world-anchored, wrapping boxes that follow the camera
-// (webgl_points_sprites-style procedural sprites; the wrap trick keeps them fixed in the world as the camera moves):
+// (webgl_points_sprites-style procedural sprites; the wrap trick keeps them fixed in the world as the camera moves,
+// in height as well as on the ground):
 //   near layer: small box around the eye, dense (what you walk through);
 //   far layer:  big box pushed ahead of the camera, sparse, so the tour's land shots see the weather too.
 // What a particle *is* comes from where it is (land sector from the polar angle), so it costs nothing to add zones.
@@ -46,21 +47,23 @@ export function buildMotes({ lands, uTime, motion = 1, scale = 1 }) {
         float fly = max(sector(ang, uLands.y), gapw) * smoothstep(100.0, 112.0, r) * (1.0 - smoothstep(235.0, 250.0, r));
         // one kind per particle, chosen by a stable hash, weighted by what the place wants
         float h = fract(id * 0.6180339 + s.y * 7.13);
-        float kind = 0.0, w = 0.0; vec3 p; vec3 col; float size;
+        float kind = 0.0, w = 0.0, vfade = 1.0; vec3 p; vec3 col; float size;
         float wsum = snow + petal * 0.55 + fly * 0.10;
         if (wsum < 0.002) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
         float pick = h * max(1.0, wsum);
         float ph = s.y * 6.2831853;
         if (pick < snow) {                                     // snow: falls ~1 m/s, wobbles, settles out of sight
           kind = 0.0; w = 1.0;
-          float H = far ? 46.0 : 26.0, y0 = far ? -1.0 : c.y - 12.0;
-          p = vec3(xz.x, y0 + fract(s.y - t * 1.05 / H) * H, xz.y);
+          // (height wraps about the eye in the world, like xz: a camera that rises or dips, as the lamplighter's does
+          // when it is pitched, must not carry the flakes with it)
+          float H = far ? 46.0 : 26.0, yc = far ? 22.0 : c.y + 1.0;
+          p = vec3(xz.x, yc + (fract(s.y - (t * 1.05 + yc) / H) - 0.5) * H, xz.y); vfade = far ? 1.0 : 1.0 - smoothstep(0.8, 1.0, abs(p.y - yc) / (0.5 * H));
           p.xz += 0.5 * vec2(sin(t * 0.9 + ph * 3.0), cos(t * 0.7 + ph * 5.0));
           col = vec3(0.62, 0.66, 0.80); size = 0.05;
         } else if (pick < snow + petal * 0.55) {               // petals: slow tumbling fall, carried by the breeze
           kind = 1.0; w = 1.0;
-          float H = far ? 22.0 : 16.0, y0 = far ? -1.0 : max(c.y - 8.0, -1.0);
-          p = vec3(xz.x, y0 + fract(s.y - t * 0.38 / H) * H, xz.y);
+          float H = far ? 22.0 : 16.0, yc = far ? 10.0 : max(c.y, 7.0);
+          p = vec3(xz.x, yc + (fract(s.y - (t * 0.38 + yc) / H) - 0.5) * H, xz.y); vfade = far || yc == 7.0 ? 1.0 : 1.0 - smoothstep(0.8, 1.0, abs(p.y - yc) / (0.5 * H));
           p.xz += vec2(sin(t * 0.4 + ph) * 1.6, cos(t * 0.33 + ph * 2.0) * 1.6) + vec2(0.6, 0.2) * sin(t * 1.3 + ph * 7.0) * 0.3;
           col = mix(vec3(1.0, 0.30, 0.50), vec3(1.0, 0.50, 0.66), fract(ph * 3.7)) * 0.5; size = 0.085;
         } else {                                               // fireflies: hover low over the lawns and blink
@@ -79,7 +82,7 @@ export function buildMotes({ lands, uTime, motion = 1, scale = 1 }) {
         vec2 q = abs(xz - c.xz) / hs;
         float edge = 1.0 - smoothstep(0.75, 1.0, max(q.x, q.y));
         float nearF = far ? smoothstep(16.0, 24.0, d) : 1.0 - smoothstep(17.0, 22.0, d);
-        float a = edge * nearF * smoothstep(0.25, 0.8, d);
+        float a = edge * vfade * nearF * smoothstep(0.25, 0.8, d);
         vC = vec4(col * e, (kind == 2.0 ? 0.0 : 0.75 * min(1.0, e * 1.5))) * a * uGain;
         vKind = kind; vSpin = sin(t * (2.0 + fract(ph * 9.1) * 3.0) + ph * 5.0);
         if (kind == 2.0 && far) vC *= 0.7;

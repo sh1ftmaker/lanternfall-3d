@@ -19,7 +19,7 @@ every land, and at eleven ten thousand paper lanterns come down onto the water.
 |---|---|---|---|
 | **Tour** (`1`) | A 2½-minute guided flight over the gate, the Spire, each land and the monorail, on a loop | Drag to take over | Drag to take over |
 | **Explore** (`2`) | Free orbit; the place chips fly you to each land | Drag, scroll, right-drag; arrows or WASD, `+`/`-`, Shift+arrows to pan | Drag, pinch, two-finger pan |
-| **Walk** (`3`) | First person on the ground; the chips drop you at each land | WASD or arrows, drag to look, Shift to run, Space to hop, `Esc` to leave | Left thumb walks, right thumb looks, Hop button |
+| **Walk** (`3`) | On the ground as Wick the lamplighter (third person), or in first person (`P` or the lantern-pole button switches; the choice is remembered); the chips drop you at each land | Wick: see Platformer below. First person: WASD or arrows, drag to look, Shift to run, Space to hop. `Esc` to leave | Wick: stick under the left thumb, Jump / Crouch / Swing buttons. First person: left thumb walks, right thumb looks, Hop button |
 
 Press `H` or the eye button to hide the controls for an unobstructed view; `H`, `Esc` or the faint button in the corner brings them back.
 
@@ -45,6 +45,31 @@ code (`fx/guests/assets.js`), animated in the vertex shader and lit by where the
 (`fx/guests/sim.js`) runs in a Worker on the walk grid, using benches, stall fronts and viewpoints extracted from
 the Blender model (`data/guests.json`, generator in `tools/guests/`). A "Guests" switch is in the settings sheet.
 
+## Platformer
+
+Walk mode's player is Wick, a lamplighter you steer in third person (the lantern-pole button in the top bar, or `P`,
+swaps to a first-person walker and back; `#fp` in the address starts in first person): run, triple jump, long jump, backflip, wall kick, ledge grab, ground pound, dive, crawl
+and swim across Stillwater. On a keyboard: WASD, Space to jump, Shift to crouch, E to swing the lantern pole, drag to
+turn the camera. On a phone: a stick under the left thumb, Jump, Crouch and Swing buttons under the right, drag
+elsewhere to turn the camera. Gamepads work too. The movement ticks 30 times a second and is drawn interpolated
+at the display's rate.
+
+The movement runs on [libsm64](https://github.com/libsm64/libsm64) compiled to a 122 KB WebAssembly module with every
+ROM, model, texture and audio path removed; it needs no ROM. The character, its rig and all of its animations were
+made for this project, and collision comes from the park's own geometry. What exactly is in the module, and its
+licences, are listed in [`fx/platformer/CREDITS.md`](fx/platformer/CREDITS.md). Nothing of it is downloaded until
+Walk is first entered.
+
+## Weather
+
+The weather changes by itself every two minutes: it starts clear, then rain, storm, mist, clear again, snow, and
+round. The Weather row in the settings sheet holds one of Clear, Mist, Rain, Storm or Snow instead (or lets it change
+again); the choice is remembered, and `#weather=rain` in the address holds that weather. Rain falls only under open sky (a height map of the park is rendered once
+from above), wets the paving, fills puddles that pick up the nearby lamps and neon, and rings the lake. Storm adds
+wind and slow, soft lightning with thunder that arrives late by distance; with Reduce motion there are no flashes.
+Snow settles on surfaces that face the sky. With sound on, rain sounds different on open paving, at the lake shore
+and under cover.
+
 ## Sound
 
 Press the speaker button (or `M`) for sound; headphones are best. Every land has its own ambience and music, placed
@@ -67,6 +92,8 @@ Add these after `#` in the address, separated by commas, then reload.
 | `noshadow` | Turn off moon shadows |
 | `aurora` | Aurora in the night sky |
 | `no-guests` | Hide the guests |
+| `weather=mist`, `rain`, `storm`, `snow` | Start in that weather |
+| `fp` | Walk mode starts in first person |
 | `guests=N` | Set the number of guests |
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
@@ -79,7 +106,8 @@ Add these after `#` in the address, separated by commas, then reload.
 - Surfaces get crisp detail from a small procedural shader (`fx/surface.js`): each vertex carries a surface class
   (paving, wood, masonry, roof, organic) that selects setts, planks, block courses or tile rows.
 - Geometry is quantised, delta-filtered and gzip-compressed into `data/*.bin` (about 33 MB in total).
-  The browser unpacks it with `DecompressionStream`; there is no WebAssembly and no build step.
+  The browser unpacks it with `DecompressionStream`; there is no build step (the only WebAssembly is the
+  optional platformer's movement module).
 - Rendering uses [three.js](https://threejs.org/) from a CDN. The viewer is `app.js` plus small modules in `fx/`:
   the lake (planar mirror and ripple simulation), the lantern fall, particles, depth-precision handling, the post
   chain, the settings sheet and WebGL context-loss recovery.
