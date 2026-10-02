@@ -23,7 +23,8 @@ const CSS = `#sx-fade{position:fixed;inset:0;z-index:30;pointer-events:none;opac
 
 export function init(game) {
   const lib = makeLib(game);
-  const state = () => game.save.get(KEY, null) || {};
+  // an old, partial or hand-edited save must not throw: anything that is not the expected shape starts empty
+  const state = () => { let s = game.save.get(KEY, null); if (!s || typeof s !== 'object' || Array.isArray(s)) s = {}; if (!s.found || typeof s.found !== 'object') s.found = {}; return s; };
   const found = (id) => {
     const s = state(); s.found = s.found || {};
     if (s.found[id]) return false;

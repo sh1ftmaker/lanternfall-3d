@@ -9,7 +9,7 @@ export function init(S) {
   let asleep = false, t = 0, busy = false;
   game.on('action', ({ name }) => { asleep = name === 'sleeping'; if (!asleep) t = 0; });
   game.on('frame', ({ dt }) => {
-    if (!asleep || busy || game.player.mode !== 'walk') return;
+    if (!asleep || busy || game.player.mode !== 'walk' || game.cameraHeld) return;      // not while photo mode or a ride has the camera
     const p = game.player;
     if (Math.hypot(p.x - BENCH[0], p.y - BENCH[1]) > NEAR) { t = 0; return; }
     if ((t += dt) < NEED) return;
