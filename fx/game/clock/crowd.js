@@ -1,6 +1,7 @@
 // The crowd drifts to what is on: weights on where guests choose to go next (fx/guests/sim.js params.bias, sent to the
 // Worker). Only new choices are biased, so nobody turns round mid-walk and the shift takes a few minutes to show.
-export const SHRINE = [36, -183];            // the ghost-story stage on the shrine terrace (see story.js)
+export const STAGE = [33.6, -181];           // the ghost-story stage on the shrine terrace (raised, z 3.19)
+const SHRINE = STAGE;
 
 export function biasFor(t) {
   if (t < 19 * 60) return null;

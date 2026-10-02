@@ -58,7 +58,7 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
     vertexShader: /* glsl */`
       attribute vec3 aSeed, aCol; attribute vec2 aPar; attribute vec4 aC, aW;
       uniform float uTime, uScale, uWater, uMotion, uPeriod, uGain; uniform vec4 uF;
-      uniform float uGate, uTAct, uTOff, uRel, uThin;      // clock hook: when the fall is released / thinned out (see userData.setFall)
+      uniform float uGate, uTAct, uTOff, uRel, uThin;      // game hook: clock: when the fall is released / thinned out (see userData.setFall)
       varying vec2 vQ; varying vec3 vCol; varying float vShape, vK, vFlame, vAlpha;
       #ifdef REFL
         uniform float uStretch; uniform sampler2D tMask; uniform vec4 uDom;     // reflection on the lake (see makeReflection)
@@ -108,7 +108,7 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
           p = floatAt(s, t, ph); lit = 1.0 - smoothstep(0.55, 1.0, s) * 0.92; sway = 0.5;
         } else { p = floatAt(1.0, t, ph); lit = 0.0; }
         float vis = 1.0;
-        if (uGate > 0.5) {                                     // clock hook: the fall is released at a time, not always there
+        if (uGate > 0.5) {                                     // game hook: clock: the fall is released at a time, not always there
           float rk = hh(aW.w * 53.7 + 4.1);
           if (rk >= 0.003) {                                   // (a handful of strays are always about)
             float tA = uTAct + rk * uRel, age = t - tA;
@@ -213,7 +213,7 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
     blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
   });
   const mesh = new THREE.Mesh(quad, mat);
-  // clock hook: 'classic' = all of them, always (the page as it opens); 'none' = only strays; 'fall' = released from the
+  // game hook: clock: 'classic' = all of them, always (the page as it opens); 'none' = only strays; 'fall' = released from the
   // gallery over uRel seconds from `now`; 'thin' = dying away over uThin seconds from `now`. Water reflections share the uniforms.
   const U = mat.uniforms;
   mesh.userData.setFall = (state, now) => {
