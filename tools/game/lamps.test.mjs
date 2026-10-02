@@ -51,7 +51,10 @@ const run = async (mobile) => {
   await ev(`window.__ev=[];for(const t of ['lamps:lit','lamps:land','lamps:all','lamps:read','lamps:wish','lamps:pole'])__park.game.on(t,d=>__ev.push([t,d]))`);
   // 5. complete a land
   await ev(`__park.setPlatformer(false);__park.game.modules.lamps.lightAllBut('rosewick','rosewick:3')`); await wait(300);
-  await near('rosewick:3', 1.6); await until(`!document.querySelector('#game-prompt').hidden`); await wait(600);
+  await ev(`__park.setMode('walk',{at:[-60,-60],yaw:0})`); await wait(400);
+  await near('rosewick:3', 1.6); await until(`!document.querySelector('#game-prompt').hidden`); await wait(1200);
+  ok('tracker line holds back for a new land (hysteresis)', !/Rosewick Gardens lamps/.test(await ev(`document.querySelector('#game-track').textContent`)));
+  await wait(3200);
   ok('tracker shows the land count', /Rosewick Gardens lamps 7 \/ 8/.test(await ev(`document.querySelector('#game-track').textContent`)));
   await page.keyboard.press('KeyE'); ok('last lamp lit', await until(`${lamp('rosewick:3')}.lit`, 4000)); await wait(1500);
   const evs = await ev(`__ev.map(e=>e[0]+':'+(e[1].count??e[1].land??''))`);
@@ -65,6 +68,7 @@ const run = async (mobile) => {
   const e2 = await ev(`__ev.map(e=>e[0])`); ok('lamps:all and lamps:pole', e2.includes('lamps:all') || (await until(`__ev.some(e=>e[0]==='lamps:all')`, 5000)), JSON.stringify(e2));
   await ev(`__park.setMode('walk',{at:[140.2,-18.2],yaw:1.2})`); ok('note prompt', await until(`/note/i.test(document.querySelector('#game-prompt').textContent)&&!document.querySelector('#game-prompt').hidden`)); await page.keyboard.press('KeyE');
   await wait(400); ok('note card opens', await ev(`!document.querySelector('#lamps-card').hidden`)); await shot('note'); await ev(`document.querySelector('#lamps-card .sheet-close').click()`);
+  ok('tavern lamp stands at the hearth', await ev(`(()=>{const l=${lamp('brinewatch:8')};return Math.hypot(l.x-139.75,l.y+15.57)<2.5})()`));
   // 7. wish
   const rp = await ev(`(()=>{const r=__park.game.modules.lamps.railPoints()[5];return [r.x,r.y,r.yaw]})()`); await ev(`__park.setMode('walk',{at:[${rp[0]},${rp[1]}],yaw:${rp[2]}})`);
   ok('rail prompt', await until(`/Write a wish/.test(document.querySelector('#game-prompt').textContent)&&!document.querySelector('#game-prompt').hidden`));
@@ -79,6 +83,14 @@ const run = async (mobile) => {
   await page.reload(); await ready(); ok('wish persisted and hangs over the lake', await ev(`__park.game.modules.lamps.state.wishes[0].text==='Let the lake keep it'&&__park.game.modules.lamps.hung()===1`));
   await ev(`__park.game.journal.open()`); await wait(400); ok('journal lists the wish', await ev(`document.querySelector('#game-journal').textContent.includes('Let the lake keep it')`));
   await ev(`__park.setMode('walk',{at:[${rp[0] - 4},${rp[1]}],yaw:${rp[2] + 3.14}})`); await ev(`__park.game.journal.close()`); await wait(1500); await shot('wish_hung');
+  // 8. the wish prompt has priority -1 and gives way to another module's prompt within 3 m
+  ok('wish prompt priority is -1', await ev(`__park.game.interactables.find(i=>i.id==='lamps:wish').priority===-1`));
+  await ev(`(()=>{const r=__park.game.modules.lamps.railPoints()[5];window.__fake=__park.game.interact({id:'fake-jetty',x:r.x+1.4,y:r.y,z:r.z??0,r:2,label:'Jetty'});__park.setMode('walk',{at:[r.x,r.y],yaw:r.yaw})})()`); await wait(1500);
+  ok('wish is not offered next to another prompt', !/Write a wish/.test(await promptText())); await ev(`window.__fake.remove()`);
+  // 9. old and damaged saves load
+  await ev(`localStorage.setItem('lanternfall.game.v1',JSON.stringify({lamps:{lit:{a:1},read:'x',done:7,all:'yes',wishes:[null,{text:5},{text:'ok',t:5}]},bounty:{day:5,ids:'x',carry:{},jobs:[],stamps:null}}))`);
+  await page.reload(); await ready(); await wait(1500);
+  ok('old-shaped save loads in lamps and bounty', await ev(`(()=>{const L=__park.game.modules.lamps,B=__park.game.modules.bounty;return !!L&&!!B&&Array.isArray(L.state.lit)&&L.state.wishes.length===1&&B.jobsToday().length===3})()`));
   console.log(JSON.stringify({ mobile, results: res, errs: [...errs].map(([k, v]) => v + 'x ' + k) }, null, 1)); await browser.close();
 };
 await run(false); await run(true);

@@ -257,14 +257,14 @@ export function init(game) {
       const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = `Jobs done in all: ${S.jobsDone}. The reward counter is across the square.`; body.appendChild(f);
     } else {
       h.textContent = 'Rewards';
-      const p = document.createElement('p'); p.className = 'bty-date'; p.textContent = "The clerk slides a tray of tinted glass across the counter: a new colour for the lamplighter's lantern."; body.appendChild(p);
+      const p = document.createElement('p'); p.className = 'bty-date'; p.textContent = "The clerk slides a tray of tinted glass across the counter: a new colour for Wick's lantern."; body.appendChild(p);
       for (const c of COLORS.filter((c) => !c.free)) {
         const ready = rewardReady(c.id), got = S.claimed[c.id], row = document.createElement('div'); row.className = 'bty-reward' + (got || ready ? '' : ' lock'); row.style.color = c.css;
         row.innerHTML = `<i></i><div style="color:var(--paper)">${esc(c.name)}<small>${got ? 'In your journal, to choose from.' : ready ? 'Earned.' : esc(c.need)}</small></div>`;
         if (ready && !got) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bty-btn'; b.textContent = 'Take it'; b.onclick = () => claim(c.id); row.appendChild(b); }
         body.appendChild(row);
       }
-      const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = 'Choose the colour in the journal (B). The lantern shows on the lamplighter, not in first person.'; body.appendChild(f);
+      const f = document.createElement('p'); f.className = 'bty-foot'; f.textContent = 'Choose the colour in the journal (B). The lantern shows on Wick, not in first person.'; body.appendChild(f);
     }
   }
 
@@ -285,7 +285,7 @@ export function init(game) {
     const c = COLORS.find((x) => x.id === id); if (!c || !rewardReady(id) || S.claimed[id]) return;
     S.claimed[id] = 1; if (!S.colors.includes(id)) S.colors.push(id); S.color = id; commit(); applyColor(true);
     game.toast(`A new lantern colour: <b>${esc(c.name)}</b>.`, { tone: 'good', ms: 5200 });
-    if (!game.player.wick) setTimeout(() => game.toast('There is no lantern in first person. The colour is kept: switch to the lamplighter (P) to see it.', { ms: 6500 }), 900);
+    if (!game.player.wick) setTimeout(() => game.toast('There is no lantern in first person. The colour is kept: switch to Wick (P) to see it.', { ms: 6500 }), 900);
     game.emit('bounty:reward', { id }); renderCard(); game.journal.refresh();
   }
   const colorOf = (id) => COLORS.find((c) => c.id === id) || COLORS[0];
@@ -298,7 +298,7 @@ export function init(game) {
   }
   function chooseColor(id) {
     if (!S.colors.includes(id)) return; S.color = id; commit(); applyColor(true); game.journal.refresh();
-    if (!game.player.wick) game.toast('Chosen. There is no lantern in first person: it shows on the lamplighter (P).', { ms: 5000 });
+    if (!game.player.wick) game.toast('Chosen. There is no lantern in first person: it shows on Wick (P).', { ms: 5000 });
   }
 
   /* ───────────────────────── the strength bell ───────────────────────── */
@@ -422,7 +422,7 @@ export function init(game) {
     el.appendChild(sw);
     const more = COLORS.filter((c) => !c.free && !S.colors.includes(c.id));
     const note = document.createElement('p'); note.className = 'bty-foot'; note.style.marginTop = '0';
-    note.textContent = `${colorOf(S.color).name}.` + (more.length ? ` ${more.length} more to earn at the reward counter.` : '') + (game.player.wick ? '' : ' It shows on the lamplighter, not in first person.'); el.appendChild(note);
+    note.textContent = `${colorOf(S.color).name}.` + (more.length ? ` ${more.length} more to earn at the reward counter.` : '') + (game.player.wick ? '' : ' It shows on Wick, not in first person.'); el.appendChild(note);
   } });
   game.journal.section({ id: 'passport', title: `Passport`, order: 41, render(el) {
     const n = passportCount(); const sum = document.createElement('p'); sum.className = 'bty-foot'; sum.style.marginTop = '0'; sum.textContent = `${n} of 8 stamps. One post in each land, and one on the Spire's island.`; el.appendChild(sum);
