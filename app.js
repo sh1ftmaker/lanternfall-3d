@@ -17,6 +17,7 @@ import { createSurface } from './fx/surface.js';
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
+import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
 
 const DATA = 'data/';
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
@@ -879,6 +880,11 @@ settings = buildSettings({ qualities: QUALITIES, quality, onQuality: (q) => setQ
     FX.fxSet(Q, id, on);
   } });
 if (quality === 'fast') setHD(false);
+/* ── sound (fx/audio/): nothing audio is fetched before the sound button; the engine follows the camera ── */
+const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mobile, getMode: () => mode, getWalk: () => walk, getTrains: () => trains,
+  fx: () => FX.fxState(), getTour: () => (ready && mode === 'tour' ? tourClock % tourLen : -1), getWater: () => fxWater,
+  getCrowd: () => (guests && guests.crowd && guests.crowd.state ? guests.crowd : null) });     // murmur follows the guests' local density
+/* ── end sound ── */
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -956,6 +962,7 @@ function frame() {
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
+  sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
   if (fxWater) { if (fxWater.hd !== Q.hd) { fxWater.setHD(Q.hd); fxWater.hd = Q.hd; } fxWater.update(dt, time); }
   depth.update(mode === 'walk' ? 0.22 : 0.6);     // never nearer than the old fixed planes
   // Fast keeps the half-float target, tone mapping and grade (bloom off, DPR 1, no MSAA): drawn straight to the 8-bit
@@ -964,7 +971,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { sound, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;

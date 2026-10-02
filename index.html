@@ -133,6 +133,15 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   .modes button,.chip{min-height:32px;padding-block:5px} .icon-btn{width:38px;height:38px}
   .hint{top:calc(env(safe-area-inset-top,0px) + 58px)} .sheet{top:calc(env(safe-area-inset-top,0px) + 54px)}
 }
+/* sound button + settings entries (fx/audio/index.js) */
+#btn-snd .snd-on{display:none} #btn-snd[data-state="on"] .snd-on,#btn-snd[data-state="loading"] .snd-on{display:inline} #btn-snd[data-state="on"] .snd-off,#btn-snd[data-state="loading"] .snd-off{display:none}
+#btn-snd[data-state="loading"] svg{opacity:.55}
+#btn-snd.nudge,#btn-snd.armed{border-color:rgba(255,181,71,.7);box-shadow:0 0 0 3px rgba(255,181,71,.16)}
+@media (prefers-reduced-motion:no-preference){ #btn-snd.nudge{animation:sndpulse 1.4s ease-in-out 3} @keyframes sndpulse{50%{box-shadow:0 0 0 7px rgba(255,181,71,.0),0 0 18px rgba(255,181,71,.45)}} }
+.snd-set{margin-top:12px}
+.snd-set .vol{display:flex;align-items:center;gap:12px;padding:6px 2px 8px;font:500 14px var(--ui)}
+.snd-set .vol span{flex:none}
+.snd-set input[type=range]{flex:1;min-width:0;accent-color:var(--amber);height:28px;cursor:pointer}
 @media (prefers-reduced-motion:reduce){ .veil-in .lamp{animation:none} .caption{transition:none} .tog i,.tog i::after{transition:none} }
 </style>
 
@@ -143,6 +152,10 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 <div class="hud top">
   <div class="brand">Lantern<i>fall</i><small>The park after dark, in three dimensions</small></div>
   <div class="top-actions">
+    <!-- sound (fx/audio/index.js): on/off, M key; nothing audio is loaded before the first press -->
+    <button class="icon-btn" id="btn-snd" type="button" aria-pressed="false" aria-label="Sound" title="Sound is off: turn it on (M)" data-state="off">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" fill-opacity=".18"/><path class="snd-on" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="snd-off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+    </button>
     <button class="icon-btn" id="btn-set" type="button" aria-expanded="false" aria-controls="sheet" title="Settings" aria-label="Settings">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
     </button>
@@ -161,7 +174,16 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   <div class="seg" role="radiogroup" aria-labelledby="q-label"></div>
   <p class="seg-note"></p>
   <div class="toggles"></div>
-  <p class="keys"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> tour, explore, walk · <kbd>F</kbd> full screen · <kbd>H</kbd> hide controls · <kbd>Esc</kbd> back</p>
+  <!-- sound entries (fx/audio/index.js) -->
+  <div class="snd-set">
+    <div class="seg-label" id="snd-label">Sound</div>
+    <label class="vol"><span>Volume</span><input type="range" id="snd-vol" min="0" max="100" step="1" value="80" aria-describedby="snd-label"></label>
+    <div class="toggles">
+      <button type="button" class="tog" role="switch" id="snd-music" aria-checked="true"><span>Music</span><i aria-hidden="true"></i></button>
+      <button type="button" class="tog" role="switch" id="snd-amb" aria-checked="true"><span>Ambience &amp; effects</span><i aria-hidden="true"></i></button>
+    </div>
+  </div>
+  <p class="keys"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> tour, explore, walk · <kbd>F</kbd> full screen · <kbd>H</kbd> hide controls · <kbd>M</kbd> sound · <kbd>Esc</kbd> back</p>
 </div>
 <button class="icon-btn" id="btn-show" type="button" title="Show the controls (H)" aria-label="Show the controls" hidden>
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>
