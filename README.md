@@ -30,6 +30,12 @@ Choices are remembered in the browser. Until a picture setting has been chosen, 
 frames run slow (resolution, the mirror, effects; never the guests). Choosing Fast, HD or Cinematic gives exactly that
 setting and holds it.
 
+## Going inside
+
+The Wanderers' Hall (the Paper Doors, the Signing Tables, the gallery) and the Brine & Barrel taproom on Brinewatch
+Wharf (bar, hearth, barrel tables; doors to the promenade, the deck and the wharf) can be walked into, and the
+Guildhollow castle courtyard and the centre of the Rose Maze are open. It does not rain indoors.
+
 ## What moves
 
 - The lantern fall is a living cycle: lanterns are released from the Spire, rise, hang over the lake, settle on the
