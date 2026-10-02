@@ -972,7 +972,7 @@ const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTim
 const dayFog = { pre() {}, post() {} };                       // game hook: daynight replaces these (fx/game/daynight/index.js)
 const game = createGame({ THREE, scene, camera, renderer, Q, walk, uTime, mobile, coarse, places, sound, weather, DATA, fetchBin, setMode, gotoPlace, nearestPlace,
   getNav: () => nav, getManifest: () => manifest, getMode: () => mode, getGuests: () => guests, getPlatformer: () => pf, getPark: () => park, getTrains: () => trains, getWater: () => fxWater,
-  getFx: () => FX.fxState(), reduceMotion: () => reduceMotion, isClean: () => clean, setClean, surface, FOG, MOON, DN, dayFog });
+  getFx: () => FX.fxState(), reduceMotion: () => reduceMotion, isClean: () => clean, setClean, surface, FOG, MOON, DN, dayFog, wickWanted: () => pfWant, getSettings: () => settings });   // game hook: wickWanted for game.teleport, getSettings so the journal and settings sheets take turns
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
