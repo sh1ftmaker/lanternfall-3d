@@ -190,6 +190,15 @@ def footstep(kind, seed):
             x[p:p + gl] += rng.normal(size=gl) * np.hanning(gl) * rng.uniform(.2, 1)
         x = filt(x, chain(hp(700), lp(6500), peak(2500, 4, 1)))
         x *= np.minimum(1, _t(n) / .02)
+    elif kind == 'gravel':
+        n = samples(.28)
+        x = np.zeros(n)
+        for g in range(70):
+            p = int(rng.beta(1.3, 3) * (n - 600))
+            gl = rng.integers(60, 500)
+            x[p:p + gl] += rng.normal(size=gl) * np.exp(-np.arange(gl) / (gl / 4)) * rng.uniform(.2, 1)
+        x = filt(x, chain(hp(400), lp(6000), peak(1600, 5, .8)))
+        x += np.sin(TAU * rng.uniform(90, 120) * _t(n)) * np.exp(-_t(n) / .02) * .3
     else:  # grass
         n = samples(.3)
         x = filt(rng.normal(size=n), chain(bp(rng.uniform(2500, 4000), .8), lp(7000)))

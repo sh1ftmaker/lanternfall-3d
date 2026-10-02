@@ -26,7 +26,7 @@ args = ap.parse_args()
 ONLY = set(filter(None, args.only.split(',')))
 
 TARGET = {'music': -20.0, 'bed': -24.0, 'layer': -26.0, 'emit': -24.0}
-KBPS = {'music': 80, 'bed': 96, 'layer': 64, 'emit': 64, 'oneshot': 64}
+KBPS = {'music': 72, 'bed': 80, 'layer': 56, 'emit': 56, 'oneshot': 48}
 
 
 def secs(s):
@@ -37,7 +37,7 @@ def secs(s):
 _cache = {}
 
 
-def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0.0):
+def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0.0, search=None):
     key = (fid, mono)
     if key not in _cache:
         _cache[key] = aio.load(os.path.join(args.src, f'fs{fid}.mp3'), mono=mono)
@@ -45,6 +45,9 @@ def rec(fid, L, start=None, mono=False, hpf=None, lpf=None, xfade=1.5, gain_db=0
     sos = []
     if hpf: sos.append(hp(hpf))
     if lpf: sos += [lp(lpf), lp(lpf * 1.2)]
+    if start is None and search:
+        a, b = secs(search[0]), min(x.shape[0], secs(search[1]))
+        start = (a + aio.best_window(x[a:b], L + secs(xfade))) / SR
     y, st = aio.make_loop(x, L, start=None if start is None else secs(start), xfade=xfade)
     if sos:
         y = pfilter(y, chain(*sos))
@@ -62,62 +65,92 @@ def st(x):
 
 
 # ------------------------------------------------------------------ beds (stereo, 16-20 s, layered lengths)
+def width(x, target=0.35):
+    """Mono-compatibility: narrow a stereo bed (scale its side signal) until L/R correlation >= target."""
+    if x.ndim == 1:
+        return x
+    for k in range(12):
+        c = np.corrcoef(x[:, 0], x[:, 1])[0, 1]
+        if c >= target:
+            break
+        m, sd = (x[:, 0] + x[:, 1]) / 2, (x[:, 0] - x[:, 1]) / 2 * .85
+        x = np.stack([m + sd, m - sd], 1)
+    return x
+
+
 def bed_gate():
+    """Arrival: a light crowd walking the gravel/stone avenue (452458) over a festival murmur, soft air."""
     L = secs(18)
-    return (rec(848976, L, lpf=6000, hpf=80) + lvl(sfx.wind(L, 11, lo=60, hi=500, gust=.4), -12))
+    return width(rec(452458, L, lpf=6500, hpf=90, search=(30, 85)) + rec(848976, L, lpf=4000, hpf=100, gain_db=-7) +
+                 lvl(sfx.wind(L, 11, lo=60, hi=500, gust=.4), -14))
 
 
 def bed_lake():
+    """The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices."""
     L = secs(17)
-    return (rec(352356, L, lpf=5000, hpf=60) + lvl(sfx.lapping(L, 21), -8) + lvl(sfx.wind(L, 22, 50, 400, .5), -10))
+    return width(rec(352356, L, lpf=5000, hpf=60) + lvl(sfx.lapping(L, 21), -7) + lvl(sfx.wind(L, 22, 50, 400, .5), -11))
 
 
 def bed_guild():
+    """Courtyard evening crowd (741283) + torches crackling (483692)."""
     L = secs(16)
-    return rec(741283, L, lpf=5500, hpf=90) + rec(848457, L, lpf=7000, gain_db=-7)
+    return width(rec(741283, L, lpf=5500, hpf=90) + rec(483692, L, lpf=7000, gain_db=-8))
 
 
 def bed_frost():
+    """Wind over snow with a faint whistle; the crowd heard muffled (low-passed) behind it."""
     L = secs(19)
     w = sfx.wind(L, 41, lo=80, hi=1200, gust=.8, whistle=.15)
-    return lvl(w, 0) + rec(834339, L, lpf=1800, hpf=120, gain_db=-9)    # crowd heard muffled through snow
+    return width(lvl(w, 0) + rec(461060, L, lpf=1500, hpf=120, gain_db=-8))
 
 
 def bed_meridian():
+    """Plaza crowd (848976) and a low electric hum under the neon."""
     L = secs(16)
-    return rec(405318, L, lpf=6000, hpf=100) + lvl(sfx.hum(L, 51), -16)
+    return width(rec(848976, L, lpf=6500, hpf=100) + lvl(sfx.hum(L, 51), -17))
 
 
 def bed_wanderers():
+    """A big cavernous convention-hall murmur (451600)."""
     L = secs(18)
-    return rec(451600, L, lpf=6000, hpf=70)
+    return width(rec(451600, L, lpf=6000, hpf=70))
 
 
 def bed_brine():
+    """Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574)."""
     L = secs(17)
-    return rec(843246, L, lpf=6000, hpf=50) + rec(31574, L, lpf=4000, hpf=120, gain_db=-6)
+    return width(rec(843246, L, lpf=6000, hpf=50) + rec(31574, L, lpf=4000, hpf=120, gain_db=-7))
 
 
 def bed_lantern():
+    """Night-market chatter (834339, close and cheerful) with chimes tuned to the park's pentatonic."""
     L = secs(16)
-    return rec(834339, L, lpf=5500, hpf=100) + lvl(sfx.chimes(L, 91, rate=.35), -14)
+    return width(rec(834339, L, lpf=5000, hpf=100, gain_db=-1) + lvl(sfx.chimes(L, 91, rate=.35), -15))
 
 
 def bed_rosewick():
+    """Gardens: a fountain (618285), crickets (522299) and guests strolling on gravel (352552), all soft."""
     L = secs(18)
-    return rec(618285, L, lpf=6500, hpf=80, gain_db=-5) + lvl(sfx.crickets(L, 101, n=10), -6)
+    return width(rec(618285, L, lpf=6500, hpf=80, gain_db=-4) + rec(522299, L, lpf=7000, hpf=200, gain_db=-7) +
+                 rec(352552, L, lpf=5000, hpf=120, gain_db=-8))
 
 
 def bed_gap():
+    """Green gaps and woods: crickets (522299), a breeze in leaves, wind."""
     L = secs(19)
-    return lvl(sfx.crickets(L, 111, n=16), -2) + lvl(sfx.leaves(L, 112), -8) + lvl(sfx.wind(L, 113, 50, 500, .6), -9)
+    return width(rec(522299, L, lpf=7000, hpf=150, search=(100, 220)) + lvl(sfx.leaves(L, 112), -11) +
+                 lvl(sfx.wind(L, 113, 50, 500, .6), -9))
 
 
 def bed_sky():
+    """From the sky: wind and a distant low-passed blend of the whole park."""
     L = secs(20)
     w = sfx.wind(L, 121, lo=40, hi=700, gust=.7, whistle=.08)
-    murmur = rec(848976, L, lpf=900, hpf=100, gain_db=-10)
-    return lvl(w, 0) + murmur
+    return width(lvl(w, 0) + rec(461060, L, lpf=900, hpf=100, gain_db=-9) + rec(848976, L, lpf=600, hpf=80, gain_db=-12))
+
+
+def crowd(fid, secs_, **kw):
+    return lambda: width(rec(fid, secs(secs_), **kw))
 
 
 # ------------------------------------------------------------------ layers and looped emitters (mono unless noted)
@@ -139,15 +172,18 @@ for nm, fn in [('gate', bed_gate), ('lake', bed_lake), ('guildhollow', bed_guild
                ('meridian', bed_meridian), ('wanderers', bed_wanderers), ('brinewatch', bed_brine),
                ('lantern-row', bed_lantern), ('rosewick', bed_rosewick), ('gap', bed_gap), ('sky', bed_sky)]:
     ITEMS['bed_' + nm] = dict(fn=fn, cat='bed', loop=True)
+for nm, fn in [('sparse', crowd(461060, 15, lpf=6000, hpf=100)), ('murmur', crowd(741283, 17, lpf=6000, hpf=90, search=(30, 70))),
+               ('dense', crowd(546676, 13, lpf=6500, hpf=100))]:
+    ITEMS['crowd_' + nm] = dict(fn=fn, cat='bed', loop=True)
 
 for nm, fn in music.LOOPS.items():
-    ITEMS[nm] = dict(fn=(lambda f=fn: f()[0]), cat='music', loop=True)
+    ITEMS[nm] = dict(fn=fn, cat='music', loop=True)
 ITEMS['frost_drum']['cat'] = 'emit'
 
 
 @item('torch_loop', 'emit')
 def _():
-    return mono(rec(848457, secs(9), lpf=7000))
+    return mono(rec(483692, secs(9), lpf=7000, search=(200, 400)))
 
 
 @item('fountain_loop', 'emit')
@@ -194,10 +230,39 @@ def oneshot(name, fn, n, level=-3.0):
         ITEMS[key] = dict(fn=(lambda f=fn, i=i: f(i)), cat='oneshot', loop=False, level=level, group=name)
 
 
-oneshot('footstep_stone', lambda i: sfx.footstep('stone', 300 + i), 5, -6)
-oneshot('footstep_wood', lambda i: sfx.footstep('wood', 310 + i), 5, -6)
-oneshot('footstep_snow', lambda i: sfx.footstep('snow', 320 + i), 5, -6)
-oneshot('footstep_grass', lambda i: sfx.footstep('grass', 330 + i), 5, -8)
+def rec_events(fid, picks=None, n=5, hpf=60, lpf=9000, max_len=1.5, thresh=-30, fade_out=.04, min_dur=.08, max_dur=99):
+    """One-shots cut from a recording of separate hits: events with a typical level, `n` of them spread out."""
+    from lib.dsp import filt, fade
+    key = (fid, True)
+    if key not in _cache:
+        _cache[key] = aio.load(os.path.join(args.src, f'fs{fid}.mp3'), mono=True)
+    ev = aio.events(_cache[key], thresh, max_len=max_len)
+    if picks is None:
+        pk = np.array([20 * np.log10(np.max(np.abs(e)) + 1e-9) for e in ev])
+        ok = [i for i in range(len(ev)) if abs(pk[i] - np.median(pk)) < 6 and min_dur * SR < ev[i].size < max_dur * SR]
+        picks = [ok[int(round(k))] for k in np.linspace(0, len(ok) - 1, min(n, len(ok)))]
+    out = []
+    for i in picks:
+        e = filt(ev[i], chain(hp(hpf), lp(lpf)))
+        out.append(fade(e, .002, fade_out))
+    return out
+
+
+def rec_oneshots(name, fid, level, **kw):
+    cache = {}
+    def get(i):
+        if 'v' not in cache:
+            cache['v'] = rec_events(fid, **kw)
+        return cache['v'][i]
+    k = len(kw.get('picks') or []) or kw.get('n', 5)
+    oneshot(name, get, k, level)
+
+
+rec_oneshots('footstep_stone', 521590, -6, n=5)
+rec_oneshots('footstep_grass', 521587, -8, n=5)
+rec_oneshots('footstep_snow', 613849, -6, n=5)
+rec_oneshots('footstep_wood', 543685, -6, n=5, picks=[6, 7, 8, 9, 10])
+oneshot('footstep_gravel', lambda i: sfx.footstep('gravel', 340 + i), 5, -7)
 oneshot('firework_launch', lambda i: sfx.firework_launch(400 + i), 3, -4)
 oneshot('firework_burst', lambda i: sfx.firework_burst(410 + i, big=i < 3), 5, -1)
 oneshot('splash', lambda i: sfx.splash(420 + i, 1 + .3 * i), 4, -6)
@@ -205,7 +270,9 @@ oneshot('lantern_release', lambda i: sfx.lantern_release(430 + i), 3, -6)
 oneshot('ui_click', lambda i: sfx.ui_click(i), 2, -10)
 oneshot('oar', lambda i: sfx.oar(440 + i), 3, -6)
 oneshot('spire_bell', lambda i: sfx.spire_bell(450 + i), 1, -1)
-oneshot('anvil', lambda i: sfx.anvil(460 + i), 4, -4)
+oneshot('anvil', lambda i: sfx.anvil(460 + i) if i else rec_events(270588, picks=[0], fade_out=.3)[0], 4, -4)
+rec_oneshots('nightingale', 521035, -8, n=6, thresh=-24, max_len=4.0, fade_out=.3, hpf=900, lpf=9500, min_dur=1.2,
+             max_dur=3.6)
 oneshot('strength_bell', lambda i: sfx.strength_bell(470 + i), 2, -3)
 oneshot('fanfare', lambda i: music.guild_fanfare()[0], 1, -2)
 oneshot('ship_bell', lambda i: sfx.ship_bell(480 + i), 1, -3)
@@ -213,10 +280,10 @@ oneshot('shrine_bell', lambda i: sfx.shrine_bell(490 + i), 1, -3)
 oneshot('clappers', lambda i: sfx.clappers(500 + i), 2, -3)
 oneshot('station_chime', lambda i: sfx.station_chime(510 + i), 1, -3)
 oneshot('announce', lambda i: sfx.announce(520 + i), 1, -5)
-oneshot('owl', lambda i: sfx.owl(530 + i), 3, -4)
-oneshot('dice', lambda i: sfx.dice(540 + i), 3, -6)
+oneshot('owl', lambda i: sfx.owl(530 + i) if i else rec_events(465697, picks=[0], max_len=3, hpf=200, lpf=4000, fade_out=.3)[0], 3, -4)
+oneshot('dice', lambda i: sfx.dice(540 + i) if i else rec_events(629982, picks=[0], fade_out=.1)[0], 3, -6)
 oneshot('kettle', lambda i: sfx.kettle(550 + i), 2, -6)
-oneshot('skate', lambda i: sfx.skate(560 + i), 3, -6)
+rec_oneshots('skate', 593623, -6, picks=[0, 1, 2, 3], max_len=1.5, fade_out=.1, lpf=8000)
 oneshot('ice_chimes', lambda i: sfx.ice_chimes(570 + i), 3, -4)
 oneshot('creak', lambda i: sfx.creak(580 + i), 4, -6)
 for d in range(12):
@@ -232,8 +299,15 @@ def render_all():
         if ONLY and name not in ONLY and it.get('group') not in ONLY:
             continue
         t0 = time.time()
-        x = np.asarray(it['fn'](), float)
+        res = it['fn']()
         cat = it['cat']
+        if isinstance(res, tuple):          # music: (loop, Piece) -> keep the score for the piano roll / checks
+            res, P = res
+            os.makedirs(os.path.join(HERE, 'scores'), exist_ok=True)
+            json.dump(dict(name=name, bpm=P.bpm, beats=P.beats, seconds=P.L / SR,
+                           notes=[[t, round(b, 4), round(d, 4), int(m), round(float(v), 3)] for t, b, d, m, v in P.notes]),
+                      open(os.path.join(HERE, 'scores', name + '.json'), 'w'))
+        x = np.asarray(res, float)
         if cat == 'music':
             x = x if x.ndim == 1 else x.mean(1)
         if it['loop']:
@@ -243,6 +317,9 @@ def render_all():
         else:
             x = x - np.mean(x[: secs(.002)], 0) if x.shape[0] > 100 else x
             x = x / (np.max(np.abs(x)) + 1e-12) * 10 ** (it.get('level', -3) / 20)
+            if it.get('group', '').startswith('footstep'):   # steps: equal loudness across surfaces, peak <= -3 dBFS
+                x = x / 10 ** (aio.lufs(x) / 20) * 10 ** (-27 / 20)
+                x = x * min(1, 10 ** (-3 / 20) / (np.max(np.abs(x)) + 1e-12))
         rel = f"{SUBDIR[cat]}/{name}.m4a"
         loop = aio.encode(x, os.path.join(OUT, rel), KBPS[cat], loop=it['loop'], tmp_dir=args.tmp)
         meta[name] = dict(file=rel, cat=cat, loop=loop, seconds=round(x.shape[0] / SR, 3),

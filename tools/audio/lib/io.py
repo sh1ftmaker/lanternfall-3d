@@ -121,3 +121,30 @@ def encode(x, out_path, kbps, loop=True, tmp_dir='/tmp'):
     if loop:
         return [PAD, round(PAD + x.shape[0] / SR, 6)]
     return None
+
+
+def events(x, thresh_db=-30.0, min_gap=.12, pre=.01, max_len=1.5, tail_db=-45.0):
+    """Split a recording of separate hits (footsteps, splashes...) into events by energy onsets.
+    Returns a list of mono arrays (pre-roll `pre` s, cut where the level falls `tail_db` below the event peak)."""
+    m = x if x.ndim == 1 else x.mean(1)
+    h = int(.005 * SR)
+    env = np.sqrt(np.convolve(m ** 2, np.ones(h) / h, 'same'))
+    db = 20 * np.log10(env + 1e-9)
+    top = db.max()
+    on = db > top + thresh_db
+    out, i = [], 0
+    while i < m.size:
+        if on[i]:
+            s = max(0, i - int(pre * SR))
+            pk = db[i:i + int(.1 * SR)].max()
+            j = i + int(.03 * SR)
+            lim = min(m.size, i + int(max_len * SR))
+            while j < lim and db[j] > pk + tail_db:
+                j += 1
+            # stop early if a new strong onset begins
+            seg = m[s:j].copy()
+            out.append(seg)
+            i = j + int(min_gap * SR)
+        else:
+            i += 1
+    return out

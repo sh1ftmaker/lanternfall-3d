@@ -461,7 +461,8 @@
    "files": [
     "oneshots/skate_1.m4a",
     "oneshots/skate_2.m4a",
-    "oneshots/skate_3.m4a"
+    "oneshots/skate_3.m4a",
+    "oneshots/skate_4.m4a"
    ],
    "area": {
     "r": 12
@@ -946,6 +947,52 @@
    ]
   },
   {
+   "id": "rose_nightingale",
+   "file": "oneshots/nightingale_1.m4a",
+   "gain": 0.55,
+   "ref": 10,
+   "max": 90,
+   "pos": [
+    -150.0,
+    -100.0,
+    2.0
+   ],
+   "loop": false,
+   "every": [
+    3,
+    11
+   ],
+   "files": [
+    "oneshots/nightingale_1.m4a",
+    "oneshots/nightingale_2.m4a",
+    "oneshots/nightingale_3.m4a",
+    "oneshots/nightingale_4.m4a",
+    "oneshots/nightingale_5.m4a",
+    "oneshots/nightingale_6.m4a"
+   ],
+   "area": {
+    "r": 30
+   }
+  },
+  {
+   "id": "punt_oar",
+   "file": "oneshots/oar_1.m4a",
+   "gain": 0.5,
+   "ref": 4,
+   "max": 45,
+   "follow": "punt",
+   "loop": false,
+   "every": [
+    2.6,
+    3.4
+   ],
+   "files": [
+    "oneshots/oar_1.m4a",
+    "oneshots/oar_2.m4a",
+    "oneshots/oar_3.m4a"
+   ]
+  },
+  {
    "id": "owl_1",
    "file": "oneshots/owl_1.m4a",
    "gain": 0.5,
@@ -1148,6 +1195,13 @@
    "oneshots/footstep_grass_4.m4a",
    "oneshots/footstep_grass_5.m4a"
   ],
+  "footstep_gravel": [
+   "oneshots/footstep_gravel_1.m4a",
+   "oneshots/footstep_gravel_2.m4a",
+   "oneshots/footstep_gravel_3.m4a",
+   "oneshots/footstep_gravel_4.m4a",
+   "oneshots/footstep_gravel_5.m4a"
+  ],
   "ui_click": [
    "oneshots/ui_click_1.m4a",
    "oneshots/ui_click_2.m4a"
@@ -1158,6 +1212,44 @@
    "oneshots/oar_3.m4a"
   ]
  },
+ "crowd": [
+  {
+   "file": "beds/crowd_sparse.m4a",
+   "gain": 0.8,
+   "loop": [
+    0.5,
+    15.5
+   ],
+   "density": [
+    0.05,
+    0.35
+   ]
+  },
+  {
+   "file": "beds/crowd_murmur.m4a",
+   "gain": 0.85,
+   "loop": [
+    0.5,
+    17.5
+   ],
+   "density": [
+    0.2,
+    0.6
+   ]
+  },
+  {
+   "file": "beds/crowd_dense.m4a",
+   "gain": 0.8,
+   "loop": [
+    0.5,
+    13.5
+   ],
+   "density": [
+    0.55,
+    1.0
+   ]
+  }
+ ],
  "oneshot_gains": {
   "firework_burst": 1.0,
   "firework_launch": 0.7,
@@ -1167,6 +1259,7 @@
   "footstep_wood": 0.35,
   "footstep_snow": 0.35,
   "footstep_grass": 0.3,
+  "footstep_gravel": 0.35,
   "ui_click": 0.4,
   "oar": 0.45
  }

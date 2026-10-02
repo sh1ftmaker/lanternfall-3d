@@ -132,13 +132,16 @@ def write_json(meta, path):
         em('lantern_sizzle', 'sizzle_loop', P['lantern_stalls'], .5, 3, 25),
         em('lantern_chimes', 'chimes_loop', P['lantern_torii'], .45, 5, 40),
         em('rose_fountain', 'fountain_loop', P['rose_fountain'], .7, 5, 45),
+        em('rose_nightingale', 'nightingale_1', P['rose_maze'], .55, 10, 90, loop=False, every=[3, 11],
+           files=files('nightingale'), area={'r': 30}),
+        em('punt_oar', 'oar_1', 'punt', .5, 4, 45, loop=False, every=[2.6, 3.4], files=files('oar')),
     ]
     for i, (x, y) in enumerate(GLADES):
         emitters.append(em(f'owl_{i + 1}', 'owl_1', [x * 1.25, y * 1.25, 10.0], .5, 20, 160, loop=False,
                            every=[25, 70], files=files('owl'), area={'r': 40}))
 
     oneshots = {k: files(k) for k in ['firework_launch', 'firework_burst', 'lantern_release', 'splash',
-                                      'footstep_stone', 'footstep_wood', 'footstep_snow', 'footstep_grass',
+                                      'footstep_stone', 'footstep_wood', 'footstep_snow', 'footstep_grass', 'footstep_gravel',
                                       'ui_click', 'oar']}
     doc = {
         'version': 1,
@@ -147,8 +150,11 @@ def write_json(meta, path):
         'zones': zones,
         'emitters': emitters,
         'oneshots': oneshots,
+        'crowd': [dict(file=f('crowd_sparse'), gain=.8, loop=lp('crowd_sparse'), density=[.05, .35]),
+                  dict(file=f('crowd_murmur'), gain=.85, loop=lp('crowd_murmur'), density=[.2, .6]),
+                  dict(file=f('crowd_dense'), gain=.8, loop=lp('crowd_dense'), density=[.55, 1.0])],
         'oneshot_gains': {'firework_burst': 1.0, 'firework_launch': .7, 'lantern_release': .6, 'splash': .5,
-                          'footstep_stone': .35, 'footstep_wood': .35, 'footstep_snow': .35, 'footstep_grass': .3,
+                          'footstep_stone': .35, 'footstep_wood': .35, 'footstep_snow': .35, 'footstep_grass': .3, 'footstep_gravel': .35,
                           'ui_click': .4, 'oar': .45},
     }
     os.makedirs(os.path.dirname(path), exist_ok=True)

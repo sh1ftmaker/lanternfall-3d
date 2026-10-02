@@ -1,6 +1,6 @@
 {
  "announce_1": {
-  "bytes": 26454,
+  "bytes": 21107,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/announce_1.m4a",
@@ -11,18 +11,18 @@
   "true_peak": -4.92
  },
  "anvil_1": {
-  "bytes": 14175,
+  "bytes": 3013,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/anvil_1.m4a",
   "group": "anvil",
   "loop": null,
-  "lufs": -20.85,
-  "seconds": 1.6,
+  "lufs": -14.72,
+  "seconds": 0.297,
   "true_peak": -3.99
  },
  "anvil_2": {
-  "bytes": 13132,
+  "bytes": 10655,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/anvil_2.m4a",
@@ -33,7 +33,7 @@
   "true_peak": -3.99
  },
  "anvil_3": {
-  "bytes": 13541,
+  "bytes": 10920,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/anvil_3.m4a",
@@ -44,7 +44,7 @@
   "true_peak": -3.98
  },
  "anvil_4": {
-  "bytes": 14232,
+  "bytes": 10896,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/anvil_4.m4a",
@@ -55,7 +55,7 @@
   "true_peak": -3.84
  },
  "bed_brinewatch": {
-  "bytes": 221372,
+  "bytes": 186073,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_brinewatch.m4a",
@@ -66,10 +66,10 @@
   ],
   "lufs": -24.0,
   "seconds": 17.0,
-  "true_peak": -4.05
+  "true_peak": -2.97
  },
  "bed_frostmere": {
-  "bytes": 244427,
+  "bytes": 204514,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_frostmere.m4a",
@@ -80,10 +80,10 @@
   ],
   "lufs": -24.0,
   "seconds": 19.0,
-  "true_peak": -9.33
+  "true_peak": -9.43
  },
  "bed_gap": {
-  "bytes": 248648,
+  "bytes": 206904,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_gap.m4a",
@@ -94,10 +94,10 @@
   ],
   "lufs": -24.0,
   "seconds": 19.0,
-  "true_peak": -10.39
+  "true_peak": -12.63
  },
  "bed_gate": {
-  "bytes": 232827,
+  "bytes": 194889,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_gate.m4a",
@@ -108,10 +108,10 @@
   ],
   "lufs": -24.0,
   "seconds": 18.0,
-  "true_peak": -7.17
+  "true_peak": -2.1
  },
  "bed_guildhollow": {
-  "bytes": 212783,
+  "bytes": 174034,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_guildhollow.m4a",
@@ -120,12 +120,12 @@
    0.5,
    16.5
   ],
-  "lufs": -24.01,
+  "lufs": -24.0,
   "seconds": 16.0,
-  "true_peak": -1.4
+  "true_peak": -9.75
  },
  "bed_lake": {
-  "bytes": 221180,
+  "bytes": 184811,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_lake.m4a",
@@ -136,10 +136,10 @@
   ],
   "lufs": -24.0,
   "seconds": 17.0,
-  "true_peak": -3.99
+  "true_peak": -4.08
  },
  "bed_lantern-row": {
-  "bytes": 207994,
+  "bytes": 173988,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_lantern-row.m4a",
@@ -153,7 +153,7 @@
   "true_peak": -5.82
  },
  "bed_meridian": {
-  "bytes": 207907,
+  "bytes": 174238,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_meridian.m4a",
@@ -164,10 +164,10 @@
   ],
   "lufs": -24.0,
   "seconds": 16.0,
-  "true_peak": -9.04
+  "true_peak": -6.63
  },
  "bed_rosewick": {
-  "bytes": 232838,
+  "bytes": 196014,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_rosewick.m4a",
@@ -178,10 +178,10 @@
   ],
   "lufs": -24.0,
   "seconds": 18.0,
-  "true_peak": -11.57
+  "true_peak": -8.02
  },
  "bed_sky": {
-  "bytes": 256565,
+  "bytes": 214688,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_sky.m4a",
@@ -192,10 +192,10 @@
   ],
   "lufs": -24.0,
   "seconds": 20.0,
-  "true_peak": -9.69
+  "true_peak": -10.41
  },
  "bed_wanderers": {
-  "bytes": 232220,
+  "bytes": 194303,
   "cat": "bed",
   "channels": 2,
   "file": "beds/bed_wanderers.m4a",
@@ -209,7 +209,7 @@
   "true_peak": -11.99
  },
  "brine_shanty": {
-  "bytes": 283871,
+  "bytes": 255931,
   "cat": "music",
   "channels": 1,
   "file": "music/brine_shanty.m4a",
@@ -223,7 +223,7 @@
   "true_peak": -6.03
  },
  "carousel_organ": {
-  "bytes": 429768,
+  "bytes": 387004,
   "cat": "music",
   "channels": 1,
   "file": "music/carousel_organ.m4a",
@@ -237,7 +237,7 @@
   "true_peak": -6.34
  },
  "chimes_loop": {
-  "bytes": 49356,
+  "bytes": 44327,
   "cat": "emit",
   "channels": 1,
   "file": "fx/chimes_loop.m4a",
@@ -251,7 +251,7 @@
   "true_peak": -10.05
  },
  "clappers_1": {
-  "bytes": 14218,
+  "bytes": 11020,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/clappers_1.m4a",
@@ -262,7 +262,7 @@
   "true_peak": -2.99
  },
  "clappers_2": {
-  "bytes": 14231,
+  "bytes": 11004,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/clappers_2.m4a",
@@ -273,7 +273,7 @@
   "true_peak": -2.9
  },
  "creak_1": {
-  "bytes": 7315,
+  "bytes": 5822,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/creak_1.m4a",
@@ -284,7 +284,7 @@
   "true_peak": -5.93
  },
  "creak_2": {
-  "bytes": 9975,
+  "bytes": 7644,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/creak_2.m4a",
@@ -295,7 +295,7 @@
   "true_peak": -5.98
  },
  "creak_3": {
-  "bytes": 8094,
+  "bytes": 6993,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/creak_3.m4a",
@@ -306,7 +306,7 @@
   "true_peak": -5.98
  },
  "creak_4": {
-  "bytes": 7598,
+  "bytes": 6065,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/creak_4.m4a",
@@ -317,7 +317,7 @@
   "true_peak": -5.98
  },
  "creak_loop": {
-  "bytes": 116880,
+  "bytes": 102558,
   "cat": "emit",
   "channels": 1,
   "file": "fx/creak_loop.m4a",
@@ -330,19 +330,61 @@
   "seconds": 13.0,
   "true_peak": -1.34
  },
+ "crowd_dense": {
+  "bytes": 143396,
+  "cat": "bed",
+  "channels": 2,
+  "file": "beds/crowd_dense.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.5
+  ],
+  "lufs": -24.0,
+  "seconds": 13.0,
+  "true_peak": -9.33
+ },
+ "crowd_murmur": {
+  "bytes": 184137,
+  "cat": "bed",
+  "channels": 2,
+  "file": "beds/crowd_murmur.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   17.5
+  ],
+  "lufs": -24.0,
+  "seconds": 17.0,
+  "true_peak": -11.28
+ },
+ "crowd_sparse": {
+  "bytes": 163860,
+  "cat": "bed",
+  "channels": 2,
+  "file": "beds/crowd_sparse.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   15.5
+  ],
+  "lufs": -24.0,
+  "seconds": 15.0,
+  "true_peak": -9.2
+ },
  "dice_1": {
-  "bytes": 11599,
+  "bytes": 7308,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/dice_1.m4a",
   "group": "dice",
   "loop": null,
-  "lufs": -25.79,
-  "seconds": 1.3,
-  "true_peak": -5.97
+  "lufs": -31.19,
+  "seconds": 0.968,
+  "true_peak": -5.86
  },
  "dice_2": {
-  "bytes": 12317,
+  "bytes": 9538,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/dice_2.m4a",
@@ -353,7 +395,7 @@
   "true_peak": -5.82
  },
  "dice_3": {
-  "bytes": 13316,
+  "bytes": 10449,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/dice_3.m4a",
@@ -364,7 +406,7 @@
   "true_peak": -5.86
  },
  "door_01": {
-  "bytes": 35471,
+  "bytes": 27132,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_01.m4a",
@@ -375,7 +417,7 @@
   "true_peak": -2.99
  },
  "door_02": {
-  "bytes": 35469,
+  "bytes": 27124,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_02.m4a",
@@ -386,7 +428,7 @@
   "true_peak": -2.96
  },
  "door_03": {
-  "bytes": 35573,
+  "bytes": 27096,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_03.m4a",
@@ -397,7 +439,7 @@
   "true_peak": -2.99
  },
  "door_04": {
-  "bytes": 35530,
+  "bytes": 27304,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_04.m4a",
@@ -408,7 +450,7 @@
   "true_peak": -2.99
  },
  "door_05": {
-  "bytes": 35361,
+  "bytes": 27084,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_05.m4a",
@@ -419,7 +461,7 @@
   "true_peak": -2.99
  },
  "door_06": {
-  "bytes": 35422,
+  "bytes": 27148,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_06.m4a",
@@ -430,7 +472,7 @@
   "true_peak": -2.98
  },
  "door_07": {
-  "bytes": 35253,
+  "bytes": 27115,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_07.m4a",
@@ -441,7 +483,7 @@
   "true_peak": -2.58
  },
  "door_08": {
-  "bytes": 34951,
+  "bytes": 26872,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_08.m4a",
@@ -452,7 +494,7 @@
   "true_peak": -2.93
  },
  "door_09": {
-  "bytes": 35498,
+  "bytes": 27096,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_09.m4a",
@@ -463,7 +505,7 @@
   "true_peak": -2.98
  },
  "door_10": {
-  "bytes": 34742,
+  "bytes": 26740,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_10.m4a",
@@ -474,7 +516,7 @@
   "true_peak": -2.99
  },
  "door_11": {
-  "bytes": 33649,
+  "bytes": 26256,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_11.m4a",
@@ -485,7 +527,7 @@
   "true_peak": -2.99
  },
  "door_12": {
-  "bytes": 35776,
+  "bytes": 27292,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/door_12.m4a",
@@ -496,7 +538,7 @@
   "true_peak": -2.99
  },
  "fanfare_1": {
-  "bytes": 50035,
+  "bytes": 38114,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/fanfare_1.m4a",
@@ -507,7 +549,7 @@
   "true_peak": -1.99
  },
  "firework_burst_1": {
-  "bytes": 34609,
+  "bytes": 26565,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_burst_1.m4a",
@@ -518,7 +560,7 @@
   "true_peak": -0.99
  },
  "firework_burst_2": {
-  "bytes": 34951,
+  "bytes": 26466,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_burst_2.m4a",
@@ -529,7 +571,7 @@
   "true_peak": -0.99
  },
  "firework_burst_3": {
-  "bytes": 34742,
+  "bytes": 26411,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_burst_3.m4a",
@@ -540,7 +582,7 @@
   "true_peak": -0.99
  },
  "firework_burst_4": {
-  "bytes": 34798,
+  "bytes": 26357,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_burst_4.m4a",
@@ -551,7 +593,7 @@
   "true_peak": -0.83
  },
  "firework_burst_5": {
-  "bytes": 34713,
+  "bytes": 26484,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_burst_5.m4a",
@@ -562,7 +604,7 @@
   "true_peak": -0.91
  },
  "firework_launch_1": {
-  "bytes": 19196,
+  "bytes": 14671,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_launch_1.m4a",
@@ -573,7 +615,7 @@
   "true_peak": -3.99
  },
  "firework_launch_2": {
-  "bytes": 19171,
+  "bytes": 14684,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_launch_2.m4a",
@@ -584,7 +626,7 @@
   "true_peak": -3.99
  },
  "firework_launch_3": {
-  "bytes": 19181,
+  "bytes": 14666,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/firework_launch_3.m4a",
@@ -595,227 +637,282 @@
   "true_peak": -3.99
  },
  "footstep_grass_1": {
-  "bytes": 3629,
+  "bytes": 2809,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_grass_1.m4a",
   "group": "footstep_grass",
   "loop": null,
-  "lufs": -21.9,
-  "seconds": 0.3,
-  "true_peak": -7.96
+  "lufs": -27.0,
+  "seconds": 0.284,
+  "true_peak": -7.45
  },
  "footstep_grass_2": {
-  "bytes": 3681,
+  "bytes": 2404,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_grass_2.m4a",
   "group": "footstep_grass",
   "loop": null,
-  "lufs": -21.61,
-  "seconds": 0.3,
-  "true_peak": -7.99
+  "lufs": -27.0,
+  "seconds": 0.211,
+  "true_peak": -4.94
  },
  "footstep_grass_3": {
-  "bytes": 3608,
+  "bytes": 2497,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_grass_3.m4a",
   "group": "footstep_grass",
   "loop": null,
-  "lufs": -22.64,
-  "seconds": 0.3,
-  "true_peak": -7.54
+  "lufs": -27.0,
+  "seconds": 0.229,
+  "true_peak": -3.97
  },
  "footstep_grass_4": {
-  "bytes": 3632,
+  "bytes": 2522,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_grass_4.m4a",
   "group": "footstep_grass",
   "loop": null,
-  "lufs": -22.39,
-  "seconds": 0.3,
-  "true_peak": -7.9
+  "lufs": -27.0,
+  "seconds": 0.234,
+  "true_peak": -6.6
  },
  "footstep_grass_5": {
-  "bytes": 3630,
+  "bytes": 2554,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_grass_5.m4a",
   "group": "footstep_grass",
   "loop": null,
-  "lufs": -24.42,
-  "seconds": 0.3,
-  "true_peak": -7.88
+  "lufs": -27.0,
+  "seconds": 0.224,
+  "true_peak": -5.12
+ },
+ "footstep_gravel_1": {
+  "bytes": 2919,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/footstep_gravel_1.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "true_peak": -8.75
+ },
+ "footstep_gravel_2": {
+  "bytes": 2800,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/footstep_gravel_2.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "true_peak": -9.65
+ },
+ "footstep_gravel_3": {
+  "bytes": 2700,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/footstep_gravel_3.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "true_peak": -10.16
+ },
+ "footstep_gravel_4": {
+  "bytes": 2855,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/footstep_gravel_4.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "true_peak": -7.43
+ },
+ "footstep_gravel_5": {
+  "bytes": 2840,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/footstep_gravel_5.m4a",
+  "group": "footstep_gravel",
+  "loop": null,
+  "lufs": -27.0,
+  "seconds": 0.28,
+  "true_peak": -9.05
  },
  "footstep_snow_1": {
-  "bytes": 3775,
+  "bytes": 4149,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_snow_1.m4a",
   "group": "footstep_snow",
   "loop": null,
-  "lufs": -22.53,
-  "seconds": 0.32,
-  "true_peak": -5.48
+  "lufs": -27.0,
+  "seconds": 0.496,
+  "true_peak": -8.69
  },
  "footstep_snow_2": {
-  "bytes": 3713,
+  "bytes": 3243,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_snow_2.m4a",
   "group": "footstep_snow",
   "loop": null,
-  "lufs": -21.95,
-  "seconds": 0.32,
-  "true_peak": -5.97
+  "lufs": -27.0,
+  "seconds": 0.346,
+  "true_peak": -8.5
  },
  "footstep_snow_3": {
-  "bytes": 3429,
+  "bytes": 3404,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_snow_3.m4a",
   "group": "footstep_snow",
   "loop": null,
-  "lufs": -24.4,
-  "seconds": 0.32,
-  "true_peak": -5.65
+  "lufs": -27.0,
+  "seconds": 0.382,
+  "true_peak": -8.9
  },
  "footstep_snow_4": {
-  "bytes": 3511,
+  "bytes": 3508,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_snow_4.m4a",
   "group": "footstep_snow",
   "loop": null,
-  "lufs": -22.92,
-  "seconds": 0.32,
-  "true_peak": -5.99
+  "lufs": -27.0,
+  "seconds": 0.382,
+  "true_peak": -9.84
  },
  "footstep_snow_5": {
-  "bytes": 3818,
+  "bytes": 3809,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_snow_5.m4a",
   "group": "footstep_snow",
   "loop": null,
-  "lufs": -23.51,
-  "seconds": 0.32,
-  "true_peak": -5.99
+  "lufs": -27.0,
+  "seconds": 0.427,
+  "true_peak": -10.04
  },
  "footstep_stone_1": {
-  "bytes": 2602,
+  "bytes": 1806,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_stone_1.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -28.01,
-  "seconds": 0.18,
-  "true_peak": -5.98
+  "lufs": -27.02,
+  "seconds": 0.108,
+  "true_peak": -2.99
  },
  "footstep_stone_2": {
-  "bytes": 2609,
+  "bytes": 2189,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_stone_2.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -26.49,
-  "seconds": 0.18,
-  "true_peak": -5.97
+  "lufs": -28.0,
+  "seconds": 0.193,
+  "true_peak": -2.98
  },
  "footstep_stone_3": {
-  "bytes": 2653,
+  "bytes": 1718,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_stone_3.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -30.45,
-  "seconds": 0.18,
-  "true_peak": -5.92
+  "lufs": -27.34,
+  "seconds": 0.104,
+  "true_peak": -2.98
  },
  "footstep_stone_4": {
-  "bytes": 2623,
+  "bytes": 2359,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_stone_4.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -29.92,
-  "seconds": 0.18,
-  "true_peak": -5.99
+  "lufs": -30.2,
+  "seconds": 0.196,
+  "true_peak": -2.99
  },
  "footstep_stone_5": {
-  "bytes": 2593,
+  "bytes": 2196,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_stone_5.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -28.61,
-  "seconds": 0.18,
-  "true_peak": -5.99
+  "lufs": -29.49,
+  "seconds": 0.183,
+  "true_peak": -2.98
  },
  "footstep_wood_1": {
-  "bytes": 3109,
+  "bytes": 2734,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_wood_1.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -28.12,
-  "seconds": 0.25,
-  "true_peak": -5.98
+  "lufs": -27.0,
+  "seconds": 0.267,
+  "true_peak": -3.64
  },
  "footstep_wood_2": {
-  "bytes": 3163,
+  "bytes": 3128,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_wood_2.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -27.76,
-  "seconds": 0.25,
-  "true_peak": -5.98
+  "lufs": -29.64,
+  "seconds": 0.33,
+  "true_peak": -2.99
  },
  "footstep_wood_3": {
-  "bytes": 3183,
+  "bytes": 1782,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_wood_3.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -27.43,
-  "seconds": 0.25,
-  "true_peak": -5.99
+  "lufs": -28.12,
+  "seconds": 0.114,
+  "true_peak": -2.99
  },
  "footstep_wood_4": {
-  "bytes": 3128,
+  "bytes": 2708,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_wood_4.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -26.92,
-  "seconds": 0.25,
-  "true_peak": -5.99
+  "lufs": -27.0,
+  "seconds": 0.261,
+  "true_peak": -4.14
  },
  "footstep_wood_5": {
-  "bytes": 3132,
+  "bytes": 2639,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/footstep_wood_5.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -25.6,
-  "seconds": 0.25,
-  "true_peak": -5.99
+  "lufs": -27.0,
+  "seconds": 0.243,
+  "true_peak": -4.35
  },
  "fountain_loop": {
-  "bytes": 99659,
+  "bytes": 87683,
   "cat": "emit",
   "channels": 1,
   "file": "fx/fountain_loop.m4a",
@@ -829,7 +926,7 @@
   "true_peak": -12.31
  },
  "frost_court": {
-  "bytes": 284445,
+  "bytes": 256205,
   "cat": "music",
   "channels": 1,
   "file": "music/frost_court.m4a",
@@ -843,7 +940,7 @@
   "true_peak": -6.6
  },
  "frost_drum": {
-  "bytes": 119935,
+  "bytes": 105099,
   "cat": "emit",
   "channels": 1,
   "file": "fx/frost_drum.m4a",
@@ -857,7 +954,7 @@
   "true_peak": -2.17
  },
  "gate_welcome": {
-  "bytes": 374358,
+  "bytes": 337675,
   "cat": "music",
   "channels": 1,
   "file": "music/gate_welcome.m4a",
@@ -871,7 +968,7 @@
   "true_peak": -6.24
  },
  "guild_tavern": {
-  "bytes": 374362,
+  "bytes": 337610,
   "cat": "music",
   "channels": 1,
   "file": "music/guild_tavern.m4a",
@@ -885,7 +982,7 @@
   "true_peak": -6.68
  },
  "ice_chimes_1": {
-  "bytes": 33819,
+  "bytes": 25720,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ice_chimes_1.m4a",
@@ -896,7 +993,7 @@
   "true_peak": -3.94
  },
  "ice_chimes_2": {
-  "bytes": 34014,
+  "bytes": 25895,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ice_chimes_2.m4a",
@@ -907,7 +1004,7 @@
   "true_peak": -3.98
  },
  "ice_chimes_3": {
-  "bytes": 33868,
+  "bytes": 25759,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ice_chimes_3.m4a",
@@ -918,7 +1015,7 @@
   "true_peak": -3.99
  },
  "kettle_1": {
-  "bytes": 33770,
+  "bytes": 25794,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/kettle_1.m4a",
@@ -929,7 +1026,7 @@
   "true_peak": -5.98
  },
  "kettle_2": {
-  "bytes": 33917,
+  "bytes": 25773,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/kettle_2.m4a",
@@ -940,7 +1037,7 @@
   "true_peak": -5.94
  },
  "lake_hush": {
-  "bytes": 337673,
+  "bytes": 304709,
   "cat": "music",
   "channels": 1,
   "file": "music/lake_hush.m4a",
@@ -954,7 +1051,7 @@
   "true_peak": -5.74
  },
  "lantern_market": {
-  "bytes": 284280,
+  "bytes": 256268,
   "cat": "music",
   "channels": 1,
   "file": "music/lantern_market.m4a",
@@ -968,7 +1065,7 @@
   "true_peak": -4.86
  },
  "lantern_release_1": {
-  "bytes": 29560,
+  "bytes": 22915,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/lantern_release_1.m4a",
@@ -979,7 +1076,7 @@
   "true_peak": -5.95
  },
  "lantern_release_2": {
-  "bytes": 29661,
+  "bytes": 22769,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/lantern_release_2.m4a",
@@ -990,7 +1087,7 @@
   "true_peak": -5.84
  },
  "lantern_release_3": {
-  "bytes": 29608,
+  "bytes": 22650,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/lantern_release_3.m4a",
@@ -1001,7 +1098,7 @@
   "true_peak": -5.92
  },
  "meridian_signal": {
-  "bytes": 380612,
+  "bytes": 341680,
   "cat": "music",
   "channels": 1,
   "file": "music/meridian_signal.m4a",
@@ -1015,7 +1112,7 @@
   "true_peak": -5.6
  },
  "neon_hum": {
-  "bytes": 74914,
+  "bytes": 65893,
   "cat": "emit",
   "channels": 1,
   "file": "fx/neon_hum.m4a",
@@ -1028,8 +1125,74 @@
   "seconds": 8.0,
   "true_peak": -17.17
  },
+ "nightingale_1": {
+  "bytes": 19124,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_1.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.67,
+  "seconds": 2.922,
+  "true_peak": -7.99
+ },
+ "nightingale_2": {
+  "bytes": 22791,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_2.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -25.08,
+  "seconds": 3.475,
+  "true_peak": -7.98
+ },
+ "nightingale_3": {
+  "bytes": 9242,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_3.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -27.34,
+  "seconds": 1.316,
+  "true_peak": -7.97
+ },
+ "nightingale_4": {
+  "bytes": 15836,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_4.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.4,
+  "seconds": 2.362,
+  "true_peak": -7.82
+ },
+ "nightingale_5": {
+  "bytes": 11043,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_5.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -18.07,
+  "seconds": 1.604,
+  "true_peak": -7.99
+ },
+ "nightingale_6": {
+  "bytes": 19281,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/nightingale_6.m4a",
+  "group": "nightingale",
+  "loop": null,
+  "lufs": -21.81,
+  "seconds": 2.928,
+  "true_peak": -7.97
+ },
  "oar_1": {
-  "bytes": 10683,
+  "bytes": 8453,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/oar_1.m4a",
@@ -1040,7 +1203,7 @@
   "true_peak": -5.97
  },
  "oar_2": {
-  "bytes": 10243,
+  "bytes": 8195,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/oar_2.m4a",
@@ -1051,7 +1214,7 @@
   "true_peak": -5.99
  },
  "oar_3": {
-  "bytes": 10907,
+  "bytes": 8552,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/oar_3.m4a",
@@ -1062,18 +1225,18 @@
   "true_peak": -5.98
  },
  "owl_1": {
-  "bytes": 27329,
+  "bytes": 19628,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/owl_1.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -18.8,
-  "seconds": 3.2,
+  "lufs": -15.33,
+  "seconds": 3.002,
   "true_peak": -3.99
  },
  "owl_2": {
-  "bytes": 27283,
+  "bytes": 20939,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/owl_2.m4a",
@@ -1084,7 +1247,7 @@
   "true_peak": -3.99
  },
  "owl_3": {
-  "bytes": 27310,
+  "bytes": 20907,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/owl_3.m4a",
@@ -1095,7 +1258,7 @@
   "true_peak": -3.99
  },
  "rosewick_waltz": {
-  "bytes": 283317,
+  "bytes": 255786,
   "cat": "music",
   "channels": 1,
   "file": "music/rosewick_waltz.m4a",
@@ -1109,7 +1272,7 @@
   "true_peak": -7.13
  },
  "ship_bell_1": {
-  "bytes": 33859,
+  "bytes": 25969,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ship_bell_1.m4a",
@@ -1120,7 +1283,7 @@
   "true_peak": -2.94
  },
  "shrine_bell_1": {
-  "bytes": 50248,
+  "bytes": 39284,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/shrine_bell_1.m4a",
@@ -1131,7 +1294,7 @@
   "true_peak": -2.99
  },
  "sizzle_loop": {
-  "bytes": 66771,
+  "bytes": 58752,
   "cat": "emit",
   "channels": 1,
   "file": "fx/sizzle_loop.m4a",
@@ -1145,40 +1308,51 @@
   "true_peak": -7.5
  },
  "skate_1": {
-  "bytes": 19151,
+  "bytes": 7007,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/skate_1.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -24.78,
-  "seconds": 2.5,
+  "lufs": -21.23,
+  "seconds": 0.944,
   "true_peak": -5.99
  },
  "skate_2": {
-  "bytes": 19205,
+  "bytes": 9826,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/skate_2.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -23.57,
-  "seconds": 2.5,
+  "lufs": -23.5,
+  "seconds": 1.406,
   "true_peak": -5.8
  },
  "skate_3": {
-  "bytes": 19252,
+  "bytes": 6841,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/skate_3.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -21.27,
-  "seconds": 2.5,
-  "true_peak": -5.48
+  "lufs": -20.92,
+  "seconds": 0.929,
+  "true_peak": -5.96
+ },
+ "skate_4": {
+  "bytes": 6520,
+  "cat": "oneshot",
+  "channels": 1,
+  "file": "oneshots/skate_4.m4a",
+  "group": "skate",
+  "loop": null,
+  "lufs": -22.26,
+  "seconds": 0.87,
+  "true_peak": -5.93
  },
  "spire_bell_1": {
-  "bytes": 87288,
+  "bytes": 65553,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/spire_bell_1.m4a",
@@ -1189,7 +1363,7 @@
   "true_peak": -0.99
  },
  "splash_1": {
-  "bytes": 8595,
+  "bytes": 6548,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/splash_1.m4a",
@@ -1200,7 +1374,7 @@
   "true_peak": -5.83
  },
  "splash_2": {
-  "bytes": 8591,
+  "bytes": 6658,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/splash_2.m4a",
@@ -1211,7 +1385,7 @@
   "true_peak": -5.99
  },
  "splash_3": {
-  "bytes": 8503,
+  "bytes": 6654,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/splash_3.m4a",
@@ -1222,7 +1396,7 @@
   "true_peak": -5.99
  },
  "splash_4": {
-  "bytes": 8510,
+  "bytes": 6500,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/splash_4.m4a",
@@ -1233,7 +1407,7 @@
   "true_peak": -5.98
  },
  "station_chime_1": {
-  "bytes": 30533,
+  "bytes": 23349,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/station_chime_1.m4a",
@@ -1244,7 +1418,7 @@
   "true_peak": -2.98
  },
  "strength_bell_1": {
-  "bytes": 23119,
+  "bytes": 18592,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/strength_bell_1.m4a",
@@ -1255,7 +1429,7 @@
   "true_peak": -2.99
  },
  "strength_bell_2": {
-  "bytes": 23184,
+  "bytes": 18276,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/strength_bell_2.m4a",
@@ -1266,7 +1440,7 @@
   "true_peak": -2.99
  },
  "taiko_loop": {
-  "bytes": 230817,
+  "bytes": 201900,
   "cat": "emit",
   "channels": 1,
   "file": "fx/taiko_loop.m4a",
@@ -1280,7 +1454,7 @@
   "true_peak": -9.19
  },
  "torch_loop": {
-  "bytes": 88193,
+  "bytes": 73472,
   "cat": "emit",
   "channels": 1,
   "file": "fx/torch_loop.m4a",
@@ -1289,12 +1463,12 @@
    0.5,
    9.5
   ],
-  "lufs": -25.36,
+  "lufs": -24.0,
   "seconds": 9.0,
-  "true_peak": -0.79
+  "true_peak": -3.04
  },
  "train_loop": {
-  "bytes": 58583,
+  "bytes": 51504,
   "cat": "emit",
   "channels": 1,
   "file": "fx/train_loop.m4a",
@@ -1308,7 +1482,7 @@
   "true_peak": -9.73
  },
  "ui_click_1": {
-  "bytes": 1705,
+  "bytes": 1494,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ui_click_1.m4a",
@@ -1319,7 +1493,7 @@
   "true_peak": -9.98
  },
  "ui_click_2": {
-  "bytes": 1715,
+  "bytes": 1498,
   "cat": "oneshot",
   "channels": 1,
   "file": "oneshots/ui_click_2.m4a",
@@ -1330,7 +1504,7 @@
   "true_peak": -9.95
  },
  "wanderers_hall": {
-  "bytes": 283566,
+  "bytes": 255346,
   "cat": "music",
   "channels": 1,
   "file": "music/wanderers_hall.m4a",
