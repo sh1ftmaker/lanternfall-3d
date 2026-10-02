@@ -130,7 +130,11 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
       }
       void main(){
         vec3 col = vCol;
-        if (uDay > 0.0) col *= dnLamp(vW.xz);                      // game hook: daynight (lamps)
+        if (uDay > 0.0) {                                           // game hook: daynight (lamps: lit things fade up; unlit lamp housings, signs and windows are painted by the sky)
+          float lk = dnLamp(vW.xz);
+          col *= lk;
+          if (vCls > 6.5 && lk < 1.0) col += max(vAlb, vec3(0.02)) * (uAmbSky * 1.1 + uSunCol * 0.12 + uAmbGnd * 0.3) * (1.0 - lk);
+        }
         if (vCls < 6.5 && (uDetail > 0.5 || uMoonOn > 0.5 || uDay > 0.0)) {
           vec3 dx = dFdx(vW), dy = dFdy(vW);
           vec3 nv = normalize(cross(dx, dy));                    // faces the viewer

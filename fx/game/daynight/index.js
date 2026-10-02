@@ -7,8 +7,8 @@ import { NIGHT } from './uniforms.js';
 const T0 = 17 * 60 + 30, T_NIGHT = 19 * 60 + 30, T_LAMPS = 19 * 60 + 15;
 // keyframes (minutes, linear colours before tone mapping). The last one is night: nothing of the dusk is left in it.
 const K = [
-  { t: T0, zen: [0.045, 0.075, 0.22], mid: [0.20, 0.17, 0.34], hor: [0.62, 0.30, 0.22], sg: [1.1, 0.42, 0.13], as: [0.17, 0.19, 0.34], ag: [0.14, 0.085, 0.085], aw: [0.30, 0.12, 0.05], fog: [0.26, 0.15, 0.17], star: 0.0, moon: 0.3 },
-  { t: 18 * 60, zen: [0.022, 0.04, 0.13], mid: [0.11, 0.085, 0.24], hor: [0.40, 0.16, 0.15], sg: [0.75, 0.22, 0.07], as: [0.10, 0.105, 0.22], ag: [0.065, 0.04, 0.055], aw: [0.16, 0.06, 0.045], fog: [0.15, 0.075, 0.10], star: 0.02, moon: 0.5 },
+  { t: T0, zen: [0.030, 0.052, 0.19], mid: [0.19, 0.115, 0.30], hor: [0.80, 0.30, 0.15], sg: [1.3, 0.45, 0.11], as: [0.115, 0.115, 0.22], ag: [0.12, 0.07, 0.06], aw: [0.28, 0.10, 0.035], fog: [0.26, 0.15, 0.17], star: 0.0, moon: 0.3 },
+  { t: 18 * 60, zen: [0.018, 0.034, 0.13], mid: [0.10, 0.065, 0.24], hor: [0.46, 0.15, 0.13], sg: [0.8, 0.2, 0.06], as: [0.075, 0.075, 0.17], ag: [0.06, 0.035, 0.05], aw: [0.14, 0.05, 0.04], fog: [0.15, 0.075, 0.10], star: 0.02, moon: 0.5 },
   { t: 18 * 60 + 30, zen: [0.012, 0.02, 0.07], mid: [0.05, 0.045, 0.14], hor: [0.17, 0.08, 0.14], sg: [0.28, 0.08, 0.05], as: [0.04, 0.042, 0.10], ag: [0.022, 0.018, 0.035], aw: [0.06, 0.025, 0.03], fog: [0.06, 0.035, 0.08], star: 0.45, moon: 0.8 },
   { t: 19 * 60, zen: [0.0085, 0.013, 0.045], mid: [0.036, 0.04, 0.115], hor: [0.10, 0.07, 0.155], sg: [0.05, 0.02, 0.02], as: [0.009, 0.011, 0.03], ag: [0.005, 0.004, 0.01], aw: [0.01, 0.005, 0.007], fog: [0.025, 0.02, 0.055], star: 0.95, moon: 1 },
   { t: T_NIGHT, zen: NIGHT.zen, mid: NIGHT.mid, hor: NIGHT.hor, sg: [0, 0, 0], as: [0, 0, 0], ag: [0, 0, 0], aw: [0, 0, 0], fog: null, star: 1, moon: 1 },
@@ -28,7 +28,7 @@ export function init(game) {
   function at(t) {
     const night = t >= T_NIGHT || t < 600;
     const tt = night ? T_NIGHT : Math.max(t, 900);
-    const el = tt >= T_NIGHT ? -40 : 4.5 - (tt - T0) * 0.2;           // sun elevation (deg): 4.5 at 17:30, sets about 17:52, -19.5 at 19:30
+    const el = tt >= T_NIGHT ? -40 : 6.5 - (tt - T0) * 0.2;           // sun elevation (deg): 6.5 at 17:30, sets about 18:02, -17.5 at 19:30
     const az = Math.max(0, tt - T0) * 0.0005;                          // due west at 17:30 (behind the Spire from the East Gate), drifting north
     const ce = Math.cos(el * Math.PI / 180), se = Math.sin(el * Math.PI / 180);
     const sun = { x: -ce * Math.cos(az), y: ce * Math.sin(az), z: se };    // Blender frame
@@ -37,7 +37,7 @@ export function init(game) {
     else if (tt > K[0].t) { let i = 1; while (K[i].t < tt) i++; a = K[i - 1]; b = K[i]; f = (tt - a.t) / (b.t - a.t); }
     const m = (k) => (night ? K[K.length - 1][k] : mix3(a[k], b[k], f));
     const sunK = sstep(-1.2, 1.2, el), warm = sstep(-1, 6, el), high = sstep(6, 30, el);
-    const sunCol = night ? [0, 0, 0] : [(1.7 - 0.15 * warm) * sunK, (0.30 + 0.32 * warm + 0.3 * high) * sunK, (0.07 + 0.17 * warm + 0.3 * high) * sunK];
+    const sunCol = night ? [0, 0, 0] : [(2.1 - 0.2 * warm) * sunK, (0.36 + 0.4 * warm + 0.4 * high) * sunK, (0.08 + 0.2 * warm + 0.4 * high) * sunK];
     const disc = night ? 0 : sstep(-1.9, -0.7, el);
     const lamps = night || tt >= T_LAMPS ? 1 : sstep(T0, T_LAMPS, tt);
     const fogv = m('fog');
