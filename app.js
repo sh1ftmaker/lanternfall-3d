@@ -18,6 +18,7 @@ import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
 import { createSound } from './fx/audio/index.js';      // sound: button, settings entries, lazy engine (fx/audio/)
+import { createGame } from './fx/game/core.js';            // game hook: things to do in the park (fx/game/, modules in fx/game/<name>/)
 import { createWeather } from './fx/weather/index.js';  // weather hook: Clear / Mist / Rain / Storm / Snow (fx/weather/)
 import { createCull } from './fx/cull/index.js';          // culling hook: per-camera frustum culling of chunks + forest cells (fx/cull/)
 
@@ -552,6 +553,7 @@ async function load() {
   }
   FX.fxPark(Q, { park, uTime });
   bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0; moonShadow();
+  game.start();                                                               // game hook: the whole park is in
 }
 
 /* ───────────────────────── places + captions ───────────────────────── */
@@ -786,7 +788,7 @@ addEventListener('blur', () => keys.clear());
 // shortcuts: 1 / 2 / 3 modes, F full screen, Esc closes the settings sheet or leaves Walk for Explore
 addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || !ready) return;
-  if (e.key === 'Escape') { if (settings.open) settings.close(); else if (clean) setClean(false); else if (mode === 'walk') setMode('orbit'); return; }
+  if (e.key === 'Escape') { if (game.journal.isOpen) game.journal.close(); else if (settings.open) settings.close(); else if (clean) setClean(false); else if (mode === 'walk') setMode('orbit'); return; }
   if (e.repeat) return;
   if (e.code === 'Space' && mode === 'walk') { walkHop(); return; }
   const m = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk' }[e.code];
@@ -945,6 +947,10 @@ const sound = createSound({ THREE, camera, manifest: () => manifest, DATA, Q, mo
 // ── weather hook ── (fx/weather/): Clear is the untouched park; '#weather=rain' etc.; window.__park.weather
 const weather = createWeather({ THREE, scene, camera, renderer, Q, surface, uTime, mobile, reduceMotion, FOG, DATA, fetchBin,
   getPark: () => park, getWater: () => fxWater, getFx: () => FX.fxState(), manifest: () => manifest, getMode: () => mode, getWalk: () => walk, isReady: () => ready, isLoaded: () => loaded, glLost: () => glCtx.lost, getSound: () => (sound.on ? sound.engine : null) });
+// ── game hook ── (fx/game/core.js + modules): quests, the evening clock, rides; '#no-game'; window.__park.game
+const game = createGame({ THREE, scene, camera, renderer, Q, walk, uTime, mobile, coarse, places, sound, weather, DATA, fetchBin, setMode, gotoPlace, nearestPlace,
+  getNav: () => nav, getManifest: () => manifest, getMode: () => mode, getGuests: () => guests, getPlatformer: () => pf, getPark: () => park, getTrains: () => trains, getWater: () => fxWater,
+  getFx: () => FX.fxState(), reduceMotion: () => reduceMotion, isClean: () => clean, setClean, surface, FOG, MOON });
 const fsBtn = $('#btn-full');
 { // full screen where the page may take it (not on iPhone Safari: no Fullscreen API for elements; Add to Home Screen instead)
   const de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen, exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -1029,7 +1035,8 @@ function frame() {
   if ((lodTick & 15) === 0) view.want = clean ? 0 : coveredBand();      // clean view: nothing covers the scene
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
-  if (pf) pf.frame(dt, mode);                                                 // platformer hook: leaves it when the mode changes
+  if (pf) pf.frame(dt, mode);
+  game.frame(dt, time);                                                       // game hook: after the walker / lamplighter has moved                                                 // platformer hook: leaves it when the mode changes
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
   weather.update(dt, time);                                 // weather hook: before the lake (rain splats) and the render
@@ -1051,7 +1058,7 @@ let pf = null, pfLoading = null, pfWant = !HASH.has('fp') && (() => { try { retu
 function platformer() {
   if (!pfLoading) pfLoading = import('./fx/platformer/index.js').then((M) => M.createPlatformer({ THREE, scene, camera, renderer, park, lodMeshes, manifest, nav, depth, surface, walk, Q, mobile, coarse,
     guests: () => guests, reduceMotion: () => reduceMotion, setMode, setFov: (f) => { if (f) { baseFov = f; applyFov(); } },
-    onEsc: () => { if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => setPlatformer(false),
+    onEsc: () => { if (game.journal.isOpen) game.journal.close(); else if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => setPlatformer(false),
     status: (t) => { const p = $('#loadpill'); p.hidden = !t; if (t) p.textContent = t; },
     hint: (t) => { hintEl.textContent = t; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 6500); } })).then((p) => (pf = p))
     .catch((e) => { console.warn('platformer:', e); pfLoading = null; pfWant = false; $('#loadpill').hidden = true; if (mode === 'walk') hopBtn.hidden = !coarse; });
@@ -1070,7 +1077,8 @@ const togglePlatformer = () => setPlatformer(!(mode === 'walk' && pfWant));
 $('#btn-pf').addEventListener('click', togglePlatformer);
 addEventListener('keydown', (e) => { if (e.code === 'KeyP' && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
 Object.defineProperty(window.__park, 'platformer', { get: () => pf });
-window.__park.cull = cull;                                  // culling hook: .set(on), .stats
+window.__park.cull = cull;
+window.__park.game = game;                                  // game hook                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 frame();
 let loadFailed = false;

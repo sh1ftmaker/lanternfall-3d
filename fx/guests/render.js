@@ -358,6 +358,7 @@ export function createGuests(opts) {
   const mkTex = (data, rows) => { const t = new THREE.DataTexture(data, TW, rows, THREE.RGBAFormat, THREE.FloatType); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
   const tState = mkTex(sData, rowsS), tLook = mkTex(lData, rowsL);
   // ground light (filled when data/guests.json arrives)
+  let lightGrid = null;
   const tLight = new THREE.DataTexture(new Uint8Array([40, 36, 52, 2]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
   tLight.needsUpdate = true;
   const U = {
@@ -482,7 +483,7 @@ export function createGuests(opts) {
       if (buf.length < L.w * L.h * 4) return;
       const t = new THREE.DataTexture(buf.subarray(0, L.w * L.h * 4), L.w, L.h, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
-      U.tLight.value = t; tLight.dispose();
+      U.tLight.value = t; tLight.dispose(); lightGrid = { data: buf, w: L.w, h: L.h, x0: L.x0, y0: L.y0, cell: L.cell, range: L.range || 32 };   // also read by fx/game (lightAt)
       U.uLightXf.value.set(L.x0, L.y0, 1 / (L.w * L.cell), 1 / (L.h * L.cell)); U.uLightOn.value = 1; stats.lightGrid = true;
       if (L.range) U.uLightRange.value = L.range;
       if (js.pois) stats.pois = js.pois.length;
@@ -605,7 +606,7 @@ export function createGuests(opts) {
     const out = {}; for (const [k, a] of Object.entries(per)) { a.sort((x, y) => x - y); out[k] = +a[a.length >> 1].toFixed(3); }
     out.frames = fr.length; return out;
   }
-  return { update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
+  return { get light() { return lightGrid; }, update, setVisible, prof(on) { prof.on = !!on; prof.acc = {}; prof.frames = 0; prof.pending = []; prof.cur = null; prof.gl = null; }, profResult, setDensity, setReduceMotion, degrade, dispose, stats, meshes: M, group, uniforms: U, cfg,
     allowStandIn() { opts.standIn = true; },
     get crowd() { return crowd; }, setCrowd(c, o = {}) { crowd = c; ownCrowd = !!o.drive; baseCount = -1; if (st.density < 1) setDensity(st.density); stats.standIn = false; seedOf.fill(-1); cur.fill(255); if (c && c.setReduceMotion) c.setReduceMotion(st.reduceMotion); },
     get visible() { return st.visible; } };
