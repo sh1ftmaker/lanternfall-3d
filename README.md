@@ -35,6 +35,14 @@ Choices are remembered in the browser. The page also lowers quality by itself if
 - The carousel in Rosewick turns, the monorail runs, it snows in Frostmere, there are fireflies and petals in the
   gardens, steam and smoke at the stalls, and fireworks during the tour's Spire shot and finale.
 
+## Guests
+
+About 2,400 guests (600 on phones) walk the park in ones, pairs and small groups. They stroll the promenades, queue
+at stalls, sit on benches, take photos and line the lake rail to watch the lanterns. The figures are generated in
+code (`fx/guests/assets.js`), animated in the vertex shader and lit by where they stand; the crowd simulation
+(`fx/guests/sim.js`) runs in a Worker on the walk grid, using benches, stall fronts and viewpoints extracted from
+the Blender model (`data/guests.json`, generator in `tools/guests/`). A "Guests" switch is in the settings sheet.
+
 ## Optional switches
 
 Add these after `#` in the address, separated by commas, then reload.
@@ -47,6 +55,8 @@ Add these after `#` in the address, separated by commas, then reload.
 | `nodetail` | Turn off the procedural paving, plank, masonry and roof detail |
 | `noshadow` | Turn off moon shadows |
 | `aurora` | Aurora in the night sky |
+| `no-guests` | Hide the guests |
+| `guests=N` | Set the number of guests |
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
 
