@@ -12,9 +12,15 @@ term is behind `if (uDay > 0.0)`, so night costs nothing extra and renders bit f
 - `index.js`: `at(t)` (pure state), per-frame easing (about 2 s when the clock jumps), writes the uniforms, the sun shadow
   map, dimming of beams / flames / dance floor, the fog hook.
 
+## Run-time props and the shadow map
+- `game.props.materials` (a live Set, fx/game/core.js) and the `'prop'` event are read if they exist (both are feature-detected). A lit
+  `props.mesh` material gets one shared shader multiplier (lamps + sun and sky light as the park's surfaces get them), a glowing one
+  (colour >= 0.9 in a channel) is dimmed with the lamps, a `props.glow` sprite by its opacity. At night every factor is exactly 1.
+- The sun's shadow map (a 4096 x 4096 depth target on desktop) is disposed when night comes and rebuilt at the next dusk.
+
 ## API
 `game.modules.daynight`: `.state` (`{ t, phase, night, el, sun, sunCol, zen, mid, hor, ambSky, ambGnd, ambGlow, fog, stars,
-moon, lamps }`), `.at(t)` for tests, `.time` (eased clock), `.snap(t)` (set the clock and show it at once).
+moon, lamps }`), `.at(t)` for tests, `.time` (eased clock), `.snap(t)` (set the clock and show it at once), `.props` (`{ gain, emit, count }`, for tests).
 Event `daynight:phase` `{ phase: 'dusk' | 'night' }` on change. Saved state: none. Hash tokens: none (`#no-daynight` is the
 core's switch; `#noshadow` also turns off the sun's shadows).
 
