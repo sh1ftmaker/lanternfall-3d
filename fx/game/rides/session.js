@@ -11,7 +11,7 @@ const CSS = `
 @media (pointer:coarse){ #rides-leave kbd{display:none} }
 /* the walker's touch controls and the hop button have nothing to do on a ride */
 body.rides-on .pf-touch,body.rides-on #stick,body.rides-on #hop{display:none!important}
-@media (max-width:640px){ #rides-leave{bottom:calc(env(safe-area-inset-bottom,0px) + 132px)} }
+@media (max-width:640px){ #rides-leave{bottom:calc(env(safe-area-inset-bottom,0px) + 240px)} }   /* above the caption card, which ends about 210 px up */
 body.clean #rides-leave{opacity:0;pointer-events:none}
 `;
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -102,8 +102,21 @@ export function createSession(game) {
   };
   const onUp = (e) => { if (e.pointerId === look.id) look.id = -1; if (cur && e.target === canvas) e.stopImmediatePropagation(); };
   for (const [n, f] of [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['pointercancel', onUp]]) window.addEventListener(n, f, true);
-  window.addEventListener('keydown', (e) => { if (cur && !cur.ending && e.code === 'Escape') { e.preventDefault(); end('button'); } });
+  // capture phase, and stopped: the viewer's own Esc (and Wick's) would otherwise leave Walk for Explore first
+  // Wick's action keys are swallowed too: the platformer latches them while its update waits, so E (its swing) pressed
+  // on a ride swung the pole on the way out and boarded the monorail again
+  const WICK_KEYS = /^(Space|Key[EFJKXCLZQ]|Shift(Left|Right))$/;
+  window.addEventListener('keydown', (e) => {
+    if (!cur) return;
+    if (e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); end('button'); }
+    else if (game.player.wick && WICK_KEYS.test(e.code) && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   btn.addEventListener('click', () => end('button'));
+  // app.js re-derives the near plane every frame from the distance to the park's geometry (fx/depth.js), which knows
+  // nothing of the boat's canopy or the carousel: over open water it rose to 0.8 m and cut the canopy and its posts.
+  // While riding, cap it the way the guests and Wick do (the walk floor of 0.22 m still applies).
+  const depth = window.__park && window.__park.depth;
+  if (depth && typeof depth.update === 'function') { const du = depth.update; depth.update = (nf) => { if (cur) depth.cap = Math.min(depth.cap ?? Infinity, 0.1); return du(nf); }; }
   game.on('mode', ({ mode }) => { if (cur && mode !== 'walk') end('mode'); });
   game.on('camera', ({ held, by }) => { if (cur && held && by !== 'rides') end('taken'); });
 
