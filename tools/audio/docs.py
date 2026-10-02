@@ -146,6 +146,7 @@ def credits():
     for k, v in meta.items():
         for s in v.get('sources') or []:
             used[s].append(v['file'])
+    used[454358].append('weather/wind.m4a')              # tools/audio/weather.py (not in render_meta)
     L = ['# Lanternfall sound credits\n',
          'All audio in `data/audio/` is one of:\n',
          '1. **Synthesised and composed for this project** by the sound-music agent (Claude), with the numpy/scipy code '
@@ -168,12 +169,26 @@ def credits():
         L.append(f"| [{sid}]({r['url']}) | {r['title']} | {r['user']} | [{r['licence']}]({r['licence_url']}) | {files} |")
     L.append('\nNote: 483692 ("torch ambience loop" by LordStirling) is itself a loop of FractalStudios\' "Fire Crackle and '
              'Flame 002", which its page states is also released under CC0.\n')
+    L.append('Wind (since the sound-fix pass): every wind in the park is one of the recordings above (37873, 86345, '
+             '435206, 575245, 454358), high-passed at 150-250 Hz (no rumble), with the slow gusts compressed so they '
+             'swell instead of jumping (`lib.io.wind_loop`). A mono recording gets its right channel from a different '
+             'stretch of the same recording.\n')
+    L.append('## Weather (`data/audio/weather/`)\n')
+    L.append('Rain on paving, rain on the lake, rain on a roof heard from under it and three thunder rolls are '
+             'synthesised by `tools/audio/weather.py` (filtered noise, thousands of individually placed drop impulses '
+             'and bubble "plips"). The storm wind (`weather/wind.m4a`) is the CC0 recording 454358 above. Played by '
+             '`fx/weather/audio.js`.\n')
     rest = [k for k in src if int(k) not in used]
     L.append('\n## Evaluated and not used\n')
     L.append('Downloaded (all CC0) and rejected: ' + ', '.join(
         f"[{k}]({src[k]['url']}) ({src[k]['title'][:40]})" for k in sorted(rest, key=int)) + '. Reasons: background '
         'music mentioned in the description (352552, 452458), traffic or highway noise (405318, 718917), close '
-        'intelligible speech, noisy phone recordings, or a synthesised version worked better.\n')
+        'intelligible speech, noisy phone recordings, or a synthesised version worked better. Wind candidates rejected '
+        'by measurement or description: 460178 (distant highway), 858679 and 331222 (birds; 15 transients a minute in '
+        '858679), 181252 and 181255 (most of their energy below 150 Hz: microphone buffeting), 181250 (tonal peaks 17 dB high), 405601 (about 90 % of '
+        'its energy below 60 Hz), 408266 (level swings of 16 dB, left and right channels anti-correlated), 216608 and 534549 '
+        '(processed, not field recordings; 216608 has tonal peaks 25 dB high), 117611 (window tapping, 7 transients a '
+        'minute), 454365 (gusts of +-8 dB every few seconds; 575245 is steadier).\n')
     os.makedirs(os.path.join(REPO, 'fx', 'audio'), exist_ok=True)
     open(os.path.join(REPO, 'fx', 'audio', 'CREDITS.md'), 'w').write('\n'.join(L) + '\n')
 

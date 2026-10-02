@@ -1,73 +1,78 @@
 {
  "announce_1": {
-  "bytes": 21107,
+  "bytes": 17174,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/announce_1.m4a",
   "group": "announce",
   "loop": null,
-  "lufs": -17.37,
-  "seconds": 3.4,
+  "lufs": -17.33,
+  "seconds": 3.48,
   "sources": [],
-  "true_peak": -4.92
+  "src_wrap": null,
+  "true_peak": -4.99
  },
  "anvil_1": {
-  "bytes": 3013,
+  "bytes": 3060,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/anvil_1.m4a",
   "group": "anvil",
   "loop": null,
-  "lufs": -14.72,
-  "seconds": 0.297,
+  "lufs": -14.5,
+  "seconds": 0.377,
   "sources": [
    270588
   ],
-  "true_peak": -3.99
+  "src_wrap": null,
+  "true_peak": -3.92
  },
  "anvil_2": {
-  "bytes": 10655,
+  "bytes": 10605,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/anvil_2.m4a",
   "group": "anvil",
   "loop": null,
-  "lufs": -20.54,
-  "seconds": 1.6,
+  "lufs": -20.52,
+  "seconds": 1.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "anvil_3": {
-  "bytes": 10920,
+  "bytes": 10806,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/anvil_3.m4a",
   "group": "anvil",
   "loop": null,
-  "lufs": -20.4,
-  "seconds": 1.6,
+  "lufs": -20.46,
+  "seconds": 1.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -3.98
  },
  "anvil_4": {
-  "bytes": 10896,
+  "bytes": 10797,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/anvil_4.m4a",
   "group": "anvil",
   "loop": null,
-  "lufs": -20.35,
-  "seconds": 1.6,
+  "lufs": -20.51,
+  "seconds": 1.68,
   "sources": [],
-  "true_peak": -3.84
+  "src_wrap": null,
+  "true_peak": -3.99
  },
  "bed_brinewatch": {
-  "bytes": 149034,
+  "bytes": 149193,
   "cat": "bed",
   "channels": 2,
   "doc": "Water slapping hulls and piles with small creaks (843246, Venice at night), plus a hull creak layer (31574).",
@@ -84,49 +89,53 @@
    843246
   ],
   "src_wrap": 0.152,
-  "true_peak": -2.99
+  "true_peak": -3.35
  },
  "bed_frostmere": {
-  "bytes": 164747,
+  "bytes": 206547,
   "cat": "bed",
   "channels": 2,
-  "doc": "Wind over snow with a faint whistle; the crowd heard muffled (low-passed) behind it.",
+  "doc": "Cold winter wind in conifers (575245); the crowd heard muffled (low-passed) behind it.",
   "file": "beds/bed_frostmere.m4a",
   "group": null,
   "loop": [
    0.5,
-   19.5
+   24.5
   ],
   "lufs": -24.0,
-  "seconds": 19.0,
+  "seconds": 24.0,
   "sources": [
-   461060
+   461060,
+   575245
   ],
-  "src_wrap": 0.113,
-  "true_peak": -11.71
+  "src_wrap": 0.23,
+  "true_peak": -11.3
  },
  "bed_gap": {
-  "bytes": 165425,
+  "bytes": 239476,
   "cat": "bed",
   "channels": 2,
-  "doc": "Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere.",
+  "doc": "Green gaps and woods: wind in the trees at night (37873) over a breeze through oak leaves (435206).\n    No crickets: this bed is heard a little everywhere.",
   "file": "beds/bed_gap.m4a",
   "group": null,
   "loop": [
    0.5,
-   19.5
+   28.5
   ],
   "lufs": -24.0,
-  "seconds": 19.0,
-  "sources": [],
-  "src_wrap": 0.095,
-  "true_peak": -4.13
+  "seconds": 28.0,
+  "sources": [
+   37873,
+   435206
+  ],
+  "src_wrap": 0.124,
+  "true_peak": -12.02
  },
  "bed_gate": {
-  "bytes": 156683,
+  "bytes": 156575,
   "cat": "bed",
   "channels": 2,
-  "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), soft air.",
+  "doc": "Arrival: an evening crowd outdoors (741283, a different stretch than Guildhollow's) over a large festival\n    walla (848976), a little night air in the trees (37873).",
   "file": "beds/bed_gate.m4a",
   "group": null,
   "loop": [
@@ -136,14 +145,15 @@
   "lufs": -24.07,
   "seconds": 18.0,
   "sources": [
+   37873,
    741283,
    848976
   ],
-  "src_wrap": 0.278,
+  "src_wrap": 0.265,
   "true_peak": -2.99
  },
  "bed_guildhollow": {
-  "bytes": 140238,
+  "bytes": 140274,
   "cat": "bed",
   "channels": 2,
   "doc": "Courtyard evening crowd (741283) + torches crackling (483692).",
@@ -159,11 +169,11 @@
    483692,
    741283
   ],
-  "src_wrap": 0.271,
-  "true_peak": -9.52
+  "src_wrap": 0.217,
+  "true_peak": -10.1
  },
  "bed_lake": {
-  "bytes": 148644,
+  "bytes": 148554,
   "cat": "bed",
   "channels": 2,
   "doc": "The hush: small waves on the quay (352356), synthetic lapping and bubbles, a faint breeze. No voices.",
@@ -176,10 +186,11 @@
   "lufs": -24.0,
   "seconds": 17.0,
   "sources": [
-   352356
+   352356,
+   435206
   ],
-  "src_wrap": 0.048,
-  "true_peak": -3.89
+  "src_wrap": 0.106,
+  "true_peak": -4.08
  },
  "bed_lantern-row": {
   "bytes": 140686,
@@ -201,10 +212,10 @@
   "true_peak": -6.84
  },
  "bed_meridian": {
-  "bytes": 140338,
+  "bytes": 140289,
   "cat": "bed",
   "channels": 2,
-  "doc": "Plaza crowd (848976) and a low electric hum under the neon.",
+  "doc": "Plaza crowd (848976) and a low electric hum under the neon. The stretch is the one with the fewest stand-out\n    events (the old one had a beep 29 dB over the crowd, heard every 16 s all over the land).",
   "file": "beds/bed_meridian.m4a",
   "group": null,
   "loop": [
@@ -216,8 +227,8 @@
   "sources": [
    848976
   ],
-  "src_wrap": 0.322,
-  "true_peak": -6.63
+  "src_wrap": 0.106,
+  "true_peak": -8.25
  },
  "bed_rosewick": {
   "bytes": 156707,
@@ -240,24 +251,25 @@
   "true_peak": -13.15
  },
  "bed_sky": {
-  "bytes": 172939,
+  "bytes": 255093,
   "cat": "bed",
   "channels": 2,
-  "doc": "From the sky: wind and a distant low-passed blend of the whole park.",
+  "doc": "From the sky: open-air wind (a gale in pines, 86345, high-passed so only the air is left) and a distant\n    low-passed blend of the whole park.",
   "file": "beds/bed_sky.m4a",
   "group": null,
   "loop": [
    0.5,
-   20.5
+   30.5
   ],
   "lufs": -24.0,
-  "seconds": 20.0,
+  "seconds": 30.0,
   "sources": [
+   86345,
    461060,
    848976
   ],
-  "src_wrap": 0.071,
-  "true_peak": -11.78
+  "src_wrap": 0.499,
+  "true_peak": -12.55
  },
  "bed_wanderers": {
   "bytes": 156539,
@@ -330,81 +342,87 @@
   "true_peak": -10.05
  },
  "clappers_1": {
-  "bytes": 11020,
+  "bytes": 11327,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/clappers_1.m4a",
   "group": "clappers",
   "loop": null,
-  "lufs": -20.79,
-  "seconds": 1.6,
+  "lufs": -20.46,
+  "seconds": 1.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.94
  },
  "clappers_2": {
-  "bytes": 11004,
+  "bytes": 11191,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/clappers_2.m4a",
   "group": "clappers",
   "loop": null,
-  "lufs": -21.07,
-  "seconds": 1.6,
+  "lufs": -21.36,
+  "seconds": 1.68,
   "sources": [],
-  "true_peak": -2.9
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "creak_1": {
-  "bytes": 5822,
+  "bytes": 5755,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/creak_1.m4a",
   "group": "creak",
   "loop": null,
-  "lufs": -23.02,
-  "seconds": 0.631,
+  "lufs": -23.06,
+  "seconds": 0.711,
   "sources": [],
-  "true_peak": -5.93
+  "src_wrap": null,
+  "true_peak": -5.74
  },
  "creak_2": {
-  "bytes": 7644,
+  "bytes": 7749,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/creak_2.m4a",
   "group": "creak",
   "loop": null,
-  "lufs": -23.71,
-  "seconds": 0.994,
+  "lufs": -23.8,
+  "seconds": 1.074,
   "sources": [],
-  "true_peak": -5.98
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "creak_3": {
-  "bytes": 6993,
+  "bytes": 6820,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/creak_3.m4a",
   "group": "creak",
   "loop": null,
-  "lufs": -23.43,
-  "seconds": 0.763,
+  "lufs": -23.17,
+  "seconds": 0.843,
   "sources": [],
-  "true_peak": -5.98
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "creak_4": {
-  "bytes": 6065,
+  "bytes": 6110,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/creak_4.m4a",
   "group": "creak",
   "loop": null,
-  "lufs": -22.18,
-  "seconds": 0.651,
+  "lufs": -22.24,
+  "seconds": 0.731,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -5.98
  },
  "creak_loop": {
@@ -465,7 +483,7 @@
   "true_peak": -9.33
  },
  "crowd_murmur": {
-  "bytes": 148588,
+  "bytes": 148637,
   "cat": "bed",
   "channels": 2,
   "doc": null,
@@ -480,8 +498,8 @@
   "sources": [
    848976
   ],
-  "src_wrap": 0.019,
-  "true_peak": -8.0
+  "src_wrap": 0.127,
+  "true_peak": -7.96
  },
  "crowd_sparse": {
   "bytes": 132050,
@@ -503,327 +521,345 @@
   "true_peak": -9.2
  },
  "dice_1": {
-  "bytes": 7308,
+  "bytes": 7387,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/dice_1.m4a",
   "group": "dice",
   "loop": null,
-  "lufs": -31.19,
-  "seconds": 0.968,
+  "lufs": -31.53,
+  "seconds": 1.048,
   "sources": [
    629982
   ],
-  "true_peak": -5.86
+  "src_wrap": null,
+  "true_peak": -5.89
  },
  "dice_2": {
-  "bytes": 9538,
+  "bytes": 9033,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/dice_2.m4a",
   "group": "dice",
   "loop": null,
-  "lufs": -26.89,
-  "seconds": 1.3,
+  "lufs": -27.5,
+  "seconds": 1.38,
   "sources": [],
-  "true_peak": -5.82
+  "src_wrap": null,
+  "true_peak": -5.83
  },
  "dice_3": {
-  "bytes": 10449,
+  "bytes": 11175,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/dice_3.m4a",
   "group": "dice",
   "loop": null,
-  "lufs": -29.73,
-  "seconds": 1.3,
+  "lufs": -29.64,
+  "seconds": 1.38,
   "sources": [],
-  "true_peak": -5.86
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "door_01": {
-  "bytes": 23413,
+  "bytes": 23716,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_01.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -12.81,
-  "seconds": 3.6,
+  "lufs": -12.57,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.92
  },
  "door_02": {
-  "bytes": 23394,
+  "bytes": 23602,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_02.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -16.54,
-  "seconds": 3.6,
+  "lufs": -16.18,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.96
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "door_03": {
-  "bytes": 23285,
+  "bytes": 23446,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_03.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -16.04,
-  "seconds": 3.6,
+  "lufs": -16.01,
+  "seconds": 3.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "door_04": {
-  "bytes": 23573,
+  "bytes": 23589,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_04.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -13.14,
-  "seconds": 3.6,
+  "lufs": -13.19,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.98
  },
  "door_05": {
-  "bytes": 23411,
+  "bytes": 23463,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_05.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -14.16,
-  "seconds": 3.6,
+  "lufs": -14.24,
+  "seconds": 3.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "door_06": {
-  "bytes": 23491,
+  "bytes": 23573,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_06.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -15.97,
-  "seconds": 3.6,
+  "lufs": -16.06,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "door_07": {
-  "bytes": 23394,
+  "bytes": 23429,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_07.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -18.84,
-  "seconds": 3.6,
+  "lufs": -19.0,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.58
+  "src_wrap": null,
+  "true_peak": -2.63
  },
  "door_08": {
-  "bytes": 23177,
+  "bytes": 23244,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_08.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -15.16,
-  "seconds": 3.6,
+  "lufs": -15.13,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.93
+  "src_wrap": null,
+  "true_peak": -2.89
  },
  "door_09": {
-  "bytes": 23352,
+  "bytes": 23535,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_09.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -16.94,
-  "seconds": 3.6,
+  "lufs": -17.1,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "door_10": {
-  "bytes": 23191,
+  "bytes": 23253,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_10.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -13.1,
-  "seconds": 3.6,
+  "lufs": -12.61,
+  "seconds": 3.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "door_11": {
-  "bytes": 22936,
+  "bytes": 22983,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_11.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -12.99,
-  "seconds": 3.6,
+  "lufs": -13.1,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.96
  },
  "door_12": {
-  "bytes": 23677,
+  "bytes": 23653,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/door_12.m4a",
   "group": "door",
   "loop": null,
-  "lufs": -13.66,
-  "seconds": 3.6,
+  "lufs": -14.1,
+  "seconds": 3.68,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "fanfare_1": {
-  "bytes": 38101,
+  "bytes": 38377,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/fanfare_1.m4a",
   "group": "fanfare",
   "loop": null,
-  "lufs": -15.84,
-  "seconds": 6.0,
+  "lufs": -16.49,
+  "seconds": 6.08,
   "sources": [],
   "src_wrap": null,
   "true_peak": -2.99
  },
  "firework_burst_1": {
-  "bytes": 26510,
+  "bytes": 26210,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_burst_1.m4a",
   "group": "firework_burst",
   "loop": null,
-  "lufs": -22.94,
-  "seconds": 4.0,
+  "lufs": -23.0,
+  "seconds": 4.08,
   "sources": [],
   "src_wrap": null,
   "true_peak": -2.99
  },
  "firework_burst_2": {
-  "bytes": 26500,
+  "bytes": 26557,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_burst_2.m4a",
   "group": "firework_burst",
   "loop": null,
-  "lufs": -22.72,
-  "seconds": 4.0,
+  "lufs": -21.18,
+  "seconds": 4.08,
   "sources": [],
   "src_wrap": null,
   "true_peak": -2.99
  },
  "firework_burst_3": {
-  "bytes": 26281,
+  "bytes": 26424,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_burst_3.m4a",
   "group": "firework_burst",
   "loop": null,
-  "lufs": -20.67,
-  "seconds": 4.0,
+  "lufs": -21.55,
+  "seconds": 4.08,
   "sources": [],
   "src_wrap": null,
   "true_peak": -2.99
  },
  "firework_burst_4": {
-  "bytes": 26481,
+  "bytes": 26575,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_burst_4.m4a",
   "group": "firework_burst",
   "loop": null,
-  "lufs": -25.07,
-  "seconds": 4.0,
+  "lufs": -28.32,
+  "seconds": 4.08,
   "sources": [],
   "src_wrap": null,
-  "true_peak": -2.83
+  "true_peak": -2.97
  },
  "firework_burst_5": {
-  "bytes": 26454,
+  "bytes": 26462,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_burst_5.m4a",
   "group": "firework_burst",
   "loop": null,
-  "lufs": -26.68,
-  "seconds": 4.0,
+  "lufs": -22.62,
+  "seconds": 4.08,
   "sources": [],
   "src_wrap": null,
-  "true_peak": -2.91
+  "true_peak": -2.99
  },
  "firework_launch_1": {
-  "bytes": 14671,
+  "bytes": 14910,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_launch_1.m4a",
   "group": "firework_launch",
   "loop": null,
-  "lufs": -28.84,
-  "seconds": 2.2,
+  "lufs": -24.23,
+  "seconds": 2.28,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "firework_launch_2": {
-  "bytes": 14684,
+  "bytes": 14939,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_launch_2.m4a",
   "group": "firework_launch",
   "loop": null,
-  "lufs": -28.56,
-  "seconds": 2.2,
+  "lufs": -23.96,
+  "seconds": 2.28,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "firework_launch_3": {
-  "bytes": 14666,
+  "bytes": 14938,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/firework_launch_3.m4a",
   "group": "firework_launch",
   "loop": null,
-  "lufs": -29.17,
-  "seconds": 2.2,
+  "lufs": -24.33,
+  "seconds": 2.28,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -3.99
  },
  "footstep_grass_1": {
-  "bytes": 2809,
+  "bytes": 2860,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -831,14 +867,15 @@
   "group": "footstep_grass",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.284,
+  "seconds": 0.364,
   "sources": [
    521587
   ],
-  "true_peak": -7.45
+  "src_wrap": null,
+  "true_peak": -6.71
  },
  "footstep_grass_2": {
-  "bytes": 2404,
+  "bytes": 2458,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -846,14 +883,15 @@
   "group": "footstep_grass",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.211,
+  "seconds": 0.291,
   "sources": [
    521587
   ],
-  "true_peak": -4.94
+  "src_wrap": null,
+  "true_peak": -5.66
  },
  "footstep_grass_3": {
-  "bytes": 2497,
+  "bytes": 2522,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -861,14 +899,15 @@
   "group": "footstep_grass",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.229,
+  "seconds": 0.309,
   "sources": [
    521587
   ],
-  "true_peak": -3.97
+  "src_wrap": null,
+  "true_peak": -5.4
  },
  "footstep_grass_4": {
-  "bytes": 2522,
+  "bytes": 2486,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -876,14 +915,15 @@
   "group": "footstep_grass",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.234,
+  "seconds": 0.314,
   "sources": [
    521587
   ],
-  "true_peak": -6.6
+  "src_wrap": null,
+  "true_peak": -5.63
  },
  "footstep_grass_5": {
-  "bytes": 2554,
+  "bytes": 2566,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -891,14 +931,15 @@
   "group": "footstep_grass",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.224,
+  "seconds": 0.304,
   "sources": [
    521587
   ],
-  "true_peak": -5.12
+  "src_wrap": null,
+  "true_peak": -4.88
  },
  "footstep_gravel_1": {
-  "bytes": 2919,
+  "bytes": 3218,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -906,12 +947,13 @@
   "group": "footstep_gravel",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.28,
+  "seconds": 0.36,
   "sources": [],
-  "true_peak": -8.75
+  "src_wrap": null,
+  "true_peak": -9.66
  },
  "footstep_gravel_2": {
-  "bytes": 2800,
+  "bytes": 3248,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -919,12 +961,13 @@
   "group": "footstep_gravel",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.28,
+  "seconds": 0.36,
   "sources": [],
-  "true_peak": -9.65
+  "src_wrap": null,
+  "true_peak": -9.76
  },
  "footstep_gravel_3": {
-  "bytes": 2700,
+  "bytes": 2929,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -932,12 +975,13 @@
   "group": "footstep_gravel",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.28,
+  "seconds": 0.36,
   "sources": [],
-  "true_peak": -10.16
+  "src_wrap": null,
+  "true_peak": -9.74
  },
  "footstep_gravel_4": {
-  "bytes": 2855,
+  "bytes": 3171,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -945,12 +989,13 @@
   "group": "footstep_gravel",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.28,
+  "seconds": 0.36,
   "sources": [],
-  "true_peak": -7.43
+  "src_wrap": null,
+  "true_peak": -7.7
  },
  "footstep_gravel_5": {
-  "bytes": 2840,
+  "bytes": 3115,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -958,12 +1003,13 @@
   "group": "footstep_gravel",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.28,
+  "seconds": 0.36,
   "sources": [],
-  "true_peak": -9.05
+  "src_wrap": null,
+  "true_peak": -10.25
  },
  "footstep_snow_1": {
-  "bytes": 4149,
+  "bytes": 4264,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -971,14 +1017,15 @@
   "group": "footstep_snow",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.496,
+  "seconds": 0.576,
   "sources": [
    613849
   ],
-  "true_peak": -8.69
+  "src_wrap": null,
+  "true_peak": -7.14
  },
  "footstep_snow_2": {
-  "bytes": 3243,
+  "bytes": 3267,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -986,14 +1033,15 @@
   "group": "footstep_snow",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.346,
+  "seconds": 0.426,
   "sources": [
    613849
   ],
-  "true_peak": -8.5
+  "src_wrap": null,
+  "true_peak": -8.28
  },
  "footstep_snow_3": {
-  "bytes": 3404,
+  "bytes": 3488,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1001,14 +1049,15 @@
   "group": "footstep_snow",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.382,
+  "seconds": 0.462,
   "sources": [
    613849
   ],
-  "true_peak": -8.9
+  "src_wrap": null,
+  "true_peak": -8.98
  },
  "footstep_snow_4": {
-  "bytes": 3508,
+  "bytes": 3503,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1016,14 +1065,15 @@
   "group": "footstep_snow",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.382,
+  "seconds": 0.462,
   "sources": [
    613849
   ],
-  "true_peak": -9.84
+  "src_wrap": null,
+  "true_peak": -10.19
  },
  "footstep_snow_5": {
-  "bytes": 3809,
+  "bytes": 3836,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1031,89 +1081,95 @@
   "group": "footstep_snow",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.427,
+  "seconds": 0.507,
   "sources": [
    613849
   ],
-  "true_peak": -10.04
+  "src_wrap": null,
+  "true_peak": -8.8
  },
  "footstep_stone_1": {
-  "bytes": 1806,
+  "bytes": 1862,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_stone_1.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -27.02,
-  "seconds": 0.108,
+  "lufs": -27.82,
+  "seconds": 0.188,
   "sources": [
    521590
   ],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "footstep_stone_2": {
-  "bytes": 2189,
+  "bytes": 2223,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_stone_2.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -28.0,
-  "seconds": 0.193,
+  "lufs": -28.05,
+  "seconds": 0.273,
   "sources": [
    521590
   ],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "footstep_stone_3": {
-  "bytes": 1718,
+  "bytes": 1740,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_stone_3.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -27.34,
-  "seconds": 0.104,
+  "lufs": -27.0,
+  "seconds": 0.184,
   "sources": [
    521590
   ],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -3.19
  },
  "footstep_stone_4": {
-  "bytes": 2359,
+  "bytes": 2298,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_stone_4.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -30.2,
-  "seconds": 0.196,
+  "lufs": -29.08,
+  "seconds": 0.276,
   "sources": [
    521590
   ],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.96
  },
  "footstep_stone_5": {
-  "bytes": 2196,
+  "bytes": 2259,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_stone_5.m4a",
   "group": "footstep_stone",
   "loop": null,
-  "lufs": -29.49,
-  "seconds": 0.183,
+  "lufs": -28.65,
+  "seconds": 0.263,
   "sources": [
    521590
   ],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "footstep_wood_1": {
-  "bytes": 2734,
+  "bytes": 2758,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1121,44 +1177,47 @@
   "group": "footstep_wood",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.267,
+  "seconds": 0.347,
   "sources": [
    543685
   ],
-  "true_peak": -3.64
+  "src_wrap": null,
+  "true_peak": -5.35
  },
  "footstep_wood_2": {
-  "bytes": 3128,
+  "bytes": 3168,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_wood_2.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -29.64,
-  "seconds": 0.33,
+  "lufs": -28.43,
+  "seconds": 0.41,
   "sources": [
    543685
   ],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "footstep_wood_3": {
-  "bytes": 1782,
+  "bytes": 1803,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/footstep_wood_3.m4a",
   "group": "footstep_wood",
   "loop": null,
-  "lufs": -28.12,
-  "seconds": 0.114,
+  "lufs": -27.0,
+  "seconds": 0.194,
   "sources": [
    543685
   ],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -3.05
  },
  "footstep_wood_4": {
-  "bytes": 2708,
+  "bytes": 2655,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1166,14 +1225,15 @@
   "group": "footstep_wood",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.261,
+  "seconds": 0.341,
   "sources": [
    543685
   ],
-  "true_peak": -4.14
+  "src_wrap": null,
+  "true_peak": -3.7
  },
  "footstep_wood_5": {
-  "bytes": 2639,
+  "bytes": 2659,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
@@ -1181,11 +1241,12 @@
   "group": "footstep_wood",
   "loop": null,
   "lufs": -27.0,
-  "seconds": 0.243,
+  "seconds": 0.323,
   "sources": [
    543685
   ],
-  "true_peak": -4.35
+  "src_wrap": null,
+  "true_peak": -5.7
  },
  "fountain_loop": {
   "bytes": 87683,
@@ -1224,7 +1285,7 @@
   "true_peak": -6.6
  },
  "frost_drum": {
-  "bytes": 105106,
+  "bytes": 104902,
   "cat": "emit",
   "channels": 1,
   "doc": "The Frost Fair's stern drum: a field-drum march cadence with bass drum, 72 bpm, 4 bars (13.3 s).",
@@ -1234,11 +1295,11 @@
    0.5,
    13.833333
   ],
-  "lufs": -24.01,
+  "lufs": -24.02,
   "seconds": 13.333,
   "sources": [],
   "src_wrap": 0.001,
-  "true_peak": -2.89
+  "true_peak": -2.86
  },
  "gate_welcome": {
   "bytes": 301199,
@@ -1292,69 +1353,74 @@
   "true_peak": -6.68
  },
  "ice_chimes_1": {
-  "bytes": 25720,
+  "bytes": 26027,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ice_chimes_1.m4a",
   "group": "ice_chimes",
   "loop": null,
-  "lufs": -15.38,
-  "seconds": 4.0,
+  "lufs": -15.43,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -3.94
+  "src_wrap": null,
+  "true_peak": -3.87
  },
  "ice_chimes_2": {
-  "bytes": 25895,
+  "bytes": 25922,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ice_chimes_2.m4a",
   "group": "ice_chimes",
   "loop": null,
-  "lufs": -15.21,
-  "seconds": 4.0,
+  "lufs": -15.15,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -3.98
+  "src_wrap": null,
+  "true_peak": -3.95
  },
  "ice_chimes_3": {
-  "bytes": 25759,
+  "bytes": 25990,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ice_chimes_3.m4a",
   "group": "ice_chimes",
   "loop": null,
-  "lufs": -17.7,
-  "seconds": 4.0,
+  "lufs": -17.77,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -3.99
+  "src_wrap": null,
+  "true_peak": -3.97
  },
  "kettle_1": {
-  "bytes": 25794,
+  "bytes": 25837,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/kettle_1.m4a",
   "group": "kettle",
   "loop": null,
-  "lufs": -20.8,
-  "seconds": 4.0,
+  "lufs": -21.31,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -5.98
+  "src_wrap": null,
+  "true_peak": -5.94
  },
  "kettle_2": {
-  "bytes": 25773,
+  "bytes": 25869,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/kettle_2.m4a",
   "group": "kettle",
   "loop": null,
-  "lufs": -21.38,
-  "seconds": 4.0,
+  "lufs": -21.85,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -5.94
+  "src_wrap": null,
+  "true_peak": -5.96
  },
  "lake_hush": {
   "bytes": 271724,
@@ -1374,43 +1440,46 @@
   "true_peak": -5.74
  },
  "lamplighter_1": {
-  "bytes": 16596,
+  "bytes": 16553,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lamplighter_1.m4a",
   "group": "lamplighter",
   "loop": null,
-  "lufs": -25.7,
-  "seconds": 2.4,
+  "lufs": -25.65,
+  "seconds": 2.48,
   "sources": [],
-  "true_peak": -5.87
+  "src_wrap": null,
+  "true_peak": -5.83
  },
  "lamplighter_2": {
-  "bytes": 16631,
+  "bytes": 16411,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lamplighter_2.m4a",
   "group": "lamplighter",
   "loop": null,
-  "lufs": -26.03,
-  "seconds": 2.4,
+  "lufs": -26.05,
+  "seconds": 2.48,
   "sources": [],
-  "true_peak": -5.83
+  "src_wrap": null,
+  "true_peak": -5.81
  },
  "lamplighter_3": {
-  "bytes": 16744,
+  "bytes": 16483,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lamplighter_3.m4a",
   "group": "lamplighter",
   "loop": null,
-  "lufs": -26.0,
-  "seconds": 2.4,
+  "lufs": -26.07,
+  "seconds": 2.48,
   "sources": [],
-  "true_peak": -5.9
+  "src_wrap": null,
+  "true_peak": -5.87
  },
  "lantern_market": {
   "bytes": 228623,
@@ -1430,43 +1499,46 @@
   "true_peak": -4.14
  },
  "lantern_release_1": {
-  "bytes": 22915,
+  "bytes": 22681,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lantern_release_1.m4a",
   "group": "lantern_release",
   "loop": null,
-  "lufs": -19.63,
-  "seconds": 3.5,
+  "lufs": -19.66,
+  "seconds": 3.58,
   "sources": [],
-  "true_peak": -5.95
+  "src_wrap": null,
+  "true_peak": -5.98
  },
  "lantern_release_2": {
-  "bytes": 22769,
+  "bytes": 22753,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lantern_release_2.m4a",
   "group": "lantern_release",
   "loop": null,
-  "lufs": -19.85,
-  "seconds": 3.5,
+  "lufs": -20.05,
+  "seconds": 3.58,
   "sources": [],
-  "true_peak": -5.84
+  "src_wrap": null,
+  "true_peak": -5.88
  },
  "lantern_release_3": {
-  "bytes": 22650,
+  "bytes": 22664,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/lantern_release_3.m4a",
   "group": "lantern_release",
   "loop": null,
-  "lufs": -18.99,
-  "seconds": 3.5,
+  "lufs": -18.96,
+  "seconds": 3.58,
   "sources": [],
-  "true_peak": -5.92
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "meridian_signal": {
   "bytes": 303508,
@@ -1503,160 +1575,169 @@
   "true_peak": -17.17
  },
  "nightingale_1": {
-  "bytes": 19124,
+  "bytes": 19256,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_1.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -21.67,
-  "seconds": 2.922,
+  "lufs": -21.68,
+  "seconds": 3.002,
   "sources": [
    521035
   ],
+  "src_wrap": null,
   "true_peak": -7.99
  },
  "nightingale_2": {
-  "bytes": 22791,
+  "bytes": 22846,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_2.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -25.08,
-  "seconds": 3.475,
+  "lufs": -25.1,
+  "seconds": 3.555,
   "sources": [
    521035
   ],
-  "true_peak": -7.98
+  "src_wrap": null,
+  "true_peak": -7.99
  },
  "nightingale_3": {
-  "bytes": 9242,
+  "bytes": 9367,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_3.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -27.34,
-  "seconds": 1.316,
+  "lufs": -27.35,
+  "seconds": 1.396,
   "sources": [
    521035
   ],
-  "true_peak": -7.97
+  "src_wrap": null,
+  "true_peak": -7.99
  },
  "nightingale_4": {
-  "bytes": 15836,
+  "bytes": 16107,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_4.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -21.4,
-  "seconds": 2.362,
+  "lufs": -21.44,
+  "seconds": 2.442,
   "sources": [
    521035
   ],
-  "true_peak": -7.82
+  "src_wrap": null,
+  "true_peak": -7.87
  },
  "nightingale_5": {
-  "bytes": 11043,
+  "bytes": 11124,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_5.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -18.07,
-  "seconds": 1.604,
+  "lufs": -18.1,
+  "seconds": 1.684,
   "sources": [
    521035
   ],
+  "src_wrap": null,
   "true_peak": -7.99
  },
  "nightingale_6": {
-  "bytes": 19281,
+  "bytes": 19569,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/nightingale_6.m4a",
   "group": "nightingale",
   "loop": null,
-  "lufs": -21.81,
-  "seconds": 2.928,
+  "lufs": -21.9,
+  "seconds": 3.008,
   "sources": [
    521035
   ],
-  "true_peak": -7.97
+  "src_wrap": null,
+  "true_peak": -7.99
  },
  "oar_1": {
-  "bytes": 8453,
+  "bytes": 8396,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/oar_1.m4a",
   "group": "oar",
   "loop": null,
-  "lufs": -20.74,
-  "seconds": 1.4,
+  "lufs": -20.84,
+  "seconds": 1.48,
   "sources": [],
-  "true_peak": -5.97
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "oar_2": {
-  "bytes": 8195,
+  "bytes": 7895,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/oar_2.m4a",
   "group": "oar",
   "loop": null,
-  "lufs": -20.26,
-  "seconds": 1.4,
+  "lufs": -20.75,
+  "seconds": 1.48,
   "sources": [],
-  "true_peak": -5.99
+  "src_wrap": null,
+  "true_peak": -5.98
  },
  "oar_3": {
-  "bytes": 8552,
+  "bytes": 8366,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/oar_3.m4a",
   "group": "oar",
   "loop": null,
-  "lufs": -19.49,
-  "seconds": 1.4,
+  "lufs": -19.16,
+  "seconds": 1.48,
   "sources": [],
-  "true_peak": -5.98
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "owl_1": {
-  "bytes": 19628,
+  "bytes": 19811,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/owl_1.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -15.33,
-  "seconds": 3.002,
+  "lufs": -15.38,
+  "seconds": 3.082,
   "sources": [
    465697
   ],
   "src_wrap": null,
-  "true_peak": -3.99
+  "true_peak": -3.98
  },
  "owl_2": {
-  "bytes": 6133,
+  "bytes": 6199,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/owl_2.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -15.63,
-  "seconds": 0.833,
+  "lufs": -15.94,
+  "seconds": 0.913,
   "sources": [
    745208
   ],
@@ -1664,15 +1745,15 @@
   "true_peak": -3.99
  },
  "owl_3": {
-  "bytes": 19342,
+  "bytes": 19349,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/owl_3.m4a",
   "group": "owl",
   "loop": null,
-  "lufs": -14.63,
-  "seconds": 2.953,
+  "lufs": -14.62,
+  "seconds": 3.033,
   "sources": [
    745208
   ],
@@ -1697,29 +1778,31 @@
   "true_peak": -7.13
  },
  "ship_bell_1": {
-  "bytes": 25969,
+  "bytes": 27533,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ship_bell_1.m4a",
   "group": "ship_bell",
   "loop": null,
-  "lufs": -13.8,
-  "seconds": 4.0,
+  "lufs": -13.64,
+  "seconds": 4.08,
   "sources": [],
-  "true_peak": -2.94
+  "src_wrap": null,
+  "true_peak": -2.93
  },
  "shrine_bell_1": {
-  "bytes": 39284,
+  "bytes": 39485,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/shrine_bell_1.m4a",
   "group": "shrine_bell",
   "loop": null,
-  "lufs": -18.04,
-  "seconds": 6.0,
+  "lufs": -17.64,
+  "seconds": 6.08,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -2.99
  },
  "sizzle_loop": {
@@ -1742,172 +1825,183 @@
   "true_peak": -2.69
  },
  "skate_1": {
-  "bytes": 7007,
+  "bytes": 6989,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/skate_1.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -21.23,
-  "seconds": 0.944,
+  "lufs": -21.63,
+  "seconds": 1.024,
   "sources": [
    593623
   ],
+  "src_wrap": null,
   "true_peak": -5.99
  },
  "skate_2": {
-  "bytes": 9826,
+  "bytes": 10041,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/skate_2.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -23.5,
-  "seconds": 1.406,
+  "lufs": -23.4,
+  "seconds": 1.486,
   "sources": [
    593623
   ],
-  "true_peak": -5.8
+  "src_wrap": null,
+  "true_peak": -5.87
  },
  "skate_3": {
-  "bytes": 6841,
+  "bytes": 6975,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/skate_3.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -20.92,
-  "seconds": 0.929,
+  "lufs": -20.85,
+  "seconds": 1.009,
   "sources": [
    593623
   ],
-  "true_peak": -5.96
+  "src_wrap": null,
+  "true_peak": -5.99
  },
  "skate_4": {
-  "bytes": 6520,
+  "bytes": 6655,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/skate_4.m4a",
   "group": "skate",
   "loop": null,
-  "lufs": -22.26,
-  "seconds": 0.87,
+  "lufs": -22.84,
+  "seconds": 0.95,
   "sources": [
    593623
   ],
-  "true_peak": -5.93
+  "src_wrap": null,
+  "true_peak": -5.94
  },
  "spire_bell_1": {
-  "bytes": 65599,
+  "bytes": 64439,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/spire_bell_1.m4a",
   "group": "spire_bell",
   "loop": null,
-  "lufs": -16.77,
-  "seconds": 10.0,
+  "lufs": -17.5,
+  "seconds": 10.08,
   "sources": [],
   "src_wrap": null,
   "true_peak": -2.99
  },
  "splash_1": {
-  "bytes": 6548,
+  "bytes": 6951,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/splash_1.m4a",
   "group": "splash",
   "loop": null,
-  "lufs": -28.62,
-  "seconds": 0.9,
+  "lufs": -29.74,
+  "seconds": 0.98,
   "sources": [],
-  "true_peak": -5.83
+  "src_wrap": null,
+  "true_peak": -5.91
  },
  "splash_2": {
-  "bytes": 6658,
+  "bytes": 7048,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/splash_2.m4a",
   "group": "splash",
   "loop": null,
-  "lufs": -25.62,
-  "seconds": 0.9,
+  "lufs": -24.49,
+  "seconds": 0.98,
   "sources": [],
-  "true_peak": -5.99
+  "src_wrap": null,
+  "true_peak": -5.94
  },
  "splash_3": {
-  "bytes": 6654,
+  "bytes": 6982,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/splash_3.m4a",
   "group": "splash",
   "loop": null,
-  "lufs": -26.38,
-  "seconds": 0.9,
+  "lufs": -25.42,
+  "seconds": 0.98,
   "sources": [],
+  "src_wrap": null,
   "true_peak": -5.99
  },
  "splash_4": {
-  "bytes": 6500,
+  "bytes": 6955,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/splash_4.m4a",
   "group": "splash",
   "loop": null,
-  "lufs": -23.92,
-  "seconds": 0.9,
+  "lufs": -24.31,
+  "seconds": 0.98,
   "sources": [],
-  "true_peak": -5.98
+  "src_wrap": null,
+  "true_peak": -5.95
  },
  "station_chime_1": {
-  "bytes": 23349,
+  "bytes": 23500,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/station_chime_1.m4a",
   "group": "station_chime",
   "loop": null,
-  "lufs": -14.98,
-  "seconds": 3.6,
+  "lufs": -15.1,
+  "seconds": 3.68,
   "sources": [],
-  "true_peak": -2.98
+  "src_wrap": null,
+  "true_peak": -2.99
  },
  "strength_bell_1": {
-  "bytes": 18592,
+  "bytes": 18365,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/strength_bell_1.m4a",
   "group": "strength_bell",
   "loop": null,
-  "lufs": -19.96,
-  "seconds": 2.6,
+  "lufs": -16.36,
+  "seconds": 2.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.93
  },
  "strength_bell_2": {
-  "bytes": 18276,
+  "bytes": 18657,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/strength_bell_2.m4a",
   "group": "strength_bell",
   "loop": null,
-  "lufs": -19.91,
-  "seconds": 2.6,
+  "lufs": -16.4,
+  "seconds": 2.68,
   "sources": [],
-  "true_peak": -2.99
+  "src_wrap": null,
+  "true_peak": -2.97
  },
  "taiko_loop": {
-  "bytes": 104796,
+  "bytes": 105054,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -1920,11 +2014,11 @@
   "lufs": -24.0,
   "seconds": 13.333,
   "sources": [],
-  "src_wrap": 0.096,
-  "true_peak": -9.15
+  "src_wrap": 0.721,
+  "true_peak": -6.89
  },
  "torch_loop": {
-  "bytes": 73472,
+  "bytes": 73697,
   "cat": "emit",
   "channels": 1,
   "doc": null,
@@ -1939,8 +2033,8 @@
   "sources": [
    483692
   ],
-  "src_wrap": 0.162,
-  "true_peak": -3.04
+  "src_wrap": 0.085,
+  "true_peak": -4.18
  },
  "train_loop": {
   "bytes": 51504,
@@ -1960,30 +2054,32 @@
   "true_peak": -9.73
  },
  "ui_click_1": {
-  "bytes": 1494,
+  "bytes": 1613,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ui_click_1.m4a",
   "group": "ui_click",
   "loop": null,
-  "lufs": -32.58,
-  "seconds": 0.06,
+  "lufs": -32.61,
+  "seconds": 0.12,
   "sources": [],
-  "true_peak": -9.98
+  "src_wrap": null,
+  "true_peak": -9.99
  },
  "ui_click_2": {
-  "bytes": 1498,
+  "bytes": 1637,
   "cat": "oneshot",
   "channels": 1,
   "doc": null,
   "file": "oneshots/ui_click_2.m4a",
   "group": "ui_click",
   "loop": null,
-  "lufs": -32.52,
-  "seconds": 0.06,
+  "lufs": -32.53,
+  "seconds": 0.12,
   "sources": [],
-  "true_peak": -9.95
+  "src_wrap": null,
+  "true_peak": -9.99
  },
  "wanderers_hall": {
   "bytes": 228063,
