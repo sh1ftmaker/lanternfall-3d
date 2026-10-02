@@ -24,26 +24,25 @@ const SURF_DECL = /* glsl */`
       col *= 1.0 - 0.45 * w * porous;
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = max(mix(vec3(l), col, 1.0 + 0.4 * w * porous), 0.0);
       float flatk = smoothstep(0.82, 0.97, up);
-      float pn = vn(vW.xz * 0.21) * 0.62 + vn(vW.xz * 0.83 + 3.1) * 0.38;
-      float pud = flatk * smoothstep(0.48, 0.60, pn) * step(vCls, 3.5) * w * smoothstep(0.6, 0.15, fw);    // far off: sheen only          // puddles on flat ground
+      float pud = 0.0;                                                               // puddles on flat ground, near enough to see
+      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6) { float pn = vn(vW.xz * 0.21) * 0.62 + vn(vW.xz * 0.83 + 3.1) * 0.38; pud = flatk * smoothstep(0.48, 0.60, pn) * w * smoothstep(0.6, 0.15, fw); }
       vec3 V = normalize(cameraPosition - vW), N = n;
-      if (pud > 0.01 && uWx.w > 0.0 && fw < 0.03) {                                               // raindrops ringing the puddles
+      if (pud > 0.01 && uWx.w > 0.0 && fw < 0.03) {                                  // raindrops ringing the puddles
         vec2 q = vW.xz * 2.2, c = floor(q), o = vec2(fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453), fract(sin(dot(c, vec2(269.5, 183.3))) * 43758.5453));
         float ph = fract(uTime * 1.3 + o.x * 9.0), d = length(q - c - o * 0.6 - 0.2), x = d - ph * 0.9;
         N = normalize(N + vec3((q - c - o * 0.6 - 0.2) / max(d, 1e-3), 0.0).xzy * sin(x * 30.0) * exp(-x * x * 90.0) * (1.0 - ph) * 0.25 * min(uWx.w, 1.0) * smoothstep(0.03, 0.01, fw));
       }
       float F = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
-      vec3 R = reflect(-V, N);
-      vec3 rl = vec3(0.0);
-      if (uCovOn > 0.5 && R.y > 0.015) {                                             // lamps and signs along the reflected ray
+      float gloss = vCls < 3.5 ? (vCls > 1.5 && vCls < 2.5 ? 0.6 : 1.0) : vCls < 4.5 ? 0.2 : 0.8;     // grass barely, wood less
+      float pk = pud / max(w, 1e-3), k = F * w * mix((0.06 + 0.32 * flatk) * gloss, 1.0, pk);
+      vec3 R = reflect(-V, N), rl = vec3(0.0);
+      if (uCovOn > 0.5 && R.y > 0.015 && k > 0.012) {                                // lamps and signs along the reflected ray
         vec2 rd = R.xz / R.y; float rl2 = dot(rd, rd); if (rl2 > 900.0) rd *= 30.0 * inversesqrt(rl2);
-        float lod = mix(2.6, 1.0, pud / max(w, 1e-3));
-        rl = covL(vW.xz + rd * 1.0, lod) * 0.20 + covL(vW.xz + rd * 2.2, lod) * 0.30 + covL(vW.xz + rd * 3.6, lod + 0.3) * 0.30
-           + covL(vW.xz + rd * 5.5, lod + 0.6) * 0.30 + covL(vW.xz + rd * 8.5, lod + 1.0) * 0.25;
+        float lod = mix(2.6, 1.0, pk);
+        rl = covL(vW.xz + rd * 1.2, lod) * 0.35 + covL(vW.xz + rd * 3.0, lod + 0.3) * 0.45 + covL(vW.xz + rd * 6.5, lod + 0.8) * 0.5;
+        if (pk > 0.3) rl = rl * 0.7 + (covL(vW.xz + rd * 2.0, lod) + covL(vW.xz + rd * 4.5, lod + 0.5)) * 0.25;
       }
       vec3 refl = uWxSky * (0.7 + 0.6 * max(R.y, 0.0)) + rl * 1.7;
-      float gloss = vCls < 3.5 ? (vCls > 1.5 && vCls < 2.5 ? 0.6 : 1.0) : vCls < 4.5 ? 0.2 : 0.8;     // grass barely, wood less
-      float k = F * w * mix((0.06 + 0.32 * flatk) * gloss, 1.0, pud / max(w, 1e-3));
       col = col * (1.0 - 0.65 * pud) * (1.0 - k) + refl * k;
     }
     if (uWx.y > 0.0) {                                                               // snow settling on what faces up
@@ -69,10 +68,15 @@ const WATER_DECL = /* glsl */`
     return s * 0.10;
   }`;
 
-const SKY_DECL = /* glsl */`uniform float uWxCloud, uWxWind; uniform vec3 uWxFlash, uWxBolt, uWxGlow;`;
+const SKY_DECL = /* glsl */`uniform float uWxCloud, uWxWind; uniform vec3 uWxFlash, uWxBolt, uWxGlow;
+    float wxN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453), b = fract(sin(dot(i + vec2(1, 0), vec2(127.1, 311.7))) * 43758.5453);
+      float c = fract(sin(dot(i + vec2(0, 1), vec2(127.1, 311.7))) * 43758.5453), d = fract(sin(dot(i + vec2(1, 1), vec2(127.1, 311.7))) * 43758.5453);
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }`;
 const SKY_CODE = /* glsl */`
       if (uWxCloud > 0.0) {                                // weather: a low deck lit from below by the park
-        float dk = fbm(vec3(cuv * 0.55 + vec2(uTime * 0.006, uTime * 0.002) * (1.0 + 4.0 * uWxWind), 5.0));
+        vec2 cp = cuv * 0.55 + vec2(uTime * 0.006, uTime * 0.002) * (1.0 + 4.0 * uWxWind);
+        float dk = wxN(cp * 2.0) * 0.55 + wxN(cp * 4.1 + 7.3) * 0.3 + wxN(cp * 8.3 + 2.1) * 0.15;
         vec3 deck = mix(vec3(0.008, 0.009, 0.015), vec3(0.026, 0.024, 0.032), smoothstep(0.25, 0.75, dk));
         deck += uWxGlow * exp(-max(h, 0.0) * 6.0) * (0.55 + 0.7 * dk);
         float ba = acos(clamp(dot(d, uWxBolt), -1.0, 1.0));
