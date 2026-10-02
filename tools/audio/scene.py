@@ -138,6 +138,13 @@ def write_json(meta, path):
         em('rose_nightingale', 'nightingale_1', P['rose_maze'], .55, 10, 90, loop=False, every=[3, 11],
            files=files('nightingale'), area={'r': 30}),
         em('punt_oar', 'oar_1', 'punt', .5, 4, 45, loop=False, every=[2.6, 3.4], files=files('oar')),
+        # inside the Brine & Barrel (added with the interiors)
+        em('tavern_hearth', 'torch_loop', [139.75, -15.57, 1.1], .5, 2, 12),
+        em('tavern_room', 'crowd_murmur', [137.28, -25.52, 2.0], .45, 3, 14),
+        # crickets: three quiet corners only (the maze hedges, two green gaps by the woods), short range
+        em('crickets_maze', 'crickets_loop', [-114.6, -145.4, 0.5], .45, 5, 38),
+        em('crickets_gap_nw', 'crickets_loop', [-186.0, 72.0, 0.5], .45, 5, 38),
+        em('crickets_gap_se', 'crickets_loop', [124.0, -142.0, 0.5], .45, 5, 38),
     ]
     for i, (x, y) in enumerate(GLADES):
         emitters.append(em(f'owl_{i + 1}', 'owl_1', [x * 1.25, y * 1.25, 10.0], .5, 20, 160, loop=False,
