@@ -8,6 +8,7 @@ const CSS = `
   text-shadow:0 2px 24px rgba(255,160,40,.55);opacity:0;transition:opacity .2s ease} #trials-count.on{opacity:1}
 #trials-count small{display:block;font:600 13px var(--ui);letter-spacing:.16em;text-transform:uppercase;color:var(--paper);text-align:center;margin-top:8px;text-shadow:none}
 body.clean #trials-count{display:none}
+#game-journal{box-sizing:border-box}  /* the core sheet is 34 px wider than the phone screen without this */
 .tr-row{padding:4px 0 8px} .tr-row b{font-weight:600} .tr-row .tr-t{color:var(--amber);font-weight:600} .tr-row .tr-sub{opacity:.72;font-size:12.5px;line-height:1.4}
 .tr-go{margin-top:5px;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:500 12px var(--ui);padding:4px 11px;cursor:pointer}
 `;
@@ -50,7 +51,7 @@ export function init(game) {
     g.font = '600 30px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(13,11,38,.55)'; g.beginPath(); g.roundRect(4, 8, 376, 56, 28); g.fill();
     g.fillStyle = '#ffd9a0'; g.fillText(text, 192, 37);
     const tex = new THREE.CanvasTexture(cv), mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
-    const s = new THREE.Sprite(mat); s.scale.set(3.4, 0.64, 1); s.renderOrder = 9; return s;
+    const s = new THREE.Sprite(mat); s.scale.set(2.6, 0.49, 1); s.renderOrder = 9; return s;
   }
   for (const c of COURSES) {
     const [x, y, z, yaw] = c.post, g = { c, parts: [] };
@@ -161,7 +162,7 @@ export function init(game) {
     if (game.journal.isOpen) game.journal.refresh();
   }
   function onFrame({ dt }) {
-    if (lblT -= dt, lblT < 0) { lblT = 0.5; for (const g of posts.values()) g.label.visible = Math.hypot(g.c.post[0] - player.x, g.c.post[1] - player.y) < 60 && player.mode === 'walk'; }
+    if (lblT -= dt, lblT < 0) { lblT = 0.5; for (const g of posts.values()) { const d = Math.hypot(g.c.post[0] - player.x, g.c.post[1] - player.y); g.label.visible = d < 60 && d > 7 && player.mode === 'walk'; } }
     if (!race) return;
     const r = race, c = r.c; dt = Math.min(dt, 0.1);
     if (r.phase === 'count') {

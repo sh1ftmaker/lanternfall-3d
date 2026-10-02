@@ -14,7 +14,7 @@ export const COURSES = [
   },
   {
     id: 'swim', name: 'The Spire Swim', short: 'Spire Swim', wick: true, pace: 3, fp: 1,
-    blurb: 'From the lake steps out to the Spire\'s island, touch the post on the beach, and swim back. Wick only.',
+    blurb: 'From the lake steps out to the Spire\'s island, touch the post on the beach, and swim back.',
     where: 'the quay beside the lake steps, south of the Lake Lap post',
     post: [100.4, -8, 0.12, Math.PI],
     cps: [[91, -3, -0.8], [55, 1, -0.8], [18, -4, 0.2, 4, 5], [55, 1, -0.8], [95.5, -2, -0.8]],
@@ -24,7 +24,7 @@ export const COURSES = [
   },
   {
     id: 'roof', name: 'The Meridian Rooftops', short: 'Rooftops', wick: true, pace: 5, fp: 1,
-    blurb: 'From the station forecourt, a long jump, a triple jump to a roof, then ledge to ledge up to the high deck by the monorail. Wick only.',
+    blurb: 'From the station forecourt, a long jump, a triple jump to a roof, then ledge to ledge up to the high deck by the monorail.',
     where: 'the forecourt south of the Meridian Loop station',
     post: [28.3, 98.8, 0.12, Math.PI / 2],
     // landings of a route proven in tools/game/trials.test.mjs (jump kinds and run-ups in tools/game/trials-roof.json); rings pass within 4.5 m and 2.4 m of height
