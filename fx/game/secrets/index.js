@@ -18,7 +18,8 @@ const FILES = ['doors', 'redcoat', 'lakebed', 'bell', 'nap', 'keep', 'snow', 'ga
 const CSS = `#sx-fade{position:fixed;inset:0;z-index:30;pointer-events:none;opacity:0;background:var(--sx-fade,#f5ecdc);transition:opacity .45s ease}
 #sx-fade.on{opacity:1} #sx-fade.slow{transition-duration:.9s} @media (prefers-reduced-motion:reduce){#sx-fade{transition:none}}
 .sx-jrow{display:flex;gap:8px;margin:0 0 7px} .sx-jrow i{font-style:normal;opacity:.55;min-width:14px;text-align:center}
-.sx-jrow.hint{opacity:.45;font-style:italic} .sx-jrow.none{opacity:.4}`;
+.sx-jrow.hint{opacity:.45;font-style:italic} .sx-jrow.none{opacity:.4}
+#game-journal{box-sizing:border-box}   /* workaround: the core sheet is content-box, so on a 390 px screen it runs 34 px off the right edge */`;
 
 export function init(game) {
   const lib = makeLib(game);

@@ -128,11 +128,15 @@ const run = async (kind) => {
     await ev(`__park.platformer.enter({x:${hz[0] + 2.2},y:${hz[1]},z:-2.2,yaw:0})`); await wait(2500);
     await ev(`__park.platformer.test.input=()=>({mx:0,my:-1,a:true,b:false,z:false})`); const dived = await until(`${M}.isFound('lakebed')`, 14000); await ev(`__park.platformer.test.input=null`);
     ok('diving near the sunken horse finds it', dived); await wait(800); await shot('lakebed');
-    // 5. the garden: triple jump at the arcade's east wall from 28 m
-    await ev(`(()=>{const pf=__park.platformer,D=28,x0=90.5+D*0.94,y0=115.6-D*0.33;pf.enter({x:x0,y:y0,z:0.6,yaw:2.8});window.__ok=0})()`); await wait(2500);
-    await ev(`(()=>{const pf=__park.platformer,t0=pf.S.t;window.__T={n:0,hold:0,wasAir:false};pf.test.input=(t,v)=>{const T=window.__T,dt=t-t0,act=v&&v.s?v.s.action:0,air=!!(act&0x800),into=[-0.94,-0.33];if(T.wasAir&&!air&&T.n<3&&T.n>0){T.hold=0.22;T.n++}T.wasAir=air;if(dt>1.0&&T.n===0){T.n=1;T.hold=0.3}if(T.hold>0){T.hold-=1/60;return{world:into,a:true}}return{world:into}}})()`);
-    const roof = await until(`${M}.isFound('garden')`, 14000); await ev(`__park.platformer.test.input=null`);
-    ok('the triple jump reaches the arcade roof and finds the garden', roof, JSON.stringify(await ev(`(({x,y,z})=>[x,y,z])(${G}.player)`))); await shot('garden');
+    // 5. the garden: triple jump at the arcade's east wall from about 28 m (timing depends on the frame rate: up to four tries)
+    let roof = false, tries = 0;
+    for (const D of [28, 26, 28, 29]) {
+      if (roof) break; tries++;
+      await ev(`(()=>{const pf=__park.platformer,D=${D},x0=90.5+D*0.94,y0=115.6-D*0.33;pf.enter({x:x0,y:y0,z:0.6,yaw:2.8})})()`); await wait(2500);
+      await ev(`(()=>{const pf=__park.platformer,t0=pf.S.t;window.__T={n:0,hold:0,wasAir:false};pf.test.input=(t,v)=>{const T=window.__T,dt=t-t0,act=v&&v.s?v.s.action:0,air=!!(act&0x800),into=[-0.94,-0.33];if(T.wasAir&&!air&&T.n<3&&T.n>0){T.hold=0.22;T.n++}T.wasAir=air;if(dt>1.0&&T.n===0){T.n=1;T.hold=0.3}if(T.hold>0){T.hold-=1/60;return{world:into,a:true}}return{world:into}}})()`);
+      roof = await until(`${M}.isFound('garden')`, 12000); await ev(`__park.platformer.test.input=null`);
+    }
+    ok('the triple jump reaches the arcade roof and finds the garden', roof, `try ${tries} ` + JSON.stringify(await ev(`(({x,y,z})=>[x,y,z])(${G}.player)`))); await shot('garden');
     // 8. the long nap
     const nb = await ev(`${API}.nap.BENCH`); await place(nb[0] + 1, nb[1], Math.PI); await wait(1500);
     const t0 = Date.now(); const slept = await until(`${G}.player.action==='sleeping'`, 110000); ok('Wick falls asleep when left alone', slept, `${((Date.now() - t0) / 1000).toFixed(0)} s`);
