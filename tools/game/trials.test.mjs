@@ -73,8 +73,8 @@ if (want('course')) {
   const { browser, page } = await open(false);
   try {
     const T = 'window.__park.game.modules.trials';
-    const legs = await page.evaluate(`(() => { const c = ${T}.courses.find((q) => q.id === 'lake'), g = __park.game.ground, all = [c.post, ...c.cps], out = []; for (let i = 1; i < all.length; i++) { const [ax, ay] = all[i - 1], [bx, by] = all[i], L = Math.hypot(bx - ax, by - ay); let dry = 0, n = 0; for (let d = 0; d <= L; d += 0.5) { const z = g(ax + (bx - ax) * d / L, ay + (by - ay) * d / L); n++; if (z !== null && z > -0.3) dry++; } out.push([i, L, dry / n]); } return out; })()`);
-    const wet = legs.filter((l) => l[2] < 0.97); check('lake: every leg of the course is on walkable ground (the grid has none in the water)', wet.length === 0, JSON.stringify(wet));
+    const legs = await page.evaluate(`(() => { const c = ${T}.courses.find((q) => q.id === 'lake'), g = __park.game.ground, all = [c.post, ...c.cps], out = []; for (let i = 1; i < all.length; i++) { const [ax, ay] = all[i - 1], [bx, by] = all[i], L = Math.hypot(bx - ax, by - ay); let run = 0, worst = 0; for (let d = 0; d <= L; d += 0.5) { const z = g(ax + (bx - ax) * d / L, ay + (by - ay) * d / L); if (z !== null && z > -0.3) run = 0; else { run += 0.5; worst = Math.max(worst, run); } } out.push([i, L, worst]); } return out; })()`);
+    const wet = legs.filter((l) => l[2] > 4); check('lake: no leg crosses water or a block (no stretch over 4 m without walkable ground; a bench is under 2 m)', wet.length === 0, JSON.stringify(wet));
     check('lake: legs are 15 to 45 m', legs.every((l) => l[1] > 15 && l[1] < 45), JSON.stringify(legs.map((l) => Math.round(l[1]))));
     const m = await page.evaluate(`${T}.courses.map((c) => [c.id, c.medals.gold, c.medals.silver, c.fp])`);
     check('medals: gold under silver, first person about 1.5x on the lake lap', m.every((r) => r[1] < r[2]) && m[0][3] === 1.5, JSON.stringify(m));
