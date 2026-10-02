@@ -167,7 +167,7 @@ async function run(mobile, fp) {
   await ev("document.querySelector('#m-walk').click()"); await wait(2500);
   const gv = await ev('(() => { const g = __park.platformer && __park.platformer.character && __park.platformer.character.group; return [__park.mode, g ? g.visible : "n/a", __park.platformer ? __park.platformer.active : "n/a"]; })()');
   check(tag + ' back in Walk after Tour/Explore', gv[0] === 'walk' && (fp || gv[1] === true || gv[1] === 'n/a'), gv);
-  await walkerWorks();
+  await standAt(288, 0, 0, Math.PI); await walkerWorks();     // an open spot: where Walk drops you after Tour is arbitrary
   check(tag + ' camera near plane restored', await ev('__park.camera.near') >= 0.2, await ev('__park.camera.near'));
 
   // natural end of the lap, once (desktop, Wick)
