@@ -26,7 +26,7 @@ args = ap.parse_args()
 ONLY = set(filter(None, args.only.split(',')))
 
 TARGET = {'music': -20.0, 'bed': -24.0, 'layer': -26.0, 'emit': -24.0}
-KBPS = {'music': 64, 'bed': 64, 'layer': 56, 'emit': 56, 'oneshot': 48}
+KBPS = {'music': 56, 'bed': 48, 'layer': 48, 'emit': 48, 'oneshot': 48}
 
 
 def secs(s):
@@ -225,7 +225,7 @@ def _():
 
 @item('train_loop', 'emit')
 def _():
-    return sfx.train_loop(secs(6), 61)
+    return sfx.train_loop(secs(24), 61)
 
 
 @item('creak_loop', 'emit')

@@ -92,8 +92,8 @@ def readme():
              'Everything here is either **synthesised/composed for this project** (numpy/scipy code in `tools/audio/`) '
              'or a **CC0 (public domain) field recording from Freesound**, listed with links in `fx/audio/CREDITS.md`.\n')
     L.append('## Format and conventions\n')
-    L.append('- AAC-LC in `.m4a`, 44.1 kHz (Safari/iOS, Chrome and Firefox decode it). Music mono 64 kb/s, beds stereo '
-             '64 kb/s, looped emitters mono 56 kb/s, one-shots mono 48 kb/s.')
+    L.append('- AAC-LC in `.m4a`, 44.1 kHz (Safari/iOS, Chrome and Firefox decode it). Music mono 56 kb/s, beds stereo '
+             '48 kb/s, looped emitters mono 48 kb/s, one-shots mono 48 kb/s.')
     L.append(f"- Total: **{sum(tot.values()) / 1e6:.2f} MB** in {len(meta)} files "
              f"(music {tot['music'] / 1e6:.2f}, beds and crowd {tot['bed'] / 1e6:.2f}, looped emitters "
              f"{tot['emit'] / 1e6:.2f}, one-shots {tot['oneshot'] / 1e6:.2f} MB).")
