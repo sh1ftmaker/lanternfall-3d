@@ -25,7 +25,7 @@ import { prepare, localField, mulberry, LOCAL_HALF } from './sim-prep.js';
 export { ANIM };
 const TAU = Math.PI * 2;
 const PATH = new Int32Array(16);
-const MIN_D = 0.5, LOCAL_MAX = 256, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
+const MIN_D = 0.5, LOCAL_MAX = 512, LOCAL_REQ = 110;              // m: walkers never closer than this to anyone (position correction)
 // centre of the most open fine cell of a coarse cell
 const fineX = (N, c) => N.x0 + ((N.cfine[c] % N.W) + 0.5) * N.cell, fineY = (N, c) => N.y0 + (((N.cfine[c] / N.W) | 0) + 0.5) * N.cell;
 const wrapA = (a) => { if (a > Math.PI) { a -= TAU; if (a > Math.PI) a = ((a + Math.PI) % TAU) - Math.PI; } else if (a < -Math.PI) { a += TAU; if (a < -Math.PI) a = ((a - Math.PI) % TAU) + Math.PI; } return a; };
@@ -40,8 +40,8 @@ export const PARAMS = {
   lane: 1.6,                         // m, max lane offset to the right of a route (keep right)
   lookahead: 3,                      // coarse cells along the flow field
   groupMix: [0.36, 0.36, 0.17, 0.11],// share of parties of 1, 2, 3, 4
-  railShare: 0.3, siteShare: 0.46, walkShare: 0.2, leaveShare: 0.02,
-  reach: 60,                         // m: sites this far away are picked e^-1 as often as next-door ones
+  railShare: 0.3, siteShare: 0.5, walkShare: 0.14, leaveShare: 0.02,
+  reach: 45,                         // m: sites this far away are picked e^-1 as often as next-door ones
   lodNear: 35, lodMid: 90, lodFar: 200,    // m from the focus: think every 2 / 4 / 8 / 16 frames
   integrateNear: 40, integrateFar: 120,   // m: movement integrated every frame / every 2nd frame / only when thinking
 };
@@ -54,7 +54,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const state = new Float32Array(CAP * 8);
   for (let i = 0; i < CAP; i++) state[i * 8 + 5] = 255;
   const params = { ...PARAMS };
-  const debug = { ev: { goal: 0, spawn: 0 }, ready: false, error: null, times: {}, frameMs: 0, frameMean: 0, frameMax: 0, frames: 0, overlaps: 0, inside: 0, counts: {}, thinkers: 0 };
+  const debug = { ev: { goal: 0, spawn: 0, ghost: 0 }, ready: false, error: null, times: {}, frameMs: 0, frameMean: 0, frameMax: 0, frames: 0, overlaps: 0, inside: 0, counts: {}, thinkers: 0 };
   const crowd = { count: CAP, state, active: 0, want: Math.min(count, CAP), params, debug, ready: false,
     update() {}, setCount(n) { crowd.want = Math.max(0, Math.min(CAP, n | 0)); }, setReduceMotion(b) { reduceMotion = !!b; }, dispose() {} };
   if (!nav || !nav.A || !manifest) return crowd;
@@ -109,7 +109,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   const MODE = new Uint8Array(CAP), STUCK = new Float32Array(CAP), ACC = new Float32Array(CAP), LOD = new Uint8Array(CAP), SIDE = new Int8Array(CAP);
   const SX = new Float32Array(CAP), SY = new Float32Array(CAP), SZ = new Float32Array(CAP), ST0 = new Float32Array(CAP), STT2 = new Float32Array(CAP);   // settle glide
   const ZT = new Float32Array(CAP), VX = new Float32Array(CAP), VY = new Float32Array(CAP), PX = new Float32Array(CAP), PY = new Float32Array(CAP);
-  const OCCK = new Int32Array(CAP).fill(-1), STMASK = new Uint16Array(CAP);       // fine cell where a standing guest stamped the occupancy grid
+  const OCCK = new Int32Array(CAP).fill(-1), STMASK = new Uint16Array(CAP), JAM = new Float32Array(CAP), GHOST = new Float32Array(CAP);       // fine cell where a standing guest stamped the occupancy grid
   let OCC = null;                                    // Uint8 per fine cell: standing guests (walkers steer round them)
   const TX = new Float32Array(CAP), TY = new Float32Array(CAP), RT = new Float32Array(CAP), DFOC = new Float32Array(CAP), AVX = new Float32Array(CAP), AVY = new Float32Array(CAP);
   const LEAVING = new Uint8Array(CAP), TACC = new Float32Array(CAP), UX = new Float32Array(CAP), UY = new Float32Array(CAP);
@@ -117,7 +117,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   let frameNo = 0, simTime = 0;
   const free = [];                    // pool of unused agent indices
   // hash grid (2 m cells) over the walk grid
-  let HG = null;
+  let HG = null, SG = null;
 
   function init() {
     const { N } = D;
@@ -125,6 +125,10 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     HG.head = new Int32Array(HG.w * HG.h).fill(-1);
     OCC = new Uint8Array(N.W * N.H);
     for (let i = CAP - 1; i >= 0; i--) free.push(i);
+    // site grid (30 m cells) for picking nearby goals
+    SG = { cs: 30, x0: N.x0, y0: N.y0, w: Math.ceil(N.W * N.cell / 30), h: Math.ceil(N.H * N.cell / 30), cells: [], near: new Int32Array(1024) };
+    for (let k = 0; k < SG.w * SG.h; k++) SG.cells.push([]);
+    for (const site of D.P.sites) { if (!site.open) continue; const i = Math.floor((site.x - SG.x0) / 30), j = Math.floor((site.y - SG.y0) / 30); if (i >= 0 && j >= 0 && i < SG.w && j < SG.h) SG.cells[j * SG.w + i].push(site.id); }
     // paving cells of the main component, for scattering guests at the start (promenades weigh more)
     const { comp, main } = D.P;
     spawnCells = [];
@@ -157,7 +161,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     X[i] = x; Y[i] = y; Z[i] = z; ZT[i] = z; YAW[i] = yaw; DYAW[i] = yaw; SPD[i] = 0; DSPD[i] = 0; PH[i] = rnd() * 4; SEED[i] = rnd();
     PREF[i] = params.speedMin + (params.speedMax - params.speedMin) * rnd(); LANE[i] = (0.25 + 0.75 * rnd()) * params.lane;
     ANI[i] = ANIM.stand; STT[i] = ST.WAIT; TIMER[i] = 0.3 + rnd(); SITE[i] = -1; SLOT[i] = -1; LEAD[i] = -1; GI[i] = 0; GS[i] = 1; MODE[i] = 0;
-    STUCK[i] = 0; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
+    STUCK[i] = 0; JAM[i] = 0; GHOST[i] = 0; ACC[i] = 0; LOD[i] = 1; SIDE[i] = rnd() < 0.5 ? 1 : -1; LEAVING[i] = 0; VX[i] = VY[i] = 0; AVX[i] = AVY[i] = 0; DFOC[i] = 0; PX[i] = x; PY[i] = y;
     for (let k = 0; k < 4; k++) MEM[i * 4 + k] = -1;
     crowd.active++;
     return i;
@@ -257,13 +261,22 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     if (want === 'gate') site = P.gate;
     else {
       let n = 0, tot = 0;
-      for (let t = 0; t < 120 && n < 40; t++) {
-        const s = sites[(rnd() * sites.length) | 0];
+      // candidates: the sites within ~90 m (site grid, random order), then a few from anywhere
+      const gi = Math.floor((X[L] - SG.x0) / SG.cs), gj = Math.floor((Y[L] - SG.y0) / SG.cs), near = SG.near;
+      let nn = 0;
+      for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+        const ii = gi + di, jj = gj + dj; if (ii < 0 || jj < 0 || ii >= SG.w || jj >= SG.h) continue;
+        const l = SG.cells[jj * SG.w + ii]; for (let q = 0; q < l.length && nn < near.length; q++) near[nn++] = l[q];
+      }
+      for (let t = 0; t < nn + 12 && n < 56; t++) {
+        let s;
+        if (t < nn) { const r = t + ((rnd() * (nn - t)) | 0), id = near[r]; near[r] = near[t]; near[t] = id; s = sites[id]; }
+        else s = sites[(rnd() * sites.length) | 0];
         if (!s.open || s.id === avoidSite || s.kind === 'gate') continue;
         if (want === 'rail' ? s.kind !== 'rail' : want === 'walk' ? s.kind !== 'walk' : (s.kind === 'rail' || s.kind === 'walk')) continue;
         if (freeSlots(s, size) < 0) continue;
         const d = Math.hypot(s.x - X[L], s.y - Y[L]);
-        let w = (s.weight || 1) * (LAND_POP[s.land] || 1) * (Math.exp(-d / params.reach) + 0.08);
+        let w = (s.weight || 1) * (LAND_POP[s.land] || 1) * (Math.exp(-d / params.reach) + 0.05);
         if (want === 'walk' && d < 25) w *= 0.1;
         if (focus.mode === 'walk' && Math.hypot(s.x - focus.x, s.y - focus.y) < 3) w *= 0.05;    // not in the walker's face
         cand[n] = s.id; candW[n] = w; tot += w; n++;
@@ -307,11 +320,11 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
   function releaseParty(L) { releaseSlot(L); for (let k = 0; k < 4; k++) { const f = MEM[L * 4 + k]; if (f >= 0) releaseSlot(f); } }
   function dwell(kind) {
     switch (kind) {
-      case 'sit': return 35 + rnd() * 85;
-      case 'rail': return (35 + rnd() * 90) * (0.7 + 0.6 * rhythm());
-      case 'stage': return 30 + rnd() * 60;
-      case 'queue': return 7 + rnd() * 9;          // service time at the front
-      case 'look': return 6 + rnd() * 14;
+      case 'sit': return 45 + rnd() * 100;
+      case 'rail': return (45 + rnd() * 100) * (0.7 + 0.6 * rhythm());
+      case 'stage': return 40 + rnd() * 80;
+      case 'queue': return 8 + rnd() * 9;          // service time at the front
+      case 'look': return 10 + rnd() * 18;
       default: return 0;
     }
   }
@@ -351,6 +364,12 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
       const st = STT[i]; if (st === ST.OFF) continue;
       if (st === ST.ACT || st === ST.QUEUE) { if (OCCK[i] < 0 && ANI[i] !== ANIM.sit) stamp(i, true); }
       else if (OCCK[i] >= 0) stamp(i, false);
+      // jams (a narrow lane, two streams): someone who wants to walk but cannot for 2.5 s may pass through others briefly
+      if (st === ST.GO || st === ST.FOLLOW) {
+        if (GHOST[i] > 0) GHOST[i] -= dt;
+        else if (DSPD[i] > 0.3 && SPD[i] < 0.2) { JAM[i] += dt; if (JAM[i] > 2.5) { JAM[i] = 0; GHOST[i] = 2.0; debug.ev.ghost++; } }
+        else if (JAM[i] > 0) JAM[i] = Math.max(0, JAM[i] - dt * 2);
+      } else if (GHOST[i] > 0) GHOST[i] = 0;
       // level of detail: distance to the focus, refreshed every 8th frame (staggered)
       if (((frameNo + i) & 7) === 0 || DFOC[i] === 0) { const dx = X[i] - focus.x, dy = Y[i] - focus.y, dz = Z[i] - focus.z; DFOC[i] = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.01; }
       const d = DFOC[i], iv = d < p.lodNear ? 2 : d < p.lodMid ? 4 : d < p.lodFar ? 8 : 16;
@@ -599,8 +618,9 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const gx = Math.floor((xi - N.x0) / 2), gy = Math.floor((yi - N.y0) / 2);
     const want = Math.hypot(vx, vy);
     let fx = 0, fy = 0, seen = 0, cxs = 0, cys = 0;
+    const ghost = GHOST[i] > 0;
     const lead = LEAD[i] >= 0 ? LEAD[i] : i;
-    for (let oy = -1; oy <= 1; oy++) {
+    for (let oy = ghost ? 2 : -1; oy <= 1; oy++) {
       const yy = gy + oy; if (yy < 0 || yy >= gh) continue;
       for (let ox = -1; ox <= 1; ox++) {
         const xx = gx + ox; if (xx < 0 || xx >= gw) continue;
@@ -757,7 +777,7 @@ export function createCrowd({ nav, manifest, pois = null, count = 1200, seed = 1
     const cv = N.clr[fj * N.W + fi];
     // near a wall: keep the body radius clear, or at least do not get any closer (so nobody is ever pinned)
     if (cv < (params.radius + 0.25 + 0.36) * 6) { const c = clearance(N, x, y); if (c < params.radius && c < clearance(N, X[i], Y[i]) + 0.002) return false; }
-    if (OCC[fj * N.W + fi] && OCCK[i] < 0 && standingBlocks(i, x, y)) return false;   // a standing guest there
+    if (OCC[fj * N.W + fi] && OCCK[i] < 0 && GHOST[i] <= 0 && standingBlocks(i, x, y)) return false;   // a standing guest there
     const g = ground(D.N, x, y); if (!(g === g) || Math.abs(g - Z[i]) > 0.45) return false;
     return true;
   }

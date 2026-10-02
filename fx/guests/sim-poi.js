@@ -111,7 +111,8 @@ export function buildSites(N, manifest, poiData, rnd) {
           let ok = false;
           for (const da of [0, 0.35, -0.35, 0.7, -0.7, 0.9, -0.9]) {
             const b = a + da, nx = x - Math.cos(b) * 0.85, ny = y - Math.sin(b) * 0.85;
-            if (okStand(nx, ny, 0.35) && lineClear(N, x, y, nx, ny, 0.25)) { x = nx; y = ny; a = b; ok = true; break; }
+            // keep the line out of narrow lanes: each place needs 0.55 m all round (a lane of about 1.6 m stays passable)
+            if (okStand(nx, ny, 0.55) && lineClear(N, x, y, nx, ny, 0.25)) { x = nx; y = ny; a = b; ok = true; break; }
           }
           if (!ok) break;
         } else if (!okStand(x, y, 0.28)) break;

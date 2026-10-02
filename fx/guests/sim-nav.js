@@ -82,7 +82,7 @@ export function buildNav(nav, opt = {}) {
     const surf = h < 0.045 ? 2 : (h < 0.09 ? 1 : 0);           // 0 paving / floors, 1 lawn, 2 bare ground (outer berm path, low shore)
     csurf[c] = surf;
     const e = clr[fk] / 6 - 0.25;                                // m from the best spot to the nearest obstacle edge
-    const base = surf === 0 ? 1 : surf === 1 ? 3.2 : 2.2;
+    const base = surf === 0 ? 1 : surf === 1 ? 6 : 4.5;
     const pen = Math.max(0, 1.4 - e) * 1.3;
     ccost[c] = Math.min(255, Math.round(10 * (base + pen)));
   }
