@@ -38,6 +38,7 @@ export function createGame(ctx) {
   const off = hash.has('no-game');
   /* ── saved state: one JSON object, one key per module ── */
   let data = {}; try { data = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { data = {}; }
+  if (typeof data !== 'object' || Array.isArray(data)) data = {};     // a damaged save must not stop every module
   let dirty = 0;
   const flush = () => { dirty = 0; try { localStorage.setItem(STORE, JSON.stringify(data)); } catch (e) { /* private mode: this visit only */ } };
   const save = {
