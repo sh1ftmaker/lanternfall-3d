@@ -70,16 +70,28 @@ export function buildNav(nav, opt = {}) {
   // ── coarse grid ──
   const cw = W >> 1, ch = H >> 1, cn = cw * ch;
   const cidx = new Int32Array(cn).fill(-1);
-  const PASS = 4;                                 // best fine cell at least a diagonal away from any blocked cell (0.42 m to its edge)
+  // The coarse graph is derived from the fine grid so that it connects exactly what the fine grid connects: a coarse
+  // cell is passable when one of its fine cells is (a doorway or maze lane 1 m wide counts), and two coarse cells are
+  // linked only where fine cells touch across their border (below). Before, a coarse cell needed a fine cell 0.42 m
+  // from any obstacle, which shut the tavern, the castle courtyard and the Rose Maze out of the route graph and left
+  // guests who were pushed into 1 m alleys without a route. A fine cell walled in on two opposite sides (a gap of
+  // 0.5 m, too narrow to walk through) does not count.
+  const fpass = new Uint8Array(n);
+  for (let j = 1; j < H - 1; j++) for (let i = 1, k = j * W + 1; i < W - 1; i++, k++) {
+    if (!clr[k]) continue;
+    if ((!clr[k - 1] && !clr[k + 1]) || (!clr[k - W] && !clr[k + W])) continue;
+    fpass[k] = 1;
+  }
   let m = 0;
-  const bestOf = new Int32Array(cn);
+  const bestOf = new Int32Array(cn), piece = new Uint8Array(cn);   // piece: bit q set = fine cell q (0 SW, 1 SE, 2 NW, 3 NE) belongs to the coarse cell
+  const QK = [0, 1, W, W + 1];
   for (let J = 0; J < ch; J++) for (let I = 0; I < cw; I++) {
-    const k0 = (2 * J) * W + 2 * I; let bk = k0, bv = clr[k0];
-    let v = clr[k0 + 1]; if (v > bv) { bv = v; bk = k0 + 1; }
-    v = clr[k0 + W]; if (v > bv) { bv = v; bk = k0 + W; }
-    v = clr[k0 + W + 1]; if (v > bv) { bv = v; bk = k0 + W + 1; }
-    const K = J * cw + I; bestOf[K] = bk;
-    if (bv >= PASS) cidx[K] = m++;
+    const k0 = (2 * J) * W + 2 * I; let bq = -1, bv = 0, mask = 0, nq = 0;
+    for (let q = 0; q < 4; q++) { const k = k0 + QK[q]; if (!fpass[k]) continue; mask |= 1 << q; nq++; if (clr[k] > bv) { bv = clr[k]; bq = q; } }
+    if (bq < 0) continue;
+    // the fine cells connected to the best one inside the 2 x 2 block (only a diagonal pair is not connected)
+    if (nq === 2 && (mask === 9 || mask === 6)) mask = 1 << bq;
+    const K = J * cw + I; bestOf[K] = k0 + QK[bq]; piece[K] = mask; cidx[K] = m++;
   }
   const ccell = new Int32Array(m), cfine = new Int32Array(m), chgt = new Float32Array(m), ccost = new Uint8Array(m), csurf = new Uint8Array(m);
   for (let K = 0; K < cn; K++) {
@@ -95,15 +107,27 @@ export function buildNav(nav, opt = {}) {
   }
   // neighbour mask per compact cell (bit d set = may step in direction d), with a height-step limit and no corner cutting
   const cnb = new Uint8Array(m);
-  const CSTEP = opt.cstep || 0.6;
+  // orthogonal link from coarse cell K in direction d (0 E, 2 N, 4 W, 6 S): two passable fine cells of the two cells'
+  // pieces touch across the border (neighbouring passable fine cells never differ by more than STEP in height)
+  const orth = (K, d) => {
+    const I = K % cw, J = (K / cw) | 0, I2 = I + DX[d], J2 = J + DY[d];
+    if (I2 < 0 || J2 < 0 || I2 >= cw || J2 >= ch) return false;
+    const K2 = J2 * cw + I2; if (cidx[K] < 0 || cidx[K2] < 0) return false;
+    const a = piece[K], b = piece[K2];
+    if (d === 0) return ((a & 2) && (b & 1)) || ((a & 8) && (b & 4));
+    if (d === 2) return ((a & 4) && (b & 1)) || ((a & 8) && (b & 2));
+    if (d === 4) return ((a & 1) && (b & 2)) || ((a & 4) && (b & 8));
+    return ((a & 1) && (b & 4)) || ((a & 2) && (b & 8));
+  };
   for (let c = 0; c < m; c++) {
-    const K = ccell[c], I = K % cw, J = (K / cw) | 0; let mask = 0;
-    for (let d = 0; d < 8; d++) {
-      const I2 = I + DX[d], J2 = J + DY[d]; if (I2 < 0 || J2 < 0 || I2 >= cw || J2 >= ch) continue;
-      const c2 = cidx[J2 * cw + I2]; if (c2 < 0) continue;
-      if (Math.abs(chgt[c2] - chgt[c]) > CSTEP) continue;
-      if (d & 1) { if (cidx[J * cw + I2] < 0 || cidx[J2 * cw + I] < 0) continue; }
-      mask |= 1 << d;
+    const K = ccell[c]; let mask = 0;
+    for (let d = 0; d < 8; d += 2) if (orth(K, d)) mask |= 1 << d;
+    // diagonals: only round a corner that is open on both sides (no corner cutting)
+    for (let d = 1; d < 8; d += 2) {
+      const da = d - 1, db = (d + 1) & 7;
+      if (!(mask & (1 << da)) || !(mask & (1 << db))) continue;
+      const Ka = K + DY[da] * cw + DX[da], Kb = K + DY[db] * cw + DX[db];
+      if (orth(Ka, db) && orth(Kb, da)) mask |= 1 << d;
     }
     cnb[c] = mask;
   }

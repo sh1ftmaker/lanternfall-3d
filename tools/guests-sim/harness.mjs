@@ -93,9 +93,9 @@ const GC = 2, GW = Math.ceil(W * NV.cell / GC), GH = Math.ceil(H * NV.cell / GC)
 function run(scen) {
   const crowd = createCrowd({ nav, manifest, pois, count: COUNT, max: Math.ceil(Math.max(COUNT, 400) * 1.7), seed: 1, sync: true, manualLocal: true, ground });
   if (!crowd.ready) throw new Error('not ready: ' + crowd.debug.error);
-  crowd.setParams({ bias: BIAS[scen] || null, hush: false });
+  crowd.setParams({ bias: BIAS[scen] || null, hush: false, budget: 2.0 });     // the Worker's budget (sim-worker.js)
   const dbg = crowd.debug, A = dbg.arrays, ST = dbg.ST, CAP = crowd.count, D = dbg.D, sites = D.P.sites, S = D.P.slots;
-  const { X, Y, Z, STT, SITE, SLOT, LEAD, ANI, DSPD } = A;
+  const { X, Y, Z, STT, SITE, SLOT, LEAD, ANI } = A, DSPD = A.WANT || A.DSPD;      // the speed wanted before avoidance (older sims: after)
   const dt = 1 / FPS, steps = Math.round(MIN * 60 * FPS), warm = Math.round(WARM * 60 * FPS), every = Math.round(FPS / 2);
   const ms = [], pump = [];
   // per-agent tracking
@@ -109,7 +109,7 @@ function run(scen) {
   const tSite = new Int32Array(CAP).fill(-2), tX = new Float32Array(CAP), tY = new Float32Array(CAP), tT = new Float32Array(CAP), tLen = new Float32Array(CAP), lX = new Float32Array(CAP), lY = new Float32Array(CAP);
   const trips = { done: 0, len: 0, straight: 0, time: 0, abandoned: 0, ratioN: 0, ratio: 0 };
   // pass-throughs
-  const close = new Map(); let passes = 0, ghost0 = 0, hushOn = false;
+  const close = new Map(), passWhy = {}; let passes = 0, ghost0 = 0, hushOn = false;
   const PG = new Int32Array(GW * GH).fill(-1), PN = new Int32Array(CAP);
   const party = (i) => (LEAD[i] >= 0 ? LEAD[i] : i);
   let t = 0;
@@ -154,7 +154,7 @@ function run(scen) {
           const xx = gx + ox, yy = gy + oy; if (xx < 0 || yy < 0 || xx >= GW || yy >= GH) continue;
           for (let j = PG[yy * GW + xx]; j >= 0; j = PN[j]) {
             if (j === i || party(j) === pi || Math.abs(Z[j] - Z[i]) > 1) continue;
-            if ((X[j] - X[i]) ** 2 + (Y[j] - Y[i]) ** 2 < 0.04) { const k = i < j ? (i << 13) | j : (j << 13) | i; if (!close.has(k)) { close.set(k, 1); passes++; } }
+            if ((X[j] - X[i]) ** 2 + (Y[j] - Y[i]) ** 2 < 0.04) { const k = i < j ? (i << 13) | j : (j << 13) | i; if (!close.has(k)) { close.set(k, 1); passes++; const why = (A.GHOST[i] > 0 || A.GHOST[j] > 0) ? 'ghost' : (STT[i] === ST.SETTLE || STT[j] === ST.SETTLE || STT[i] === ST.UNSETTLE || STT[j] === ST.UNSETTLE) ? 'settle' : (STT[i] === ST.FOLLOW || STT[j] === ST.FOLLOW) ? 'follow' : 'walk'; passWhy[why] = (passWhy[why] || 0) + 1; } }
           }
         }
       }
@@ -224,7 +224,7 @@ function run(scen) {
     tag: TAG, scen, minutes: MIN, warm: WARM, count: COUNT, active: Math.round(acc.act / n), focus,
     stuck5: +(acc.stuck5 / n).toFixed(4), stuck20: +(acc.stuck20 / n).toFixed(4), wantWalk: Math.round(acc.wantN / n),
     overlapsOther: +(acc.over / n).toFixed(1), overlapsParty: +(acc.overParty / n).toFixed(1),
-    passesPerMin: +(passes / mins).toFixed(1), ghostPerMin: +((dbg.ev.ghost - ghost0) / mins).toFixed(1),
+    passesPerMin: +(passes / mins).toFixed(1), passWhy: Object.fromEntries(Object.entries(passWhy).map(([k, v]) => [k, +(v / mins).toFixed(1)])), ghostPerMin: +((dbg.ev.ghost - ghost0) / mins).toFixed(1),
     density: { median: q(dM, 0.5), p95: q(d95, 0.5), maxMedian: q(dMax, 0.5), maxMax: Math.max(...dMax), crowdShare: +(acc.crowdShare / n).toFixed(3), crowdShareWalkers: +(acc.crowdWalk / n).toFixed(3) },
     poi, regions,
     trips: { perMin: +(trips.done / mins).toFixed(1), meanLen: +(trips.len / Math.max(1, trips.done)).toFixed(1), detour: +(trips.ratio / Math.max(1, trips.ratioN)).toFixed(3), speedMadeGood: +(trips.straight / Math.max(1e-6, trips.time)).toFixed(3), meanTime: +(trips.time / Math.max(1, trips.done)).toFixed(1), abandonedPerMin: +(trips.abandoned / mins).toFixed(1) },

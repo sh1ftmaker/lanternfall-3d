@@ -157,9 +157,10 @@ export function buildSites(N, manifest, poiData, rnd) {
       const offs = [[0, 0], [0.8, 0], [-0.8, 0], [1.6, -0.3], [-1.6, -0.3], [0.4, -1.0], [-0.4, -1.0], [1.2, -1.1]];
       for (let i = 0, n = 0; i < offs.length && n < site.cap; i++) {
         const [o, b] = offs[i], sx = p.x + rx * o + fx * b, sy = p.y + ry * o + fy * b;
+        if (kind === 'rail' && b < -0.5) continue;          // no second row at the lake rail: the walk behind the leaners stays free
         const sp = findStand(sx, sy, 0.4, 0.28); if (!sp) continue;
         if (lean && b === 0 && !leanRoom(sp[0], sp[1], fx, fy)) continue;
-        const ap = lean ? (findStand(sp[0] - fx * 0.7, sp[1] - fy * 0.7, 0.5, 0.35) || sp) : sp;
+        const ap = lean ? (findStand(sp[0] - fx * 0.85, sp[1] - fy * 0.85, 0.5, 0.35) || sp) : sp;
         const g = ground(N, sp[0], sp[1]);
         if (addSlot(site, sp[0], sp[1], g, yaw, ap[0], ap[1], lean && b === 0 ? ANIM.lean : type === 'photo' ? ANIM.look : ANIM.stand) >= 0) n++;
       }
