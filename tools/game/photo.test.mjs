@@ -80,8 +80,8 @@ async function run(mobile, quality) {
     await ev("document.querySelector('[data-tab=look]').click()"); await ev("document.querySelector('[data-look=warm]').click()"); await ev("(()=>{const r=document.querySelector('#ph-vig'); r.value=60; r.dispatchEvent(new Event('input'))})()"); await wait(800);
     if (m === 'wick') {
       const vis = await ev("!document.querySelector('#ph-pose').hidden"); check(vis, `${tag}/${m}: Pose button offered for Wick`);
-      a0 = await ev('String(__park.platformer.animator.update).length'); await ev("document.querySelector('#ph-pose').click()"); await ev("document.querySelector('#ph-pose').click()"); await wait(1200);
-      const a1 = await ev('String(__park.platformer.animator.update).length'); check(a0 !== a1, `${tag}/${m}: Pose swaps the animation`); await shot(m + '-3b-pose');
+      a0 = await ev('__park.platformer.animator.st.cur.aLf'); for (let i = 0; i < 4; i++) await ev("document.querySelector('#ph-pose').click()"); await wait(1500);
+      const a1 = await ev('__park.platformer.animator.st.cur.aLf'); check(Math.abs(a0 - a1) > 0.05 && (await ev("document.querySelector('#ph-pose').textContent")) === 'Warm hands', `${tag}/${m}: Pose drives the animation (${a0 && a0.toFixed(2)} -> ${a1 && a1.toFixed(2)})`); await shot(m + '-3b-pose');
     } else { const hid = await ev("document.querySelector('#ph-pose').hidden"); check(hid, `${tag}/${m}: no Pose button without Wick`); }
     await shot(m + '-3-look');
     await ev("document.querySelector('[data-asp=\"4:5\"]').click()");
@@ -100,8 +100,7 @@ async function run(mobile, quality) {
     await wait(1200);
     check(await ev("!__park.game.modules.photo.active && !__park.game.cameraHeld && !document.body.classList.contains('photo-on') && document.body.classList.contains('clean') === " + clean0), `${tag}/${m}: left, interface restored`);
     check((await ev('__park.mode')) === mode0, `${tag}/${m}: same mode`);
-    check(m !== 'wick' || (await ev('String(__park.platformer.animator.update).length')) === a0, `${tag}/${m}: Wick's animation restored`);
-    check(!(await ev('!!__park.Q.photo')) && !(await ev('!!__park.game.modules.photo.pass')), `${tag}/${m}: pass gone`);
+        check(!(await ev('!!__park.Q.photo')) && !(await ev('!!__park.game.modules.photo.pass')), `${tag}/${m}: pass gone`);
     if (m === 'wick') { const w1 = await ev('(()=>{const v=__park.platformer.view.pos;return [v.x,v.y,v.z]})()'); check(same(wick0, w1, 0.3), `${tag}/${m}: Wick still where they were`);
       await ev('__park.platformer.test.input = () => ({ mx: 0, my: 1, a: false, b: false, z: false })'); await wait(1500); const w2 = await ev('(()=>{const v=__park.platformer.view.pos;return [v.x,v.y,v.z]})()'); await ev('__park.platformer.test.input = null');
       check(!same(w1, w2, 0.5), `${tag}/${m}: Wick walks again`); }

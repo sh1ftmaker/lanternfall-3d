@@ -38,7 +38,7 @@ const CSS = `
 #ph-shutter:active{transform:scale(.94)}
 #ph-lightbox{position:fixed;inset:0;z-index:12;display:grid;place-items:center;align-content:center;gap:10px;background:rgba(5,4,15,.88);padding:16px;cursor:pointer;font:500 14px var(--ui);color:var(--paper)} #ph-lightbox[hidden]{display:none}
 #ph-lightbox img{max-width:min(92vw,720px);max-height:72vh;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6)}
-.ph-sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px} .ph-sheet button{appearance:none;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0d0b26;cursor:pointer;aspect-ratio:1;display:block} .ph-sheet img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-sheet{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px} .ph-sheet button{appearance:none;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0d0b26;cursor:pointer;aspect-ratio:1;display:block} .ph-sheet img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-take{appearance:none;border:1px solid var(--amber);border-radius:999px;background:transparent;color:var(--amber);font:600 13px var(--ui);padding:8px 16px;cursor:pointer}
 body.photo-on .pf-touch,body.photo-on #hop,body.photo-on #stick,body.photo-on #hint,body.photo-on #btn-show,body.photo-on #game-track{display:none!important}
 #btn-photo{display:none} @media (min-width:641px){ #btn-photo{display:grid} }
@@ -169,7 +169,7 @@ export function init(game) {
       basis(); cam.p.addScaledVector(fwd, ((k('KeyW') ? 1 : 0) - (k('KeyS') ? 1 : 0)) * sp).addScaledVector(right, ((k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0)) * sp);
       cam.p.y += ((k('KeyE') ? 1 : 0) - (k('KeyQ') ? 1 : 0)) * sp;
     }
-    place();
+    place(); poseFrame(dt);
   }
   function basis() { e.set(cam.pitch, cam.yaw, 0, 'YXZ'); fwd.set(0, 0, -1).applyEuler(e); right.set(1, 0, 0).applyEuler(e); }
   function place() {
@@ -229,21 +229,22 @@ export function init(game) {
   });
   addEventListener('resize', () => { if (active) layoutCrop(); });
 
-  /* ── Wick's pose: cycle a few idle clips by stepping in front of the animator ── */
-  const POSES = [['Stand', null], ['Look around', 'lookAround'], ['Trim the lantern', 'idleTrim'], ['Warm hands', 'warmHands']];
-  let poseI = 0, poseOrig = null;
-  function unpose() { const pf = game.platformer; if (poseOrig && pf && pf.animator) pf.animator.update = poseOrig; poseOrig = null; poseI = 0; $('#ph-pose').textContent = 'Pose'; }
-  $('#ph-pose').addEventListener('click', () => {
-    const pf = game.platformer, a = pf && pf.animator; if (!a) return;
-    poseI = (poseI + 1) % POSES.length; const [label, clip] = POSES[poseI]; $('#ph-pose').textContent = poseI ? label : 'Pose';
-    if (!poseOrig) poseOrig = a.update;
-    if (!clip) { a.update = poseOrig; return; }
-    const orig = poseOrig, fn = a.clips[clip];
-    a.update = (dt, anim, c, body) => {          // run the chosen clip instead of whatever the movement library says (Wick is standing still anyway)
-      const keep = a.clips.pose; a.clips.pose = (u, cc) => fn((cc.t * 0.12) % 1, cc);
-      try { return orig(dt, { id: -1, u: 0 }, { ...c, speed: 0, vy: 0 }, body); } finally { a.clips.pose = keep; }
-    };
-  });
+  /* ── Wick's pose: the platformer only animates inside its own update (which waits while the camera is held), so
+     while a pose is chosen we run the animator ourselves each frame and hand the bones to the character ── */
+  const POSES = [['Stand', 'pose'], ['Look around', 'lookAround'], ['Trim the lantern', 'idleTrim'], ['Warm hands', 'warmHands']];
+  let poseI = -1;
+  function unpose() { poseI = -1; $('#ph-pose').textContent = 'Pose'; }
+  function poseFrame(dt) {
+    const pf = game.platformer, a = pf && pf.animator, v = pf && pf.view; if (poseI < 0 || !a || !v || !v.pos || !pf.character) return;
+    const fn = a.clips[POSES[poseI][1]], keep = a.clips.pose; if (!fn) return;
+    a.clips.pose = (u, c) => fn((c.t * 0.12) % 1, c);               // the clip table is looked up by name: stand in for 'pose' for this one call
+    try {
+      const bones = a.update(dt, { id: -1, u: 0 }, { speed: 0, vy: 0, reduceMotion: game.reduceMotion }, { pos: v.pos, yaw: v.yaw, pitch: 0, roll: 0 });
+      for (let i = 0; i < bones.length; i++) pf.character.bones[i].copy(bones[i]);
+      pf.character.uniforms.uLantern.value.copy(a.st.lanternWorld);
+    } finally { a.clips.pose = keep; }
+  }
+  $('#ph-pose').addEventListener('click', () => { poseI = (poseI + 1) % POSES.length; $('#ph-pose').textContent = POSES[poseI][0]; });
 
   /* ── saving ── */
   const pad2 = (n) => String(n).padStart(2, '0');
