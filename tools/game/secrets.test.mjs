@@ -34,7 +34,7 @@ const run = async (kind) => {
 
   /* 1. the Paper Doors: each weather opens somewhere else; a return door stands there */
   const door = await ev(`${API}.doors.doorWorld()`);
-  const dest = { clear: [6.2, 0.2], mist: await wx('lantern-row', 0, 28), rain: await wx('meridian', 14, 4.5), storm: await wx('guildhollow', 0, 22.6), snow: await wx('frostmere', 36, 5) };
+  const dest = { clear: [0, 5], mist: await wx('lantern-row', 0, 28), rain: await wx('meridian', 14, 4.5), storm: await wx('guildhollow', 0, 22.6), snow: await wx('frostmere', 36, 5) };
   for (const w of mobile ? ['mist', 'rain'] : ['clear', 'mist', 'rain', 'storm', 'snow']) {
     await weather(w); const f = await wx('wanderers', -1.33, 21.5); await place(f[0], f[1], await ev(`${M}.lib.outward('wanderers')`)); await wait(2500);
     ok(`door prompt (${w})`, /Open door/.test(await prompt()), await prompt());

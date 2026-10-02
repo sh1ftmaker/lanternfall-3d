@@ -4,7 +4,7 @@ const DOOR = { land: 'wanderers', lx: -1.33, ly: 22.6, z: 0.95 };           // d
 const AWAY = Math.PI;                                                         // add to the land's outward yaw to face the lake
 // weather -> where the door opens (land-local x, y, z of the floor; yaw offset from "outward"; fp: where the walker can stand if the grid has no such place)
 const DEST = {
-  clear: { name: 'spire', world: [6.2, 0.2], z: 0.6, yaw: 0 },                                          // the Spire's island, facing the lake
+  clear: { name: 'spire', world: [0, 5], z: 0.6, yaw: Math.PI / 2 },                                      // the Spire's island (north side, away from the stamp post and the jetty), facing the lake
   mist: { land: 'lantern-row', lx: 0, ly: 28, z: 1.95, yaw: 0 },                                       // the Shrine of Wishes, facing the hall
   rain: { land: 'meridian', lx: 14, ly: 4.5, z: 35.05, yaw: AWAY },                                    // the Launch Deck, facing the lake
   storm: { land: 'guildhollow', lx: 0, ly: 22.6, z: 0.15, yaw: 0 },                                      // the castle courtyard, facing the keep
