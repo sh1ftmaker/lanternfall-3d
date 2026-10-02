@@ -65,3 +65,5 @@ module's README section (below) so others can listen.
 - Words on screen: short, plain, in the park's voice. No emoji. Follow the look of the existing interface (CSS
   variables `--paper`, `--amber`, `--glass`, `--line`, `--ui`).
 - Positions you place things at must be checked against the walk grid (`game.ground`) and looked at in a screenshot.
+- Text fields: keys typed into an `<input>` / `<textarea>` never reach the page's key handlers (walking, Wick, shortcuts),
+  so a form just works. Close it on `Enter` / `Escape` yourself (listen on the field).

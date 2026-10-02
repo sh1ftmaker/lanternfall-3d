@@ -29,6 +29,8 @@ const $ = (s) => document.querySelector(s);
 const coarse = matchMedia('(pointer: coarse)').matches;
 const small = Math.min(innerWidth, innerHeight) < 620;
 const mobile = coarse || small;
+// typing in a text field (a wish, a name) is not a command: the page's key handlers below never see those keys
+for (const t of ['keydown', 'keyup']) addEventListener(t, (e) => { const el = e.target; if (el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type !== 'range') || el.isContentEditable)) e.stopImmediatePropagation(); });
 const PREFS = loadPrefs();                                   // settings sheet choices (fx/ui.js), if any were saved
 let reduceMotion = PREFS.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches;
 const B = (x, y, z) => new THREE.Vector3(x, z, -y);          // Blender (x, y, z-up) -> three (x, y-up, z)
