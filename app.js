@@ -18,6 +18,8 @@ import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 
 const DATA = 'data/';
+// a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
+addEventListener('error', (e) => { if (!window.__park || !window.__park.loaded) { if (e.error) refreshCode('boot-error'); } });
 const $ = (s) => document.querySelector(s);
 const coarse = matchMedia('(pointer: coarse)').matches;
 const small = Math.min(innerWidth, innerHeight) < 620;
@@ -250,8 +252,22 @@ scene.add(sky);
 const bar = $('#bar'), veilMsg = $('#veil-msg');
 let loadedBytes = 0, totalBytes = 1;
 let B64 = false;      // hosts that only serve text: the same gzip bytes, base64-encoded in <name>.txt
+// The mesh format this code reads. The host caches files for minutes, so right after a deploy a browser can hold old
+// code with new data (or the reverse). Data files are fetched with the manifest's build id so they always match the
+// manifest; if the manifest is newer than this code, refreshCode() re-downloads the page's scripts and reloads once.
+const DATA_FORMAT = 2;
+let dataTag = '';
+async function refreshCode(why) {
+  let tried = null; try { tried = sessionStorage.getItem('lf-refresh'); } catch (e) { /* storage unavailable */ }
+  if (tried === why) return false;                       // already tried for this build: do not loop
+  try { sessionStorage.setItem('lf-refresh', why); } catch (e) { return false; }
+  const urls = new Set([location.pathname]);
+  for (const e of performance.getEntriesByType('resource')) if (e.name.startsWith(location.origin) && /\.(js|html)(\?|$)/.test(e.name)) urls.add(e.name);
+  await Promise.all([...urls].map((u) => fetch(u, { cache: 'reload' }).catch(() => {})));
+  location.reload(); return true;
+}
 async function fetchBin(file) {
-  const res = await fetch(DATA + file + (B64 ? '.txt' : ''));
+  const res = await fetch(DATA + file + (B64 ? '.txt' : '') + dataTag);
   if (!res.ok) throw new Error(file + ': ' + res.status);
   let buf;
   if (res.body && res.body.getReader) {
@@ -468,7 +484,9 @@ function moonShadow() {
   surface.buildShadow(renderer, scene, casters);
 }
 async function load() {
-  manifest = await (await fetch(DATA + 'manifest.json')).json();
+  manifest = await (await fetch(DATA + 'manifest.json', { cache: 'no-cache' })).json();
+  if ((manifest.format || 1) > DATA_FORMAT && await refreshCode('f' + manifest.format + (manifest.build || ''))) return new Promise(() => {});   // reloading
+  if (manifest.build) dataTag = '?v=' + manifest.build;
   const ex = manifest.extras;
   totalBytes = manifest.parts.reduce((s, p) => s + p.bytes, 0) + ex.file.bytes + (ex.train_file ? ex.train_file.bytes : 0) + (manifest.nav ? manifest.nav.bytes : 0);
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
@@ -917,9 +935,10 @@ window.__park = { glCtx, depth, lodMeshes, get loaded() { return loaded; }, scen
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 frame();
 let loadFailed = false;
-load().catch((err) => {
-  loadFailed = true; console.warn('Lanternfall: loading failed:', err);
+load().catch(async (err) => {
   const net = err instanceof TypeError || /network|fetch|\b[45]\d\d\b/i.test(err.message);
+  if (!net && await refreshCode('load-error')) return;        // possibly mixed old and new files just after a deploy
+  loadFailed = true; console.warn('Lanternfall: loading failed:', err);
   veilFail(net ? 'The download was interrupted.' : 'The park could not be loaded.', net ? 'Check the connection and try again.' : err.message);
 });
 { // a download that stops without an error (stalled connection): offer a retry instead of an endless progress bar

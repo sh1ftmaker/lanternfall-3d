@@ -460,5 +460,10 @@ else:
     mcol = np.array([0.62, 0.74, 1.0]) * 0.55 / math.pi
 manifest["moon"] = dict(dir=[float(MOON[0]), float(MOON[2]), float(-MOON[1])], col=[float(v) for v in mcol], baked=not MOON_SAMPLES)
 log("moon light colour", [round(float(v), 4) for v in mcol], "(analytic %s)" % [round(v * 0.55 / math.pi, 4) for v in (0.62, 0.74, 1.0)])
+# format = what the viewer must understand (app.js DATA_FORMAT); build = content id used to cache-bust the data files
+import hashlib
+_h = hashlib.sha1()
+for _p in manifest["parts"]: _h.update(open(os.path.join(OUT, _p["file"]), "rb").read())
+manifest["format"] = 2; manifest["build"] = _h.hexdigest()[:10]
 json.dump(manifest, open(os.path.join(OUT, "manifest.json"), "w"), separators=(",", ":"))
 log("manifest written; total download %.1f MB" % (sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT)) / 1e6))
