@@ -161,7 +161,7 @@ export function init(game) {
     if (l.hidden) revealPole();
     const complete = c >= t;
     if (complete && !st.done.includes(l.land)) { st.done.push(l.land); persist(); game.toast(`<b>${nameOf(l.land)} is lit.</b> Every lamp, every corner.`, { ms: 6000, tone: 'good' }); celebrate(l.land); game.emit('lamps:land', { land: l.land }); }
-    else if (!l.hidden) game.toast(`<b>Lamp lit</b> · ${nameOf(l.land)} ${c} / ${t}`, { ms: 2600, tone: 'good' });
+    else if (!l.hidden) game.toast(`<b>Lamp lit</b> · ${nameOf(l.land)} ${c} / ${t}${l.ini ? '<br>Someone scratched initials on this post.' : ''}`, { ms: l.ini ? 5000 : 2600, tone: 'good' });
     if (countAll() >= L.length && !st.all) { st.all = true; persist(); setTimeout(() => { game.toast('<b>The whole park is lit.</b> Look at the lake.', { ms: 8000, tone: 'good' }); finale(); }, 2500); game.emit('lamps:all', {}); }
     game.journal.refresh(); updateTrack(true); return true;
   }
