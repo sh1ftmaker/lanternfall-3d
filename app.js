@@ -594,7 +594,7 @@ const hintEl = $('#hint'); let hintTimer = 0;
 function showHint() {
   const txt = mode === 'tour' ? (coarse ? 'Drag to explore yourself · tap a place to fly there' : 'Drag to take over · pick a place to fly there')
     : mode === 'orbit' ? (coarse ? 'Drag to orbit · pinch to zoom · two fingers to pan' : 'Drag to orbit · scroll to zoom · right-drag or Shift+arrows to pan')
-    : (coarse ? 'Left thumb walks · right thumb looks' : 'WASD or arrows to walk · drag to look · Shift to run · Esc to leave');
+    : (coarse ? 'Left thumb walks · right thumb looks' : 'WASD or arrows to walk · drag to look · Shift to run · Space to hop');
   hintEl.textContent = txt; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 5200);
 }
 
@@ -667,7 +667,7 @@ function setMode(m, opts = {}) {
   const prev = mode; mode = m;
   for (const k of ['tour', 'orbit', 'walk']) $('#m-' + k).setAttribute('aria-pressed', String(k === m));
   controls.enabled = m === 'orbit'; fly.on = false;
-  $('#stick').hidden = true;
+  $('#stick').hidden = true; hopBtn.hidden = !(m === 'walk' && coarse);
   if (m === 'tour') { startBlend(prev === 'walk' ? 3.5 : 2.6); lastShot = -1; baseFov = 52; }
   if (m === 'orbit') {
     baseFov = 52;
@@ -706,14 +706,18 @@ $('#m-orbit').addEventListener('click', () => setMode('orbit'));
 $('#m-walk').addEventListener('click', () => setMode('walk'));
 
 /* ───────────────────────── walking ───────────────────────── */
-const walk = { x: 300, y: 0, z: 0.12, yaw: Math.PI, pitch: 0, eye: 1.68, bob: 0 };
+const walk = { x: 300, y: 0, z: 0.12, yaw: Math.PI, pitch: 0, eye: 1.68, bob: 0, hop: 0, vh: 0, cz: 0.12, slide: 1, blockT: 0, stuckT: 0, unsticks: 0 };
+// Steps: the walker steps up or down onto any grid cell within WALK_STEP of its feet (nav.bin keeps neighbouring cells up
+// to ~0.45-0.6 m apart connected; kerbs, stairs, terrace edges and bleacher tiers of 0.45 m included). A hop (Space, the
+// touch Hop button) lifts the feet by up to ~0.6 m, so a cell up to WALK_STEP above the hop is reachable too.
+const WALK_STEP = 0.6, HOP_V = 4.6, HOP_G = 18, SLIDE = [0.5, 1.0, 1.45], EDGE = [1.75];
 const navH = (v) => (v - 1) / 100 - 2;
 function navLevels(x, y) {
   const i = Math.floor((x - nav.x0) / nav.cell), j = Math.floor((y - nav.y0) / nav.cell);
   if (i < 0 || j < 0 || i >= nav.w || j >= nav.h) return null;
   const k = j * nav.w + i; return [nav.A[k], nav.B[k]];
 }
-function navHeight(x, y, zRef, tol = 0.6) {
+function navHeight(x, y, zRef, tol = WALK_STEP) {
   const lv = navLevels(x, y); if (!lv) return null;
   let best = null, bd = tol;
   for (const v of lv) { if (!v) continue; const h = navH(v), d = Math.abs(h - zRef); if (d <= bd) { bd = d; best = h; } }
@@ -726,17 +730,37 @@ function spawnWalk(x, y, yaw) {
     for (let k = 0; k < n; k++) { const a = (k / n) * 6.2831853, px = x + Math.cos(a) * r * 0.5, py = y + Math.sin(a) * r * 0.5; const lv = navLevels(px, py); if (lv && lv[0] && !inLake(px, py)) { found = [px, py, navH(lv[0])]; break; } }
   }
   if (!found) found = [300, 0, 0.12];
-  walk.x = found[0]; walk.y = found[1]; walk.z = found[2];
+  walk.x = found[0]; walk.y = found[1]; walk.z = walk.cz = found[2]; walk.hop = walk.vh = 0; walk.stuckT = 0;
   walk.yaw = yaw !== undefined ? yaw : Math.atan2(-walk.y, -walk.x);   // face the lake
   walk.pitch = 0.04;
 }
 // the Spire island and the harbour-light rock are walkable but cut off: never drop a visitor there
 function inLake(x, y) { const pl = manifest.lake; let c = false; for (let i = 0, j = pl.length - 1; i < pl.length; j = i++) { const [xi, yi] = pl[i], [xj, yj] = pl[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
-function walkCanStand(x, y, z) {
+function walkCanStand(x, y, z, air = false) {     // air: in a hop, anything under the footprint lower than the feet is fine
   const r = 0.28; let h = navHeight(x, y, z); if (h === null) return null;
-  for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) if (navHeight(x + dx, y + dy, h, 0.75) === null) return null;
+  const top = Math.max(h, z) + 0.75;
+  for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
+    if (!air) { if (navHeight(x + dx, y + dy, h, 0.75) === null) return null; continue; }
+    const lv = navLevels(x + dx, y + dy); if (!lv || !((lv[0] && navH(lv[0]) <= top) || (lv[1] && navH(lv[1]) <= top))) return null;
+  }
   return h;
 }
+// a move of (mx, my) from where the walker is, feet at zr (ground + hop); lands it on the cell's height
+function walkTry(mx, my, zr) {
+  const h = walkCanStand(walk.x + mx, walk.y + my, zr, walk.hop > 0); if (h === null) return false;
+  walk.x += mx; walk.y += my;
+  if (walk.hop > 0 || walk.vh > 0) { walk.hop = Math.max(0, zr - h); if (!walk.hop) walk.vh = 0; }
+  walk.z = h; return true;
+}
+function walkHop() { if (mode === 'walk' && walk.hop === 0 && walk.vh === 0) walk.vh = HOP_V; }
+// touch: a Hop button on the right, above the dock (outside the canvas, so it never takes the stick's or the look's touch)
+const hopBtn = document.createElement('button');
+hopBtn.type = 'button'; hopBtn.id = 'hop'; hopBtn.textContent = 'Hop'; hopBtn.title = 'Hop'; hopBtn.hidden = true;
+hopBtn.style.cssText = 'position:fixed;z-index:6;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 200px);width:62px;height:62px;border-radius:50%;' +
+  'border:1px solid rgba(245,236,220,.22);background:rgba(13,11,38,.55);color:#f5ecdc;font:600 14px Figtree,system-ui,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)';
+hopBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); walkHop(); });
+hopBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+document.body.appendChild(hopBtn);
 const keys = new Set(); const stick = { id: -1, x: 0, y: 0, ox: 0, oy: 0 }; const look = { id: -1, x: 0, y: 0 };
 addEventListener('keydown', (e) => { if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return; keys.add(e.code); if (mode !== 'tour' && /Arrow|Space|Page/.test(e.code)) e.preventDefault(); });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -746,6 +770,7 @@ addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || !ready) return;
   if (e.key === 'Escape') { if (settings.open) settings.close(); else if (mode === 'walk') setMode('orbit'); return; }
   if (e.repeat) return;
+  if (e.code === 'Space' && mode === 'walk') { walkHop(); return; }
   const m = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk' }[e.code];
   if (m) { if (m !== mode) setMode(m); return; }
   if (e.code === 'KeyF' && !fsBtn.hidden) fsBtn.click();
@@ -766,7 +791,8 @@ function updateWalk(dt) {
   if (keys.has('KeyD')) fx += 1; if (keys.has('KeyA')) fx -= 1;
   if (keys.has('ArrowLeft')) walk.yaw += dt * 1.9; if (keys.has('ArrowRight')) walk.yaw -= dt * 1.9;
   if (stick.id !== -1) { fx += stick.x; fy += -stick.y; }
-  const mag = Math.hypot(fx, fy);
+  if (walk.vh || walk.hop > 0) { walk.vh -= HOP_G * dt; walk.hop += walk.vh * dt; if (walk.hop <= 0) { walk.hop = 0; walk.vh = 0; } }
+  const mag = Math.hypot(fx, fy), x0 = walk.x, y0 = walk.y;
   if (mag > 0.02) {
     const sp = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 9.5 : 4.6) * Math.min(1, mag) * (stick.id !== -1 ? 1.25 : 1);
     fx /= mag; fy /= mag;
@@ -774,21 +800,48 @@ function updateWalk(dt) {
     const dx = (fy * c + fx * s) * sp * dt, dy = (fy * s - fx * c) * sp * dt;
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 0.2));
     for (let k = 0; k < steps; k++) {
-      const sx = dx / steps, sy = dy / steps;
-      let h = walkCanStand(walk.x + sx, walk.y + sy, walk.z);
-      if (h !== null) { walk.x += sx; walk.y += sy; walk.z = h; continue; }
-      h = walkCanStand(walk.x + sx, walk.y, walk.z); if (h !== null) { walk.x += sx; walk.z = h; continue; }
-      h = walkCanStand(walk.x, walk.y + sy, walk.z); if (h !== null) { walk.y += sy; walk.z = h; }
+      const sx = dx / steps, sy = dy / steps, zr = walk.z + walk.hop;
+      if (walkTry(sx, sy, zr)) continue;
+      // blocked: slide along the obstacle, i.e. the move turned by 30, 60, 85 degrees (shortened to its part along the
+      // wish), all on the side that worked last time before the other side; held up for a moment (the corner of an
+      // obstacle in the way), also edge sideways (100 degrees, slowly) to get round it; then along the axes. In a
+      // concave corner every one of these is blocked, so the walker rests there without jitter
+      let ok = false;
+      const turns = walk.blockT > 0.25 ? SLIDE.concat(EDGE) : SLIDE;
+      for (const sg of [walk.slide, -walk.slide]) {
+        for (const a of turns) {
+          const kk = a > 1.5 ? 0.35 : Math.cos(a), ca = Math.cos(a * sg), sa = Math.sin(a * sg);
+          if (walkTry((sx * ca - sy * sa) * kk, (sx * sa + sy * ca) * kk, zr)) { walk.slide = sg; ok = true; break; }
+        }
+        if (ok) break;
+      }
+      if (!ok && !walkTry(sx, 0, zr)) walkTry(0, sy, zr);
     }
-    walk.bob += dt * sp * 1.7;
-  }
-  const targetY = walk.z + walk.eye + Math.sin(walk.bob) * 0.035;
-  camera.position.x = walk.x; camera.position.z = -walk.y;
-  camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 9);
-  if (Math.abs(camera.position.y - targetY) > 3) camera.position.y = targetY;
+    // progress along the wish: little of it for a while means an obstacle's corner is in the way
+    const prog = ((walk.x - x0) * dx + (walk.y - y0) * dy) / (dx * dx + dy * dy);
+    walk.blockT = prog < 0.25 ? walk.blockT + dt : Math.max(0, walk.blockT - dt * 0.5);
+    walk.bob += Math.hypot(walk.x - x0, walk.y - y0) * 1.7;   // the bob follows the distance walked (none against a wall)
+    // never stuck: input held for a second without moving and no way out at all -> to the nearest cell it can walk from
+    walk.stuckT = Math.hypot(walk.x - x0, walk.y - y0) < 1e-3 * sp ? walk.stuckT + dt : 0;
+    if (walk.stuckT > 1) { walk.stuckT = 0; walkUnstick(); }
+  } else { walk.stuckT = 0; walk.blockT = 0; }
+  // camera: eases over steps (and the hop's landing on a higher cell), follows a hop closely
+  walk.cz += (walk.z + walk.hop - walk.cz) * Math.min(1, dt * (walk.hop > 0 ? 30 : 9));
+  if (Math.abs(walk.cz - walk.z - walk.hop) > 3) walk.cz = walk.z + walk.hop;
+  camera.position.set(walk.x, walk.cz + walk.eye + (walk.hop > 0 ? 0 : Math.sin(walk.bob) * 0.035), -walk.y);
   const cp = Math.cos(walk.pitch);
   camLook.set(walk.x + Math.cos(walk.yaw) * cp, camera.position.y + Math.sin(walk.pitch), -(walk.y + Math.sin(walk.yaw) * cp));
   camera.lookAt(camLook);
+}
+function walkUnstick() {
+  const free = (x, y, z) => { const h = walkCanStand(x, y, z); if (h === null) return null; for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4; if (walkCanStand(x + Math.cos(a) * 0.2, y + Math.sin(a) * 0.2, h) !== null) return h; } return null; };
+  if (free(walk.x, walk.y, walk.z) !== null) return;            // just against a wall: not stuck
+  for (let r = 1; r <= 12; r++) {
+    for (let q = 0; q < r * 8; q++) {
+      const a = q / (r * 8) * Math.PI * 2, x = walk.x + Math.cos(a) * r * 0.25, y = walk.y + Math.sin(a) * r * 0.25;
+      for (const dz of [0, -0.6, -1.2]) { const h = free(x, y, walk.z + dz); if (h !== null) { walk.x = x; walk.y = y; walk.z = h; walk.hop = walk.vh = 0; walk.unsticks++; return; } }
+    }
+  }
 }
 let walkLandTimer = 0;
 function nearestPlace() {
