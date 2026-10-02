@@ -22,4 +22,14 @@ export const COURSES = [
     medals: { gold: 50, silver: 70 },
     stray: 130,
   },
+  {
+    id: 'roof', name: 'The Meridian Rooftops', short: 'Rooftops', wick: true, pace: 5, fp: 1,
+    blurb: 'From the station forecourt, a long jump, a triple jump to a roof, then ledge to ledge up to the high deck by the monorail. Wick only.',
+    where: 'the forecourt south of the Meridian Loop station',
+    post: [28.3, 98.8, 0.12, Math.PI / 2],
+    // landings of a route proven in tools/game/trials.test.mjs (jump kinds and run-ups in tools/game/trials-roof.json); rings pass within 4.5 m and 2.4 m of height
+    cps: [[48.2, 126.9, 5.2], [59.1, 123.3, 10.4], [54.5, 106.5, 10], [56.3, 111.1, 11]].map(([x, y, z]) => [x, y, z, 4.5, 2.4]),
+    medals: { gold: 40, silver: 65 },
+    stray: 80,
+  },
 ];
