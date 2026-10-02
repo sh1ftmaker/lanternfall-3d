@@ -51,6 +51,7 @@ body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--ui);fon
 .icon-btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
 .top-actions{display:flex;gap:8px}
 #btn-pf{display:none} body:has(#m-walk[aria-pressed="true"]) #btn-pf{display:grid} body.pf-on #btn-pf{border-color:var(--amber);color:var(--amber)}   /* platformer hook */
+@media (max-width:420px){ body:has(#m-walk[aria-pressed="true"]) .top-actions{gap:4px} body:has(#m-walk[aria-pressed="true"]) .top-actions .icon-btn{width:38px;height:38px} }   /* platformer hook: room for one more button */
 /* clean view: the interface fades away (H, or the eye button); a faint handle in the corner brings it back */
 .hud,.pill{transition:opacity .35s ease}
 body.clean .hud,body.clean .pill,body.clean .sheet{opacity:0;pointer-events:none}
