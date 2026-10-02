@@ -54,10 +54,11 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime, uScale: { value: 500 }, uWater: { value: waterY }, uMotion: { value: motion }, uPeriod: { value: PERIOD },
       uF: { value: new THREE.Vector4(F.rise, F.rise + F.hang, F.rise + F.hang + F.desc, F.rise + F.hang + F.desc + F.float) }, uGain: { value: 1 },
-      uStretch: { value: 2.6 }, tMask: { value: null }, uDom: { value: new THREE.Vector4(0, 0, 1, 1) } },
+      uGate: { value: 0 }, uTAct: { value: 1e9 }, uTOff: { value: 1e9 }, uRel: { value: 70 }, uThin: { value: 40 }, uStretch: { value: 2.6 }, tMask: { value: null }, uDom: { value: new THREE.Vector4(0, 0, 1, 1) } },
     vertexShader: /* glsl */`
       attribute vec3 aSeed, aCol; attribute vec2 aPar; attribute vec4 aC, aW;
       uniform float uTime, uScale, uWater, uMotion, uPeriod, uGain; uniform vec4 uF;
+      uniform float uGate, uTAct, uTOff, uRel, uThin;      // game hook: clock: when the fall is released / thinned out (see userData.setFall)
       varying vec2 vQ; varying vec3 vCol; varying float vShape, vK, vFlame, vAlpha;
       #ifdef REFL
         uniform float uStretch; uniform sampler2D tMask; uniform vec4 uDom;     // reflection on the lake (see makeReflection)
@@ -77,22 +78,22 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
         p.y += 0.035 * sin(t * 1.3 + ph * 5.0);
         return p;
       }
+      vec3 risePos(float s, vec3 tgt){
+        float rt = length(tgt.xz), at = atan(tgt.z, tgt.x);
+        float a0 = aW.z, da = mod(at - a0, TAU) + TAU * 0.6;
+        float er = smoothstep(0.0, 0.8, s), ea = 1.0 - (1.0 - s) * (1.0 - s);
+        float r = mix(5.6, rt, er), a = a0 + da * ea;
+        float y = mix(45.6, tgt.y, smoothstep(0.0, 1.0, s) * 0.7 + 0.3 * s);
+        return mix(vec3(r * cos(a), y, r * sin(a)), tgt, smoothstep(0.85, 1.0, s));
+      }
       void main(){
         float ph = hh(aC.w * 91.7 + aW.w * 13.1) * TAU;
         float t = uTime;
         float u = fract(t / uPeriod + aC.w);
         vec3 p; float lit = 1.0, sway = 1.0;
         if (u < uF.x) {                                        // rise: spiral up out of the gallery, spread into the canopy
-          float s = u / uF.x;
-          vec3 tgt = hangAt(0.0, t, ph);
-          float rt = length(tgt.xz), at = atan(tgt.z, tgt.x);
-          float a0 = aW.z, da = mod(at - a0, TAU) + TAU * 0.6;
-          float er = smoothstep(0.0, 0.8, s), ea = 1.0 - (1.0 - s) * (1.0 - s);
-          float r = mix(5.6, rt, er), a = a0 + da * ea;
-          float y = mix(45.6, tgt.y, smoothstep(0.0, 1.0, s) * 0.7 + 0.3 * s);
-          p = vec3(r * cos(a), y, r * sin(a));
-          p = mix(p, tgt, smoothstep(0.85, 1.0, s));
-          lit = smoothstep(0.0, 0.05, s); sway = 1.6;
+          p = risePos(u / uF.x, hangAt(0.0, t, ph));
+          lit = smoothstep(0.0, 0.05, u / uF.x); sway = 1.6;
         } else if (u < uF.y) {
           p = hangAt((u - uF.x) / (uF.y - uF.x), t, ph);
         } else if (u < uF.z) {                                 // descend: settle onto the lake, rocking a little
@@ -106,8 +107,22 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
           float s = (u - uF.z) / (uF.w - uF.z);
           p = floatAt(s, t, ph); lit = 1.0 - smoothstep(0.55, 1.0, s) * 0.92; sway = 0.5;
         } else { p = floatAt(1.0, t, ph); lit = 0.0; }
+        float vis = 1.0;
+        if (uGate > 0.5) {                                     // game hook: clock: the fall is released at a time, not always there
+          float rk = hh(aW.w * 53.7 + 4.1);
+          if (rk >= 0.003) {                                   // (a handful of strays are always about)
+            float tA = uTAct + rk * uRel, age = t - tA;
+            if (age < 0.0) vis = 0.0;
+            else {
+              float uA = fract(tA / uPeriod + aC.w);
+              if (uA >= uF.y) { if (t < tA + (1.0 - uA) * uPeriod) vis = 0.0; }            // not hanging then: waits for its next rise
+              else if (age < uPeriod * uF.x) { p = risePos(age / (uPeriod * uF.x), p); lit = smoothstep(0.0, 0.05, age / (uPeriod * uF.x)); sway = 1.6; }
+            }
+            vis *= 1.0 - smoothstep(0.0, 12.0, t - (uTOff + hh(aW.w * 17.3 + 1.7) * uThin));
+          }
+        }
         p = mix(aSeed, p, uMotion);
-        lit = mix(1.0, lit, uMotion);
+        lit = mix(1.0, lit, uMotion) * vis;
         float reflK = 1.0, stretch = 1.0;
         #ifdef REFL
           // image of the lantern in the lake: mirror it about the water plane, draw it where the reflected ray meets the
@@ -198,6 +213,16 @@ export function buildLanternFall({ f32, count, waterY, uTime, motion = 1, scale 
     blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
   });
   const mesh = new THREE.Mesh(quad, mat);
+  // game hook: clock: 'classic' = all of them, always (the page as it opens); 'none' = only strays; 'fall' = released from the
+  // gallery over uRel seconds from `now`; 'thin' = dying away over uThin seconds from `now`. Water reflections share the uniforms.
+  const U = mat.uniforms; mesh.userData.fallState = 'classic';
+  mesh.userData.setFall = (state, now) => {
+    U.uGate.value = state === 'classic' ? 0 : 1;
+    if (state === 'none') { U.uTAct.value = 1e9; U.uTOff.value = 1e9; }
+    else if (state === 'fall') { U.uTAct.value = now; U.uTOff.value = 1e9; }
+    else if (state === 'thin') U.uTOff.value = now;
+    mesh.userData.fallState = state;
+  };
   mesh.renderOrder = 8; mesh.frustumCulled = false;
   mesh.onBeforeRender = (r, s, cam) => { const rt = r.getRenderTarget(); const h = rt ? rt.height : r.domElement.height; mat.uniforms.uScale.value = h * 0.5 * cam.projectionMatrix.elements[5]; };
   // A second draw of the same instances as their reflections on the lake, for water tiers without a planar mirror

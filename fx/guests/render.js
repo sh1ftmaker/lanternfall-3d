@@ -25,6 +25,26 @@
 // Hash tokens: '#no-guests' (app.js), '#crowd' (app.js: real simulation), '#guests=N', '#guests-avenue'.
 import { buildGuestGeometry, guestLook, lookMask, ITEMS } from './assets.js';
 import { RIG, LIGHT } from './assets-rig.js';
+import { DN_DECL, DN_LAMP } from '../game/daynight/uniforms.js';      // game hook: daynight
+// the sun's shadow (surface.uniforms.tShadowS) and the lamp sweep, for the vertex stage; sun and sky light are added in the fragment stage
+const DN_VS = /* glsl */`
+  ${DN_DECL}
+  ${DN_LAMP}
+  uniform sampler2D tShadowS; uniform mat4 uShadowMS; uniform float uShadowOnS, uSSizeS;
+  float shTapS(vec2 uv, float z){ return step(z, unpackRGBAToDepth(texture2D(tShadowS, uv))); }
+  float sunShadowG(vec3 p){
+    if (uShadowOnS < 0.5) return 1.0;
+    vec4 sc = uShadowMS * vec4(p + vec3(0.0, 0.25, 0.0), 1.0); vec3 q = sc.xyz * 0.5 + 0.5;
+    if (any(lessThan(q.xy, vec2(0.002))) || any(greaterThan(q.xy, vec2(0.998))) || q.z > 0.999) return 1.0;
+    float z = q.z - 0.0006;
+    vec2 t = q.xy * uSSizeS - 0.5, f = fract(t), b = (floor(t) + 0.5) / uSSizeS, o = vec2(1.0 / uSSizeS, 0.0);
+    return mix(mix(shTapS(b, z), shTapS(b + o.xy, z), f.x), mix(shTapS(b + o.yx, z), shTapS(b + o.xx, z), f.x), f.y);
+  }`;
+const DN_LIGHT = /* glsl */`
+  vec3 dnLightG(vec3 n, float sh){
+    vec2 sf = normalize(uSunDir.xz + vec2(1e-5));
+    return uSunCol * (max(dot(n, uSunDir), 0.0) * sh) + mix(uAmbGnd, uAmbSky, n.y * 0.5 + 0.5) + uAmbGlow * max(dot(n, vec3(sf.x, 0.0, sf.y)), 0.0);
+  }`;
 
 const TW = 1024;                         // float texture width (texels)
 const DYN = 4, LOOKN = 8;                // texels per guest: state, look
@@ -74,9 +94,10 @@ const COLORS = /* glsl */`
 const BODY_VS = /* glsl */`
   ${RIG}
   ${LIGHT}
+  ${DN_VS}
   ${COLORS}
   attribute vec3 aOff; attribute vec4 aInfo; attribute vec4 aW; attribute float aIdx;
-  varying vec3 vW, vAlb, vGL, vEmit; varying float vSh, vDist;
+  varying vec3 vW, vAlb, vGL, vEmit; varying float vSh, vDist, vSS;
   void main(){
     int gi = int(aIdx + 0.5);
     vec4 s0 = gS(gi, 0), s1 = gS(gi, 1), s2 = gS(gi, 2), s3 = gS(gi, 3);
@@ -85,7 +106,7 @@ const BODY_VS = /* glsl */`
     int anim = int(s1.y + 0.5), prevA = int(s2.x + 0.5);
     bool phoneOn = g.item == 5 || anim == 2 || (prevA == 2 && uTime - s2.z < uBlend);
     bool vis = grp == 0 || ((g.mask >> grp) & 1) == 1 || (grp == 16 && phoneOn);
-    if (!vis) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vAlb = vGL = vEmit = vec3(0.0); vSh = vDist = 0.0; return; }
+    if (!vis) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vAlb = vGL = vEmit = vec3(0.0); vSh = vDist = vSS = 0.0; return; }
     float bt;
     Pose P = guestPose(gi, s1, s2, s3, g, bt);
     vec3 lp = morph(position, aOff, aW, b0, g);
@@ -94,6 +115,7 @@ const BODY_VS = /* glsl */`
     vW = toWorld(cp, s0, g.h);
     vAlb = regionColor(reg, gi, g, vEmit);
     vGL = groundLight(s0.xy);
+    if (uDay > 0.0) vGL *= dnLamp(vec2(s0.x, -s0.y));                              // game hook: daynight
     if (g.item == 1 || g.item == 2) {               // a carried paper lantern lights its bearer
       vec3 lw = toWorld((boneM(14, P, g) * vec4(0.0, -0.17, 0.0, 1.0)).xyz, s0, g.h);
       vec3 c = lc(gi, 9); float d2 = dot(vW - lw, vW - lw);
@@ -101,17 +123,21 @@ const BODY_VS = /* glsl */`
     }
     if (phoneOn && b0 == 2 && anim == 2) vGL += vec3(0.05, 0.08, 0.14);                  // phone screen on the face
     vSh = uMoonOn > 0.5 ? moonShadow(vW) : 0.0;
+    vSS = uSunOn > 0.5 ? sunShadowG(vW) : 0.0;                                      // game hook: daynight
     vDist = length(vW - cameraPosition);
     gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
   }`;
 const BODY_FS = /* glsl */`
   uniform vec3 uFog, uMoon, uMoonCol; uniform float uFogD, uMoonOn, uAmb, uRim, uMoonK;
-  varying vec3 vW, vAlb, vGL, vEmit; varying float vSh, vDist;
+  ${DN_DECL}
+  ${DN_LIGHT}
+  varying vec3 vW, vAlb, vGL, vEmit; varying float vSh, vDist, vSS;
   void main(){
     vec3 dx = dFdx(vW), dy = dFdy(vW); vec3 n = normalize(cross(dx, dy));
     vec3 V = normalize(cameraPosition - vW); if (dot(n, V) < 0.0) n = -n;
     float hemi = 0.7 + 0.3 * n.y;
     vec3 light = vGL * hemi * uAmb + uMoonCol * (max(dot(n, uMoon), 0.0) * vSh * uMoonOn * uMoonK);
+    if (uDay > 0.0) light += dnLightG(n, vSS);                                       // game hook: daynight
     vec3 col = vAlb * light;
     float fr = 1.0 - max(dot(n, V), 0.0); fr = fr * fr * fr;
     col += fr * uRim * (vGL * 0.7 + uMoonCol * 0.6 * uMoonOn) * (0.3 + 0.7 * vAlb);
@@ -128,8 +154,9 @@ const BODY_FS = /* glsl */`
 const IMP_VS = /* glsl */`
   ${RIG}
   ${LIGHT}
+  ${DN_VS}
   attribute float aIdx;
-  varying vec2 vP; varying vec3 vGL; varying float vSh, vDist;
+  varying vec2 vP; varying vec3 vGL; varying float vSh, vDist, vSS;
   flat varying vec3 vSkin, vHair, vTop, vLow, vLeg, vShoe; flat varying vec4 vI;
   void main(){
     int gi = int(aIdx + 0.5);
@@ -151,13 +178,16 @@ const IMP_VS = /* glsl */`
     float hat = ((g.mask >> 6) & 7) != 0 ? 1.0 : 0.0;
     vI = vec4(sqrt(g.girth), float(g.lower >= 2 ? 1 : 0) + (g.top == 3 ? 2.0 : 0.0), sit ? 1.0 : 0.0, hat + (g.hair == 5 ? 2.0 : 0.0));
     vGL = groundLight(s0.xy);
+    if (uDay > 0.0) vGL *= dnLamp(vec2(s0.x, -s0.y));                              // game hook: daynight
     vSh = uMoonOn > 0.5 ? moonShadow(base + vec3(0.0, 1.2, 0.0)) : 0.0;
+    vSS = uSunOn > 0.5 ? sunShadowG(base + vec3(0.0, 1.2, 0.0)) : 0.0;
     vDist = length(w - cameraPosition);
     gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
   }`;
 const IMP_FS = /* glsl */`
   uniform vec3 uFog, uMoonCol; uniform float uFogD, uMoonOn, uAmb;
-  varying vec2 vP; varying vec3 vGL; varying float vSh, vDist;
+  ${DN_DECL}
+  varying vec2 vP; varying vec3 vGL; varying float vSh, vDist, vSS;
   flat varying vec3 vSkin, vHair, vTop, vLow, vLeg, vShoe; flat varying vec4 vI;
   void main(){
     float x = abs(vP.x), y = vP.y, gw = vI.x;
@@ -176,6 +206,7 @@ const IMP_FS = /* glsl */`
     }
     if (!hit) discard;
     vec3 col = c * (vGL * uAmb * 0.85 + uMoonCol * 0.35 * vSh * uMoonOn);
+    if (uDay > 0.0) col += c * (uSunCol * (0.4 * vSS) + mix(uAmbGnd, uAmbSky, 0.65) + uAmbGlow * 0.3);       // game hook: daynight
     float f = 1.0 - exp(-vDist * vDist * uFogD);
     gl_FragColor = vec4(mix(col, uFog, f), 1.0);
     #include <tonemapping_fragment>
@@ -367,6 +398,7 @@ export function createGuests(opts) {
     uLightFallback: { value: new THREE.Vector3(0.05, 0.045, 0.065) },
     tShadow: surface.uniforms.tShadow, uShadowM: surface.uniforms.uShadowM, uShadowOn: surface.uniforms.uShadowOn, uSSize: surface.uniforms.uSSize,
     uMoonOn: surface.uniforms.uMoonOn, uMoon: surface.uniforms.uMoon, uMoonCol: surface.uniforms.uMoonCol,
+    ...(surface.dn || {}), tShadowS: surface.uniforms.tShadowS, uShadowMS: surface.uniforms.uShadowMS, uShadowOnS: surface.uniforms.uShadowOnS, uSSizeS: surface.uniforms.uSSizeS,   // game hook: daynight
     uFog: surface.uniforms.uFog, uFogD: surface.uniforms.uFogD,
     uAmb: { value: cfg.amb }, uRim: { value: cfg.rim }, uMoonK: { value: cfg.moonK },
     uScale: { value: 500 }, uMinPx: { value: cfg.minDot },

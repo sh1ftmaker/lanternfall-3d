@@ -23,7 +23,7 @@ const CSS = `
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:game-toast-in .35s ease both}
 .game-toast.good{border-color:rgba(255,181,71,.7)} .game-toast b{color:var(--amber)} .game-toast.out{opacity:0;transition:opacity .5s ease}
 @keyframes game-toast-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-#game-journal{left:max(16px,env(safe-area-inset-left,0px));right:auto;width:min(360px,calc(100vw - 32px))}
+#game-journal{left:max(16px,env(safe-area-inset-left,0px));right:auto;width:min(360px,calc(100vw - 32px));box-sizing:border-box}
 #game-journal .gj-sec{border-top:1px solid var(--line);padding:10px 0 8px} #game-journal .gj-sec:first-of-type{border-top:0}
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
@@ -200,8 +200,8 @@ export function createGame(ctx) {
      (tour, orbit, the walker, Wick) does not run. One holder at a time; taking it again replaces the holder ── */
   let driver = null;
   function takeCamera(fn, { name = '' } = {}) {
-    if (driver && driver.release) driver.release('replaced');
-    const d = { fn, name, release: null }; driver = d; emit('camera', { held: true, by: name });
+    if (driver) { const old = driver; driver = null; emit('camera', { held: false, by: old.name, why: 'replaced' }); }      // the old holder hears it lost the camera
+    const d = { fn, name }; driver = d; emit('camera', { held: true, by: name });
     return (why) => { if (driver === d) { driver = null; emit('camera', { held: false, by: name, why }); } };
   }
   function drive(dt) { if (!driver) return false; try { driver.fn(dt); } catch (e) { console.warn('game: camera', driver.name, e); driver = null; return false; } return true; }
