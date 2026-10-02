@@ -41,10 +41,16 @@ export function init(S) {
     if (tl > 6.6) { tl = -1; cyl.visible = false; top.sprite.visible = false; }
   });
 
+  // after the third ring the bell keeps a count, in a small toast, until the Spire answers
+  function ring() {
+    count++;
+    if (count === RINGS) answer();
+    else if (count >= 3 && count < RINGS && !S.isFound('bell')) game.toast(`The bell has rung ${count} times`, { ms: 1400 });
+  }
   game.on('use', ({ id }) => {
     if (!IDS.has(id)) return;
     if (id === 'strength-bell') { realSeen = true; if (own) own.enabled = false; }
-    if (++count === RINGS) answer();
+    ring();
   });
   // our own bell, only if nobody else has put one in by ten seconds
   setTimeout(() => {
@@ -52,5 +58,5 @@ export function init(S) {
     const gz = game.ground(BELL[0], BELL[1]);
     own = game.interact({ id: 'secrets-bell', x: BELL[0], y: BELL[1], z: gz ?? 0.3, r: 3.2, label: 'Ring the bell', show: () => !game.cameraHeld, use() { game.sound('guild_strength_bell', [BELL[0], BELL[1], 2.5]); } });
   }, 10000);
-  return { get count() { return count; }, get own() { return own; }, answer, ring: () => { if (++count === RINGS) answer(); }, reset: () => { count = 0; } };
+  return { get count() { return count; }, get own() { return own; }, answer, ring, reset: () => { count = 0; } };
 }
