@@ -23,6 +23,12 @@ const CSS = `
 .game-toast.good{border-color:rgba(255,181,71,.7)} .game-toast b{color:var(--amber)} .game-toast.out{opacity:0;transition:opacity .5s ease}
 @keyframes game-toast-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 #game-journal{left:max(16px,env(safe-area-inset-left,0px));right:auto;width:min(360px,calc(100vw - 32px));box-sizing:border-box}
+#game-journal{max-height:calc(100dvh - 64px - 104px - env(safe-area-inset-top,0px))}   /* desktop: ends above the mode buttons and the places row */
+#game-journal .gj-chips{position:sticky;top:-14px;z-index:1;display:flex;gap:6px;overflow-x:auto;margin:0 -16px 2px;padding:7px 16px;background:rgba(13,11,38,.97);scrollbar-width:none;border-bottom:1px solid var(--line)}
+#game-journal .gj-chips::-webkit-scrollbar{display:none} #game-journal .gj-chips[hidden]{display:none}
+#game-journal .gj-chips [role=button]{flex:none;appearance:none;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--paper);font:600 11px var(--ui);letter-spacing:.06em;padding:5px 11px;cursor:pointer;white-space:nowrap;touch-action:manipulation;user-select:none}
+#game-journal .gj-chips [role=button]:hover,#game-journal .gj-chips [role=button]:focus-visible{border-color:rgba(255,181,71,.7);color:var(--amber)}
+#game-journal .gj-sec{scroll-margin-top:44px}
 #game-journal .gj-sec{border-top:1px solid var(--line);padding:10px 0 8px} #game-journal .gj-sec:first-of-type{border-top:0}
 #game-journal .gj-sec h3{margin:0 0 6px;font:600 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
 #game-journal .gj-body{font:400 13.5px/1.45 var(--ui);color:var(--paper)} #game-journal .gj-body p{margin:0 0 6px} #game-journal .gj-empty{opacity:.6;font:400 13px var(--ui)}
@@ -93,7 +99,7 @@ export function createGame(ctx) {
   const promptEl = el('button', 'game-prompt'); promptEl.type = 'button'; promptEl.hidden = true;
   const toastsEl = el('div', 'game-toasts'); toastsEl.setAttribute('aria-live', 'polite');
   const journalEl = el('div', 'game-journal', 'sheet'); journalEl.hidden = true; journalEl.setAttribute('role', 'dialog'); journalEl.setAttribute('aria-label', 'Journal');
-  journalEl.innerHTML = '<div class="sheet-head"><h2>Journal</h2><button type="button" class="sheet-close" aria-label="Close the journal">&times;</button></div><div class="gj-list"></div><button type="button" class="gj-reset">Start over</button>';
+  journalEl.innerHTML = '<div class="sheet-head"><h2>Journal</h2><button type="button" class="sheet-close" aria-label="Close the journal">&times;</button></div><div class="gj-chips" role="group" aria-label="Sections" hidden></div><div class="gj-list"></div><button type="button" class="gj-reset">Start over</button>';
   if (!off) document.body.append(trackEl, promptEl, toastsEl, journalEl);
   // anything typed by the visitor or read back from storage goes in with esc(), as text: { text } or a Node
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -115,35 +121,70 @@ export function createGame(ctx) {
     if (w.gone) return; w.gone = true; w.t.classList.add('out');
     setTimeout(() => { w.t.remove(); const i = shown.indexOf(w); if (i >= 0) shown.splice(i, 1); pump(); }, 600);
   }
-  // tracker: up to three short lines, lowest `order` first; a line is { text, order }
-  const lines = new Map();
-  function track(id, text, { order = 50 } = {}) {
-    if (text == null || text === '') lines.delete(id); else lines.set(id, { text, order });
-    const list = [...lines.values()].sort((a, b) => a.order - b.order).slice(0, 3);
-    trackEl.innerHTML = '<b>Journal</b>'; for (const l of list) { const sp = el('span'); fill(sp, l.text); trackEl.appendChild(sp); }
+  // tracker: up to three short lines, lowest `order` first. A line shows at least 2 s before it can go (several modules
+  // changing their lines at once used to make the pill flicker), and a line whose text has not changed is left alone
+  const lines = new Map(), spans = new Map(), MIN_SHOW = 2000;
+  const keyOf = (v) => (v && typeof v === 'object' && 'text' in v ? 't:' + v.text : typeof v === 'string' ? 's:' + v : v);
+  const head = el('b'); head.textContent = 'Journal'; trackEl.appendChild(head);
+  function drawTrack() {
+    const list = [...lines.entries()].sort((a, b) => a[1].order - b[1].order).slice(0, 3), want = new Set();
+    for (const [id, l] of list) {
+      want.add(id); let sp = spans.get(id);
+      if (!sp) { sp = el('span'); spans.set(id, sp); sp.k = undefined; }
+      if (sp.k !== l.k) { fill(sp, l.v); sp.k = l.k; }
+    }
+    for (const [id, sp] of spans) if (!want.has(id)) { sp.remove(); spans.delete(id); }
+    let prev = head; for (const [id] of list) { const sp = spans.get(id); if (sp.previousSibling !== prev) prev.after(sp); prev = sp; }
     trackEl.hidden = !started || (!list.length && (!sections.size || player.mode === 'tour'));   // Tour keeps today's first look: no empty pill
   }
+  function track(id, text, { order = 50 } = {}) {
+    const now = performance.now(), l = lines.get(id);
+    if (text == null || text === '') {
+      if (!l) return drawTrack();
+      const wait = l.at + MIN_SHOW - now;
+      if (wait > 0) { if (!l.gone) { l.gone = true; l.timer = setTimeout(() => { if (lines.get(id) === l && l.gone) { lines.delete(id); drawTrack(); } }, wait); } return; }
+      clearTimeout(l.timer); lines.delete(id); return drawTrack();
+    }
+    if (l) { l.gone = false; clearTimeout(l.timer); l.v = text; l.k = keyOf(text); l.order = order; }
+    else lines.set(id, { v: text, k: keyOf(text), order, at: now, gone: false, timer: 0 });
+    drawTrack();
+  }
   // journal: modules add sections; render(el) is called whenever the journal opens or journal.refresh() runs
-  const sections = new Map();
+  const sections = new Map(); let lastScroll = 0;      // the sheet's scroll position, kept while it is closed
   const journal = {
     section(s) { sections.set(s.id, { order: 50, ...s }); track('', null); if (!journalEl.hidden) journal.refresh(); },
     refresh() {
       if (journalEl.hidden) return;
-      const list = journalEl.querySelector('.gj-list'); list.textContent = '';
+      const list = journalEl.querySelector('.gj-list'), chips = journalEl.querySelector('.gj-chips'), keep = journalEl.scrollTop; list.textContent = ''; chips.textContent = '';
       for (const s of [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {   // equal orders: by id, not by which module happened to load first
         const sec = el('div', null, 'gj-sec'), h = el('h3'), body = el('div', null, 'gj-body'); h.textContent = s.title; sec.append(h, body); list.appendChild(sec);
+        const chip = el('span'); chip.setAttribute('role', 'button'); chip.tabIndex = 0; chip.textContent = String(s.title); chip.addEventListener('click', () => sec.scrollIntoView({ block: 'start', behavior: ctx.reduceMotion && ctx.reduceMotion() ? 'auto' : 'smooth' })); chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); } }); chips.appendChild(chip);   // spans, not buttons: tests find the journal's own buttons by text
+
         try { s.render(body); } catch (e) { console.warn('game: journal', s.id, e); }
       }
       if (!sections.size) list.innerHTML = '<p class="gj-empty">Nothing yet. Walk the park.</p>';
+      chips.hidden = sections.size < 2; journalEl.scrollTop = keep;     // a refresh keeps the place in the sheet
     },
-    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
-    close() { journalEl.hidden = true; emit('journal', { open: false }); },
+    open() { const st = ctx.getSettings && ctx.getSettings(); if (st && st.open) st.close(); journalEl.hidden = false; journalEl.scrollTop = lastScroll; journal.refresh(); emit('journal', { open: true }); },   // one sheet at a time
+    close() { if (!journalEl.hidden) lastScroll = journalEl.scrollTop; journalEl.hidden = true; emit('journal', { open: false }); },
     get isOpen() { return !journalEl.hidden; },
   };
   trackEl.addEventListener('click', () => (journal.isOpen ? journal.close() : journal.open()));
   const setBtn = document.getElementById('btn-set'); if (setBtn) setBtn.addEventListener('click', () => { if (journal.isOpen) journal.close(); }, true);
+  const modesEl = document.querySelector('.modes'); if (modesEl) modesEl.addEventListener('click', () => { if (journal.isOpen && matchMedia('(max-width:640px)').matches) journal.close(); }, true);   // on a phone the sheet covers the buttons
   journalEl.querySelector('.sheet-close').addEventListener('click', journal.close);
   journalEl.querySelector('.gj-reset').addEventListener('click', () => { if (journalEl.querySelector('.gj-reset').dataset.sure) { save.reset(); location.reload(); } else { const b = journalEl.querySelector('.gj-reset'); b.dataset.sure = '1'; b.textContent = 'Erase all progress? Tap again'; } });
+
+  /* ── the first walk: one toast that says there are things to do (once, saved) ── */
+  let hello = 0;
+  on('mode', ({ mode }) => {
+    clearTimeout(hello); const c = save.get('core'); if (mode !== 'walk' || (c && typeof c === 'object' && c.welcomed === true)) return;
+    hello = setTimeout(() => {
+      if (player.mode !== 'walk' || journal.isOpen) return; const c2 = save.get('core');
+      save.set('core', { ...(c2 && typeof c2 === 'object' ? c2 : {}), welcomed: true });
+      toast(ctx.coarse ? 'There are things to do in the park. Tap <b>Journal</b>, top left, to see them.' : 'There are things to do in the park. Press <b>B</b> to open the journal.', { ms: 7000 });
+    }, 2500);
+  });
 
   /* ── the player, read once per frame ── */
   const player = { x: 0, y: 0, z: 0, yaw: 0, mode: 'tour', wick: false, action: '', speed: 0, land: null, three: new THREE.Vector3() };
@@ -166,7 +207,7 @@ export function createGame(ctx) {
   /* ── interactables ── */
   const inter = []; let near = null;          // an array: walked every frame without an iterator
   function interact(o) {
-    const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o };
+    const it = { r: 2.2, swing: true, enabled: true, z: 0, ...o }; if (!Number.isFinite(it.priority)) it.priority = 0;   // priority: the highest in reach wins, the nearest among equals
     it.remove = () => { const i = inter.indexOf(it); if (i >= 0) inter.splice(i, 1); if (near === it) { near = null; promptEl.hidden = true; promptKey.it = null; } };
     it.move = (x, y, z = it.z) => { it.x = x; it.y = y; it.z = z; };
     inter.push(it); return it;
@@ -174,12 +215,12 @@ export function createGame(ctx) {
   const usable = (it) => { if (!it.enabled) return false; if (!it.show) return true; try { return !!it.show(); } catch (e) { fail('interact show ' + it.id, it.show, e); return false; } };
   const labelOf = (it) => { try { return String((typeof it.label === 'function' ? it.label() : it.label) ?? ''); } catch (e) { it.enabled = false; console.warn('game: interact', it.id, 'label failed; switched off', e); return ''; } };
   function findNear(extra = 0, swing = false) {     // swing: only what the pole can use (a swing passes over a swing: false thing)
-    let best = null, bd = Infinity;
+    let best = null, bd = Infinity, bp = -Infinity;
     const px = player.x, py = player.y, pz = player.z;
     for (let i = 0; i < inter.length; i++) {      // squared distances, inline: this runs every frame over every interactable
       const it = inter[i]; if (swing && !it.swing) continue;
       const dx = it.x - px, dy = it.y - py, dz = (it.z - pz) * 0.6, d = dx * dx + dy * dy + dz * dz, r = it.r + extra;
-      if (d < r * r && d < bd && usable(it)) { bd = d; best = it; }     // show() only for those in reach
+      if (d < r * r && (it.priority > bp || (it.priority === bp && d < bd)) && usable(it)) { bd = d; bp = it.priority; best = it; }     // show() only for those in reach
     }
     return best;
   }
@@ -194,22 +235,25 @@ export function createGame(ctx) {
 
   /* ── props: small things added to the scene at run time (the park itself is baked) ── */
   let glowTex = null;
+  const materials = new Set();   // every material props.glow / props.mesh made and not yet removed (daynight lights them); 'prop' fires as each is made
+  const made = (material, kind) => { materials.add(material); emit('prop', { material, kind }); return material; };
   const props = {
+    materials,
     // a soft additive light: { x, y, z, color: [r,g,b] linear (may exceed 1 to bloom), size (m) } -> { sprite, set({..}), remove() }
     glow(o) {
       if (!glowTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); glowTex = new THREE.CanvasTexture(c); }
-      const m = new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false });
+      const m = made(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }), 'glow');
       const s = new THREE.Sprite(m); s.renderOrder = 8;
-      const h = { sprite: s, set(p) { if (p.color) m.color.setRGB(p.color[0], p.color[1], p.color[2]); if (p.size) s.scale.setScalar(p.size); if (p.x !== undefined) v3(p.x, p.y, p.z ?? 0, s.position); if (p.visible !== undefined) s.visible = p.visible; return h; }, remove() { scene.remove(s); m.dispose(); } };
+      const h = { sprite: s, set(p) { if (p.color) m.color.setRGB(p.color[0], p.color[1], p.color[2]); if (p.size) s.scale.setScalar(p.size); if (p.x !== undefined) v3(p.x, p.y, p.z ?? 0, s.position); if (p.visible !== undefined) s.visible = p.visible; return h; }, remove() { scene.remove(s); materials.delete(m); m.dispose(); } };
       h.set({ color: [1, 0.7, 0.35], size: 1, ...o }); scene.add(s); return h;
     },
     // a mesh in the park: geometry in three.js axes (y up), placed at Blender (x, y, z), turned by yaw about the vertical.
     // color: linear albedo; it is lit once by the baked light at its spot (lit: false or emissive: [r,g,b] for things that glow)
     mesh(geometry, { x = 0, y = 0, z = 0, yaw = 0, color = [0.5, 0.5, 0.5], emissive = null, lit = true, scale = 1 } = {}) {
       const L = lit && !emissive ? lightAt(x, y) : null, k = L ? [L[0] + 0.02, L[1] + 0.022, L[2] + 0.035] : lit && !emissive ? [0.3, 0.24, 0.18] : [1, 1, 1], c = emissive || [color[0] * k[0], color[1] * k[1], color[2] * k[2]];
-      const m = new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(c[0], c[1], c[2]), fog: false });
+      const m = made(new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(c[0], c[1], c[2]), fog: false }), 'mesh');
       const o = new THREE.Mesh(geometry, m); v3(x, y, z, o.position); o.rotation.y = yaw; o.scale.setScalar(scale); scene.add(o);
-      o.userData.remove = () => { scene.remove(o); m.dispose(); };
+      o.userData.remove = () => { scene.remove(o); materials.delete(m); m.dispose(); };
       return o;
     },
   };
