@@ -909,7 +909,7 @@ function setHD(on) {
   Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1, Q.dpr); resize();   // never raises what adapt() lowered
 }
 function setQuality(q, user) {
-  quality = q; if (user) perf.locked = true;               // a visitor's choice is not overridden by adapt()
+  quality = q; if (user) { perf.locked = true; undoAdapt(); }     // a visitor's choice is not overridden by adapt(), and gets the whole preset: what adapt() took away comes back
   {
     const want = readFx(q === 'cinematic' ? '#fx=hd' : '#fx=legacy');
     if (JSON.stringify(want) !== JSON.stringify(Q.post)) { Q.post = want; disposeComposer(); buildComposer(); resize(); }
@@ -954,7 +954,15 @@ const fsBtn = $('#btn-full');
   const sync = () => { const on = !!fsEl(); fsBtn.setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen'); fsBtn.title = on ? 'Leave full screen' : 'Full screen'; };
   document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
 }
-const perf = { ema: 16, n: 0, step: 0, locked: false, cool: 0 };
+const perf = { ema: 16, n: 0, step: 0, locked: !!PREFS.quality, cool: 0 };     // a saved choice holds from the start
+// what adapt() lowers, as configured: a picture setting chosen in the sheet starts again from these
+const Q0 = (({ dpr, maxPixels, mirrorEvery, mirrorLite, waterMirror, lod, waterSimHz, forest }) => ({ dpr, maxPixels, mirrorEvery, mirrorLite, waterMirror, lod, waterSimHz, forest }))(Q);
+function undoAdapt() {
+  if (!perf.step) return;
+  Object.assign(Q, Q0); perf.step = 0; perf.ema = 16; perf.cool = 0;
+  setForest(Q.forest); if (fxWater && perf.simWas) fxWater.sim.on = true;
+  FX.fxDegrade(Q, 0); if (guests) guests.degrade(0); weather.degrade(0);
+}
 function setForest(f) { Q.forest = f; for (const im of forest) { if (im.userData.setFraction) { im.userData.setFraction(f); continue; }   /* culling hook */ im.count = Math.floor(im.userData.total * f); im.visible = f > 0; } }
 function adapt(ms) {
   if (!loaded || document.hidden) return;
@@ -970,7 +978,7 @@ function adapt(ms) {
     resize();
   }
   else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
-  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; if (fxWater) fxWater.sim.on = false; resize(); }
+  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; if (fxWater) { perf.simWas = perf.simWas || fxWater.sim.on; fxWater.sim.on = false; } resize(); }
   else if (perf.step === 4) { setQuality('fast'); }
   else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.75; resize(); }
 }

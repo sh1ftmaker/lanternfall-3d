@@ -590,13 +590,8 @@ export function createGuests(opts) {
     if (crowd && crowd.setCount) { if (baseCount < 0) baseCount = crowd.want ?? crowd.count; crowd.setCount(Math.round(baseCount * st.density)); }
   }
   function setReduceMotion(b) { st.reduceMotion = !!b; U.uMotion.value = b ? 0 : 1; if (crowd && crowd.setReduceMotion) crowd.setReduceMotion(b); }
-  // app.js adapt() ladder: coarser LOD, then fewer guests, then none
-  function degrade(step) {
-    st.step = step;
-    if (step >= 5) setVisible(false);
-    else if (step >= 4) setDensity(Math.min(st.density, 0.35));
-    else if (step >= 3) setDensity(Math.min(st.density, 0.6));
-  }
+  // app.js adapt() ladder: coarser LOD only. The crowd is never thinned or hidden for speed (only the Guests switch does that)
+  function degrade(step) { st.step = step; }
   function dispose() {
     scene.remove(group);
     for (const k in M) { M[k].geometry.dispose(); }

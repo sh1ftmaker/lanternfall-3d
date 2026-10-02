@@ -26,7 +26,9 @@ Press `H` or the eye button to hide the controls for an unobstructed view; `H`, 
 `F` toggles full screen. The settings button (top right) has the picture quality (**Fast**, **HD**, **Cinematic**),
 switches for fireworks, lake mist and searchlights, and **Reduce motion** (also taken from the system setting).
 Cinematic is the default on computers, HD on phones.
-Choices are remembered in the browser. The page also lowers quality by itself if frames run slow.
+Choices are remembered in the browser. Until a picture setting has been chosen, the page lowers quality by itself if
+frames run slow (resolution, the mirror, effects; never the guests). Choosing Fast, HD or Cinematic gives exactly that
+setting and holds it.
 
 ## What moves
 
