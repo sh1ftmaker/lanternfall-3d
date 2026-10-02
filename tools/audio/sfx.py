@@ -307,21 +307,30 @@ def ui_click(seed):
 
 
 def train_loop(L, seed):
-    """Monorail running loop (mono, the engine moves and Doppler-shifts it): motor whine (two steady partials),
-    rubber-tyre rumble, a faint rhythmic joint every 1 s, air rush."""
+    """Monorail running loop (mono, the engine moves and Doppler-shifts it): motor whine (steady partials with a slow
+    periodic pitch drift), rubber-tyre rumble, rail joints at irregular intervals (0.7-1.4 s, uneven strength: no
+    pulse at any fixed period, nothing on the loop seam), air rush. Made for a 20 s or longer L."""
     rng = np.random.default_rng(seed)
     t = np.arange(L) / SR
+    T = L / SR
     def ip(f):  # integer cycles per loop -> periodic
         return round(f * L / SR) * SR / L
-    whine = (np.sin(TAU * ip(310) * t) * .5 + np.sin(TAU * ip(620) * t + 1) * .25 + np.sin(TAU * ip(930) * t) * .08)
-    whine *= 1 + .05 * slow_lfo(L, seed, (2, 3))
+    k1, k2 = max(1, round(T / 7.3)), max(1, round(T / 4.1))          # slow drifts: whole cycles per loop
+    drift = .8 * np.sin(TAU * k1 * t / T) + .5 * np.sin(TAU * k2 * t / T + 1.3)       # radians of phase wander
+    whine = (np.sin(TAU * ip(310) * t + drift) * .5 + np.sin(TAU * ip(620) * t + 2 * drift + 1) * .25
+             + np.sin(TAU * ip(930) * t + 3 * drift) * .08)
+    whine *= 1 + .08 * slow_lfo(L, seed, (2, 3))
     rumble = pnoise(L, seed + 1, pink(35, 260, 2), 1) * 1.2
     rush = pnoise(L, seed + 2, band(400, 3000, 1.5), 1) * .45
+    rush *= 1 + .25 * np.sin(TAU * round(T / 9.7) * t / T + .7)
     joints = np.zeros(L)
-    for k in range(int(L / SR)):
-        for dt in (0, .09):
-            m = samples(.05)
-            add_at(joints, filt(rng.normal(size=m), lp(400)) * np.exp(-_t(m) / .01) * 1.5, int((k + dt) * SR))
+    x = rng.uniform(.4, 1.0)
+    while x < T - 1.0:                      # keep clear of the seam so no click lands on the loop point
+        m = samples(.05)
+        a = rng.uniform(.35, 1.0)
+        for dt, g in ((0, 1), (.09, .8)):
+            add_at(joints, filt(rng.normal(size=m), lp(400)) * np.exp(-_t(m) / .01) * 1.5 * a * g, int((x + dt) * SR))
+        x += rng.uniform(.7, 1.4)
     return whine * .25 + rumble + rush + joints
 
 

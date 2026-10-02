@@ -5,10 +5,10 @@
 
 ## What it does
 - **Clock** (`index.js`): sets `clock.rate` each frame (`rateAt`: 0.5 / 0.45 / 0.2 / 0.4 park min per second, 0.121 in the fall, so the
-  evening is about 20 real minutes and the fall 5.5). Wraps at 23:40 with `clock.set(17:30)` (`jump: true`, as documented). Tour entry
+  evening is about 20 real minutes and the fall 5.5). At 23:40 closing time is a fade through dark (`#ck-close`: 1.4 s out, 3 s hold with "The park closes. / A new evening begins.", 1.8 s in); the clock stands still, the lanterns are cleared and `clock.set(17:30)` (`jump: true`) happens at full dark. Entering Tour or jumping back cancels it; the Tour never gets there (it holds the fall). The programme toasts wait until the fade-in. Tour entry
   jumps to 23:10 unless already inside 23:04-23:40 (or exactly at the opening 23:00) and freezes; leaving Tour resumes. The
   clock also stops while a module holds the camera and while "Hold the time" is on.
-- **Tracker line** `clock` (order 90): "21:04 · Ghost stories at 21:15". Hidden in Tour.
+- **Tracker line** `clock` (order 90): "21:04 · Ghost stories at 21:15"; from 23:00 "23:10 · Lanterns in the air · closing at 23:40" (during the silent four minutes: "silent until 23:04"). Hidden in Tour.
 - **Journal "Tonight"** (order 5): the programme (tap a row to jump), the current row marked, the "Hold the time" switch, the storyteller's
   state and the keepsakes.
 - **Programme events**, each once per evening, a toast each (queued 2.2 s apart; none in Tour): `gates` 17:30, `frostfair` 19:00,
@@ -21,21 +21,23 @@
 - **Crowd** (`crowd.js` -> `fx/guests/sim.js` `params.bias`, sent to the Worker with `crowd.setParams`): land weights and point weights on
   goal choice only (nobody turns round mid-walk): Frostmere 19:00-21:15, Lantern Row + the stage 21:15-22:00, then the lake rail x1.2 / x1.7 / x2.4.
   `params.hush`: during the silent four minutes walkers inside the lake ring (r < 122 m) stop and turn to the Spire.
-- **Silent four minutes** (`hush.js`): ducks the engine's music and ambience buses (`engine.debug.nodes.music/amb`, only once the
+- **Silent four minutes** (`hush.js`): ducks the engine's music and ambience buses (put back at once if the visitor toggles music or ambience meanwhile) (`engine.debug.nodes.music/amb`, only once the
   sound button has started the engine) to 3 % / 8 %, and shows one great lantern at (42, -24, z 2.8) low over the water that is drawn only
   when the rendering camera is the water's mirror camera (`onBeforeRender`), so only the lake shows it. It needs a planar mirror (tier 1
   and 2; absent where the water has none). Depth test is off for it because the mirror's depth hid it.
 - **Storyteller** (`story.js`): 21:15-22:00 a hooded figure with a staff lantern and a circle of light on the ghost-story stage in Lantern
-  Row (33.6, -181, z 3.19). `E` / prompt / Wick's swing: tells the next unheard story on a small card (three pages). Each story names a
+  Row (33.6, -181, z 3.19). `E` / prompt / Wick's swing (`swing: true`): tells the next unheard story on a small card (three pages). Each story names a
   spot where a glowing keepsake then waits (picked up with a `game.interact`): the pagoda terrace (68.9, -178.6), the great torii
-  (35.6, -127.8), the Night Market square (3.4, -186.2).
+  (35.6, -127.8), the Night Market square (4.0, -188.8; paving, ground 0.1: the old spot was a stall roof).
 
 ## Events I emit
 `clock:event { id, t }`, `clock:story { id }` (a story was heard for the first time), `clock:keepsake { id }`.
 Public API: `game.modules.clock = { EVENTS, rateAt, hold, hush, story, say, announced, lanterns() }`.
 
 ## Saved state (`game.save` key `clock`)
-`{ hold: bool, heard: [story ids], found: [story ids] }`.
+`{ hold: bool, heard: [story ids], found: [story ids], t: minutes }`. `t` is the evening's time, written every 3 park minutes while not in Tour and when the page is hidden; on a reload it is restored when the visitor leaves the opening Tour (or at once if the page does not open in Tour), unless the address has `#time=HH:MM` (which sets the time instead). Only values from 17:30 to 23:40 are restored.
+
+Hash token: `#time=19:30` (also `#t=`).
 
 ## Edits outside this folder (all marked `game hook: clock`)
 `fx/lanterns.js` (gate / launch / thin uniforms and `userData.setFall`), `fx/fireworks.js` (`finale` flag), `fx/guests/sim.js`

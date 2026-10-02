@@ -94,7 +94,7 @@ export function createAudio(opts) {
   const L = { p: new THREE.Vector3(), prev: new THREE.Vector3(), v: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3(), r: new THREE.Vector3(), pf: new THREE.Vector3(0, 0, -1), w: 0, slowFor: 0, hrtfOk: true, cutUntil: 0, first: true };
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const D = { zone: {}, A: 0, h: 0, density: 0, rev: [0, 0], voices: 0, ground: '', focus: [0, 0], events: [], cpu: {} };
-  let fwRecent = [], nyq = 20000, solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, bob = null, quarterNext = 0, memTimer = 0;
+  let fwRecent = [], nyq = 20000, solo = null, aer = 0, snap = true, time = 0, lastTour = -1, wave = -1, lanternAt = -99, bob = null, quarterNext = 0, memTimer = 0;
   const shellSeen = new Float64Array(16).fill(-1e9); const splashSeen = new WeakSet();
 
   /* ───────── graph ───────── */
@@ -196,7 +196,7 @@ export function createAudio(opts) {
     const positional = !!(def.pos || def.follow) && kind !== 'bed';
     const s = { kind, def, zone, positional, gain: def.gain ?? 0.5, ref: def.ref ?? 10, max: def.max ?? 150, pos: new THREE.Vector3(), vel: new THREE.Vector3(), prevPos: new THREE.Vector3(),
       hasPrev: false, target: 0, level: 0, ch: null, node: null, el: null, playing: false, stopAt: 0, rate: def.rate || 1, hrtfWant: false, hrtfSince: 0, swapUntil: 0,
-      loop: def.loop, every: def.every, nextAt: 0, d: 1e9, id: def.id || (zone + ':' + kind), ...extra };
+      pinned: def.follow === 'train', loop: def.loop, every: def.every, nextAt: 0, d: 1e9, id: def.id || (zone + ':' + kind), ...extra };
     if (def.pos) s.pos.fromArray(blend3(def.pos));
     const variants = Array.isArray(def.files) && def.files.length ? def.files : null;   // several recordings of one thing
     if (!def.every && !def.schedule) s.asset = asset(variants ? { ...def, file: variants[Math.floor(Math.random() * variants.length)] } : def, kind === 'layer' ? 'bed' : kind);
@@ -311,10 +311,10 @@ export function createAudio(opts) {
     for (const c of oneshotPool) { if (c.busy < now) { ch = c; break; } if (!oldest || c.busy < oldest.busy) oldest = c; }
     let when = now + Math.max(0, o.delay || 0) + 0.005;
     const gg = (ch || oldest).gain.gain;
-    if (!ch) {                                   // all busy: steal the one that ends first, with a 15 ms fade
-      ch = oldest; gg.cancelScheduledValues(now); gg.setValueAtTime(gg.value, now); gg.linearRampToValueAtTime(0, now + 0.015);
-      if (ch.src) { try { ch.src.stop(now + 0.02); } catch (e) { /* already stopped */ } }
-      when = Math.max(when, now + 0.025); gg.setValueAtTime(g, when);
+    if (!ch) {                                   // all busy: steal the one that ends first, with a 60 ms fade
+      ch = oldest; gg.cancelScheduledValues(now); gg.setValueAtTime(gg.value, now); gg.linearRampToValueAtTime(0, now + 0.06);
+      if (ch.src) { try { ch.src.stop(now + 0.07); } catch (e) { /* already stopped */ } }
+      when = Math.max(when, now + 0.075); gg.setValueAtTime(g, when);
     } else { gg.cancelScheduledValues(now); gg.setValueAtTime(g, now); }
     const src = ctx.createBufferSource(); src.buffer = a.buffer; src.playbackRate.value = (o.rate || 1) * (1 + (Math.random() - 0.5) * 0.08);
     ch.src = src;
@@ -457,12 +457,15 @@ export function createAudio(opts) {
     // audibility order; continuous sources only (one-shot emitters are events)
     const cand = [];
     for (const s of sources) { if (s.asset) { reapVoice(s, now); if (s.target > 1e-3 || (s.playing && !s.stopAt && s.target > 3e-4)) cand.push(s); } }
-    cand.sort((a, b) => b.target - a.target);
+    // audibility order, with two rules against restarts: a voice that is already playing gets a 30 % margin over one that
+    // is not, and a monorail voice that is audible cannot be displaced at all (a train pass is one continuous sound)
+    for (const s of cand) s.rankKey = s.pinned && s.target > 2e-3 ? 1e3 + s.target : s.target * (s.playing && !s.stopAt ? 1.3 : 1);
+    cand.sort((a, b) => b.rankKey - a.rankKey);
     let n = 0, posRank = 0;
     for (const s of cand) {
       if (n >= MAX) break;
       const a = s.asset;
-      if (!a.stream && a.state !== 'ready') { if (!mobile || s.target > 0.03) request(a, -s.target); continue; }   // phones: no downloads for what is barely audible
+      if (!a.stream && a.state !== 'ready' && !s.playing) { if (!mobile || s.target > 0.03) request(a, -s.target); continue; }   // phones: no downloads for what is barely audible
       n++;
       s.chosen = true;
       if (s.positional) { s.hrtfWant = L.hrtfOk && (posRank < HRTF_N || (!!(s.ch && s.ch.hrtf) && posRank < HRTF_N + 2)); posRank++; }   // hysteresis: rarely swapped
@@ -471,7 +474,7 @@ export function createAudio(opts) {
     let active = 0;
     for (const s of sources) {
       if (!s.asset) continue;
-      if (s.playing && !s.stopAt && !s.chosen) stopVoice(s, now, 0.2);
+      if (s.playing && !s.stopAt && !s.chosen) stopVoice(s, now, s.pinned ? 0.6 : 0.25);
       if (s.playing && !s.stopAt) { active++; apply(s, dt, now); }
       s.chosen = false;
       s.level += ((s.playing && !s.stopAt ? s.target : 0) - s.level) * Math.min(1, dt * 4);
@@ -491,7 +494,7 @@ export function createAudio(opts) {
         s.dop = C / (C + vr); s.node.playbackRate.setTargetAtTime(s.rate * s.dop, now, 0.12);
       }
       if (s.swapAt && now >= s.swapAt) { ch.hrtf = !ch.hrtf; ch.panner.panningModel = ch.hrtf ? 'HRTF' : 'equalpower'; s.swapAt = 0; s.swapUntil = now + 0.03; }   // resume after the kernels settle
-      else if (ch.hrtf !== s.hrtfWant && !s.swapAt) {                         // HRTF <-> equal-power: only after a second, with a dip
+      else if (ch.hrtf !== s.hrtfWant && !s.swapAt && !(s.pinned && s.d < 90)) {   // (a train in sight keeps its panner: the swap dip would be heard)                         // HRTF <-> equal-power: only after a second, with a dip
         if (!s.hrtfSince) s.hrtfSince = time || 1e-6;
         if (time - s.hrtfSince >= (L.hrtfOk ? 1.5 : 0) && now >= s.swapUntil) {
           const g = ch.gain.gain; g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + 0.03); s.swapUntil = 1e9; s.swapAt = now + 0.04;
@@ -533,7 +536,10 @@ export function createAudio(opts) {
     const lan = fxs.lanterns;
     if (lan && lan.material && lan.material.uniforms.uMotion && lan.material.uniforms.uMotion.value > 0.5 && lan.visible !== false) {
       const k = Math.floor(time / 12.5);
-      if (k !== wave) { if (wave >= 0) play('lantern_release', [0, 0, 45.6], { gain: 0.6 }); wave = k; }
+      if (k !== wave) {      // the sound is for some waves only (about one in three, at a random moment of the wave's 5.6 s), never twice within 25 s
+        if (wave >= 0 && time - lanternAt > 25 && Math.random() < 0.38) { play('lantern_release', [0, 0, 45.6], { gain: 0.6, delay: Math.random() * 4 }); lanternAt = time; }
+        wave = k;
+      }
     }
     // taps on the lake: fx/water.js queues a splat {x, z, amp, r, cont: false} that its update() consumes this frame
     const wtr = getWater();
@@ -590,9 +596,10 @@ export function createAudio(opts) {
   const BUDGET = (mobile ? 64 : 160) * 1048576;          // MB of decoded PCM before far, silent buffers are dropped
   function releaseMemory() {
     if (st.decoded > BUDGET * 0.85) {
-      const cand = [];
+      const cand = [], inUse = new Set();          // an asset can be shared (three trains, crowd layers): one playing source keeps it
+      for (const s of sources) if (s.playing || s.target > 1e-4) for (const a of s.asset ? [s.asset] : s.shots || []) inUse.add(a);
       for (const s of sources) for (const a of s.asset ? [s.asset] : s.shots || []) {
-        if (s.playing || a.state !== 'ready' || a.stream || time - a.used < 20 || s.target > 1e-4) continue;
+        if (inUse.has(a) || s.playing || a.state !== 'ready' || a.stream || time - a.used < 20 || s.target > 1e-4) continue;
         if (s.positional && s.d < s.max * 1.2) continue;
         cand.push([s.positional || s.shots ? s.d / s.max : 2 - (D.zone[s.zone] || 0), a]);
       }

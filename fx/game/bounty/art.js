@@ -14,17 +14,38 @@ export function createArt(game) {
     const L = game.lightAt(x, y); const k = L ? [L[0] + 0.03, L[1] + 0.034, L[2] + 0.05] : [0.34, 0.28, 0.22];
     return [Math.min(1, k[0] * 2.4), Math.min(1, k[1] * 2.4), Math.min(1, k[2] * 2.4)];
   }
+  // One shared vertex-coloured material for every merged prop (one draw call per prop, one material for the day-night code);
+  // only parts that need their own colour later (a post's flag) or alpha (the net) are separate meshes.
+  const shared = new T.MeshBasicMaterial({ vertexColors: true, fog: false });
+  const reg = (m) => { const set = game.props && game.props.materials; if (set && !set.has(m)) { set.add(m); game.emit('prop', { material: m, kind: 'mesh' }); } };
+  const unreg = (m) => { const set = game.props && game.props.materials; if (set) set.delete(m); };
+  reg(shared);
+  const tmpO = new T.Object3D();
+  function merge(parts) {
+    let nv = 0, ni = 0; for (const p of parts) { nv += p.geometry.attributes.position.count; ni += p.geometry.index ? p.geometry.index.count : p.geometry.attributes.position.count; }
+    const pos = new Float32Array(nv * 3), col = new Float32Array(nv * 3), idx = new Uint32Array(ni), v = new T.Vector3(); let vo = 0, io = 0;
+    for (const p of parts) {
+      const pa = p.geometry.attributes.position, n = pa.count, ix = p.geometry.index;
+      for (let i = 0; i < n; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(p.matrix); pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z; col[(vo + i) * 3] = p.color.r; col[(vo + i) * 3 + 1] = p.color.g; col[(vo + i) * 3 + 2] = p.color.b; }
+      if (ix) for (let i = 0; i < ix.count; i++) idx[io++] = ix.getX(i) + vo; else for (let i = 0; i < n; i++) idx[io++] = vo + i;
+      vo += n;
+    }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3)); g.setIndex(new T.BufferAttribute(idx, 1)); g.computeBoundingSphere(); return g;
+  }
   function builder(tint) {
-    const g = new T.Group(), mats = [];
+    const g = new T.Group(), mats = [], parts = [];
     const add = (geometry, hex, x = 0, y = 0, z = 0, o = {}) => {
       const c = new T.Color(hex);
       if (!o.glow) { c.r *= tint[0]; c.g *= tint[1]; c.b *= tint[2]; }
+      tmpO.position.set(x, y, z); tmpO.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0); if (o.s) tmpO.scale.set(...o.s); else tmpO.scale.set(1, 1, 1); tmpO.updateMatrix();
+      if (o.alpha === undefined && !o.sep) { parts.push({ geometry, matrix: tmpO.matrix.clone(), color: c }); return null; }
       const m = new T.MeshBasicMaterial({ color: c, fog: false, transparent: o.alpha !== undefined, opacity: o.alpha ?? 1, side: o.alpha !== undefined ? T.DoubleSide : T.FrontSide, depthWrite: o.alpha === undefined });
-      mats.push(m);
-      const mesh = new T.Mesh(geometry, m); mesh.position.set(x, y, z); if (o.rx) mesh.rotation.x = o.rx; if (o.ry) mesh.rotation.y = o.ry; if (o.rz) mesh.rotation.z = o.rz; if (o.s) mesh.scale.set(...o.s);
+      mats.push(m); reg(m);
+      const mesh = new T.Mesh(geometry, m); mesh.position.set(x, y, z); mesh.rotation.copy(tmpO.rotation); mesh.scale.copy(tmpO.scale);
       g.add(mesh); return mesh;
     };
-    return { g, add, mats };
+    const finish = () => { g.traverse((o) => { o.userData.bounty = 1; }); if (!parts.length) return null; const geo = merge(parts), mesh = new T.Mesh(geo, shared); mesh.userData.bounty = 1; g.add(mesh); return geo; };
+    return { g, add, mats, finish };
   }
 
   const MODELS = {
@@ -116,7 +137,7 @@ export function createArt(game) {
     post(b, o) {   // stamp post: wooden pole, brass cap, a flag in the land's colour, a little lantern
       b.add(cyl(0.07, 0.09, 2.2, 8), 0x6a4a2c, 0, 1.1, 0);
       b.add(cyl(0.11, 0.11, 0.1, 10), 0xc8a050, 0, 2.2, 0);
-      const flag = b.add(box(0.8, 0.5, 0.02), o.color, 0.46, 1.8, 0, { glow: true });
+      const flag = b.add(box(0.8, 0.5, 0.02), o.color, 0.46, 1.8, 0, { glow: true, sep: true });
       b.add(box(0.9, 0.05, 0.03), 0xc8a050, 0.46, 2.07, 0);
       b.add(box(0.2, 0.2, 0.2), 0x403828, 0, 0.4, 0);       // the ink pad box at the foot
       b.add(box(0.14, 0.015, 0.14), o.color, 0, 0.505, 0, { glow: true });
@@ -141,13 +162,15 @@ export function createArt(game) {
     },
   };
 
-  // build(kind, { x, y, z, yaw, scale, color, coat, hat }) -> { g, parts, remove(), setVisible(v) }
+  // build(kind, { x, y, z, yaw, scale, color, coat, hat }) -> { g, parts, remove(), visible, near }. `visible` is the module's own
+  // show/hide; `near` is set by the distance and mode cull; the prop shows only when both are on.
   function build(kind, o = {}) {
     const b = builder(o.tint || tintAt(o.x, o.y));
-    const parts = MODELS[kind](b, o) || {};
+    const parts = MODELS[kind](b, o) || {}, geo = b.finish();
     const g = b.g; g.position.set(o.x, o.z ?? 0, -o.y); g.rotation.y = o.yaw || 0; if (o.scale) g.scale.setScalar(o.scale);
-    scene.add(g);
-    return { g, parts, mats: b.mats, kind, remove() { scene.remove(g); for (const m of b.mats) m.dispose(); }, set visible(v) { g.visible = v; }, get visible() { return g.visible; } };
+    scene.add(g); let vis = true, nr = true;
+    return { g, parts, mats: b.mats, kind, remove() { scene.remove(g); if (geo) geo.dispose(); for (const m of b.mats) { unreg(m); m.dispose(); } },
+      set visible(v) { vis = !!v; g.visible = vis && nr; }, get visible() { return vis; }, set near(v) { nr = !!v; g.visible = vis && nr; }, get near() { return nr; } };
   }
   return { build, tintAt, models: Object.keys(MODELS) };
 }

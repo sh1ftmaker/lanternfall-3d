@@ -27,7 +27,14 @@ export function init(S) {
   const prints = new THREE.InstancedMesh(finish(), mat, pts.length); prints.frustumCulled = false; prints.renderOrder = 3; prints.visible = false;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   pts.forEach((p, i) => {
-    const gz = game.ground(p.x, p.y); p.z = (gz ?? 0.12) + 0.04;
+    // the walk grid reports a bench top as ground: a print that lands on one (more than 0.4 m above the paving) moves to the nearest paving beside it
+    let gz = game.ground(p.x, p.y);
+    if (gz === null || gz > 0.4) {
+      let best = null;
+      for (let r = 0.3; r <= 2.4 && !best; r += 0.3) for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6, qx = p.x + Math.cos(a) * r, qy = p.y + Math.sin(a) * r, g = game.ground(qx, qy); if (g !== null && g < 0.3 && g > -0.1) { best = [qx, qy, g]; break; } }
+      if (best) { p.x = best[0]; p.y = best[1]; gz = best[2]; } else gz = 0.12;
+    }
+    p.z = gz + 0.04;
     q.setFromAxisAngle(up, Math.atan2(Math.cos(p.yaw), -Math.sin(p.yaw)));
     m4.compose(game.v3(p.x, p.y, p.z, v), q, one); prints.setMatrixAt(i, m4);
   });
