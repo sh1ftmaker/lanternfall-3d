@@ -131,6 +131,7 @@ async function run(mobile, fp) {
   if (car) {
     const cx = -135.04, cy = -125.18;
     await standAt(cx + 14.5, cy + 3, 0, Math.atan2(-3, -14.5)); await wait(500);
+    await ev(`window.__rel = __park.game.takeCamera(() => { const c = __park.camera; c.position.set(${cx + 13.5}, 3.6, ${-cy + 2}); c.lookAt(${cx + 8}, 2.4, ${-cy - 1}); }, { name: 'test' })`);   // a clear view from outside the pavilion
     const poses = []; for (let i = 0; i < 3; i++) { await shot(`8-carousel-${i}`); poses.push(await ev('(() => { const c = __park.game.modules.rides.carousel, f = __park.game.ctx.getFx().animated.uniforms, o = []; for (let i = 0; i < c.seats.length; i++) { const h = c.horse(i, f.uFxTime.value, f.uFxMotion.value); o.push([h.p.x, h.p.y, h.p.z]); } const m = c.mesh, M = new __park.game.THREE.Matrix4(), v = new __park.game.THREE.Vector3(), r = []; for (let i = 0; i < c.seats.length; i++) { m.getMatrixAt(i, M); v.setFromMatrixPosition(M); r.push([v.x, v.y, v.z]); } return { t: f.uFxTime.value, horses: o, riders: r, vis: m.visible, n: m.count }; })()')); await wait(1000); }
     const dev = Math.max(...poses.map((p) => Math.max(...p.horses.map((h, i) => Math.hypot(h[0] - p.riders[i][0], h[2] - p.riders[i][2]) + Math.abs(h[1] - p.riders[i][1])))));
     check(tag + ' twelve riders, visible', poses[0].n === 12 && poses[0].vis, poses[0].n);
@@ -139,7 +140,7 @@ async function run(mobile, fp) {
     const ang = (p) => Math.atan2(p.riders[0][2] - 125.18, p.riders[0][0] + 135.04); let da = ang(poses[2]) - ang(poses[0]); da = ((da + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     const dt = poses[2].t - poses[0].t; check(tag + ' riders turn with the carousel', Math.abs(da / dt - 0.24) < 0.03, +(da / dt).toFixed(3));
     check(tag + ' riders rise and fall', new Set(poses.map((p) => p.riders[0][1].toFixed(2))).size === 3, poses.map((p) => +p.riders[0][1].toFixed(2)));
-    pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
+    await ev('__rel()');
     await standAt(car.x, car.y, 0.7, Math.atan2(cy - car.y, cx - car.x));
     pr = await ev('(() => { const e = document.querySelector("#game-prompt"); return [e.hidden, e.textContent]; })()');
     check(tag + ' carousel prompt', !pr[0] && /Ride the carousel/.test(pr[1]), pr[1]);

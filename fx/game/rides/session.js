@@ -9,6 +9,9 @@ const CSS = `
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:manipulation;-webkit-user-select:none;user-select:none;max-width:calc(100vw - 32px);white-space:nowrap}
 #rides-leave[hidden]{display:none} #rides-leave kbd{font:600 11px var(--ui,system-ui);border:1px solid var(--line,rgba(245,236,220,.22));border-radius:5px;padding:1px 5px;margin-left:8px;opacity:.8}
 @media (pointer:coarse){ #rides-leave kbd{display:none} }
+/* the walker's touch controls and the hop button have nothing to do on a ride */
+body.rides-on .pf-touch,body.rides-on #stick,body.rides-on #hop{display:none!important}
+@media (max-width:640px){ #rides-leave{bottom:calc(env(safe-area-inset-bottom,0px) + 132px)} }
 body.clean #rides-leave{opacity:0;pointer-events:none}
 `;
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -51,7 +54,7 @@ export function createSession(game) {
     const g = wickGroup(); wickWas = g ? g.visible : null; if (g) g.visible = false;
     release = game.takeCamera(tick, { name: 'rides' });
     startBlend(def.blendIn ?? 0.8);
-    btn.hidden = false; setLeave(def.leave);
+    btn.hidden = false; setLeave(def.leave); document.body.classList.add('rides-on');
     return true;
   }
   function setLeave(label) { btn.innerHTML = label + '<kbd>Esc</kbd>'; }
@@ -68,7 +71,7 @@ export function createSession(game) {
 
   function finish(why) {
     const c = cur; if (!c) return; cur = null;
-    btn.hidden = true;
+    btn.hidden = true; document.body.classList.remove('rides-on');
     if (release && why !== 'taken') release(why); release = null;
     camera.near = near0; camera.updateProjectionMatrix();
     const g = wickGroup(); if (g && wickWas !== null) g.visible = game.ctx.getMode() === 'walk' && !!(game.platformer && game.platformer.active);
