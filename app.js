@@ -103,7 +103,10 @@ function buildComposer() {
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
   const dopt = depthTargetOptions(THREE, renderer, size.x, size.y);
-  if (Q.photo && Q.photo.depth && !dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);   // game hook: photo (focus blur reads depth)
+  if (Q.photo && Q.photo.depth) {             // game hook: photo (focus blur reads depth)
+    if (!dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);
+    dopt.resolveDepthBuffer = true;           // reversed depth turns the resolve off; with MSAA (HD on desktop) the blur then read an empty depth texture
+  }
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...dopt });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
@@ -1080,7 +1083,8 @@ let pf = null, pfLoading = null, pfWant = !HASH.has('fp') && (() => { try { retu
 function platformer() {
   if (!pfLoading) pfLoading = import('./fx/platformer/index.js').then((M) => M.createPlatformer({ THREE, scene, camera, renderer, park, lodMeshes, manifest, nav, depth, surface, walk, Q, mobile, coarse,
     guests: () => guests, reduceMotion: () => reduceMotion, setMode, setFov: (f) => { if (f) { baseFov = f; applyFov(); } },
-    onEsc: () => { if (game.journal.isOpen) game.journal.close(); else if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => setPlatformer(false),
+    // game hook: rides, photo — while a module holds the camera, Esc and P are its own (Esc ends the ride or photo mode)
+    onEsc: () => { if (game.cameraHeld) return; if (game.journal.isOpen) game.journal.close(); else if (settings.open) settings.close(); else if (clean) setClean(false); else setMode('orbit'); }, onSwitch: () => { if (!game.cameraHeld) setPlatformer(false); },
     status: (t) => { const p = $('#loadpill'); p.hidden = !t; if (t) p.textContent = t; },
     hint: (t) => { hintEl.textContent = t; hintEl.classList.remove('off'); clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add('off'), 6500); } })).then((p) => (pf = p))
     .catch((e) => { console.warn('platformer:', e); pfLoading = null; pfWant = false; $('#loadpill').hidden = true; if (mode === 'walk') hopBtn.hidden = !coarse; });
