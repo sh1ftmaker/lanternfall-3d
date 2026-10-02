@@ -102,7 +102,7 @@ export function createGame(ctx) {
   // unseen), and while some wait, each one up is cut to 2 s on screen
   const shown = [], waiting = [];
   function toast(text, { ms = 4200, tone = '' } = {}) {
-    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); fill(t, text);
+    const t = el('div', null, 'game-toast' + (tone ? ' ' + tone : '')); fill(t, text); if (ctx.reduceMotion && ctx.reduceMotion()) t.style.animation = 'none';   // the in-app setting, not only the system one
     waiting.push({ t, ms }); pump(); return t;
   }
   function pump() {
