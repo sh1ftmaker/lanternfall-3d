@@ -10,7 +10,7 @@ const STYLE = {   // per land: [post height m, head width, head height, colour r
 };
 const DIRS = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'];
 const CSS = `
-#lamps-wish,#lamps-card{left:50%;right:auto;transform:translateX(-50%);width:min(380px,calc(100vw - 32px));top:calc(env(safe-area-inset-top,0px) + 80px)}
+#lamps-wish,#lamps-card{box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);width:min(380px,calc(100vw - 32px));top:calc(env(safe-area-inset-top,0px) + 80px)}
 #lamps-wish input{box-sizing:border-box;width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(7,6,26,.6);color:var(--paper);font:400 16px var(--ui)}
 #lamps-wish input:focus{outline:2px solid var(--amber);outline-offset:1px}
 #lamps-wish .lw-row{display:flex;justify-content:space-between;gap:10px;margin:6px 2px 10px;font:400 12px var(--ui);color:var(--muted)}
@@ -28,8 +28,10 @@ export function init(game) {
   const { THREE, scene, camera } = game;
   const hash = game.hash;
   const lands = game.manifest.lands, landBy = Object.fromEntries(lands.map((l) => [l.id, l]));
-  const st = game.save.get('lamps', null) || {};
-  st.lit = st.lit || []; st.read = st.read || []; st.done = st.done || []; st.wishes = st.wishes || []; st.all = !!st.all; st.pole = !!st.pole;
+  const raw = game.save.get('lamps', null), st = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};   // an old or damaged save must not stop the module
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  st.lit = arr(st.lit).filter((x) => typeof x === 'string'); st.read = arr(st.read); st.done = arr(st.done); st.all = !!st.all; st.pole = !!st.pole;
+  st.wishes = arr(st.wishes).filter((w) => w && typeof w.text === 'string' && Number.isFinite(w.t));
   const persist = () => game.save.set('lamps', st);
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
 
@@ -122,20 +124,20 @@ export function init(game) {
     flM.setColorAt(i, col.setRGB(c[0], c[1], c[2])); flM.instanceColor.needsUpdate = true; flTop = Math.max(flTop, i + 1); flM.count = flTop; flBusy++; return i;
   }
   function stepFloaters(dt, time) {
-    if (!flBusy) return; let busy = 0;
+    if (!flBusy) return; let busy = 0, top = 0;
     for (let i = 0; i < flTop; i++) {
       if (fl.age[i] >= fl.life[i] && !fl.hang[i]) continue; fl.age[i] += dt; const a = fl.age[i];
-      if (a < 0) { busy++; continue; }
+      if (a < 0) { busy++; top = i + 1; continue; }
       let s = fl.s[i], x = fl.x[i], y = fl.y[i], z = fl.z[i];
-      if (fl.hang[i]) { z += Math.sin(time * 0.7 + fl.seed[i]) * 0.18; x += Math.sin(time * 0.31 + fl.seed[i] * 2) * 0.4; s *= Math.min(1, a * 0.8); busy++; }
+      if (fl.hang[i]) { z += Math.sin(time * 0.7 + fl.seed[i]) * 0.18; x += Math.sin(time * 0.31 + fl.seed[i] * 2) * 0.4; s *= Math.min(1, a * 0.8); busy++; top = i + 1; }
       else {
-        if (a >= fl.life[i]) { hide(i); continue; } busy++;
+        if (a >= fl.life[i]) { hide(i); continue; } busy++; top = i + 1;
         const k = a * fl.vz[i]; z = fl.z[i] + k; x += Math.sin(a * 0.5 + fl.seed[i]) * 2.2 + a * 0.35; y += Math.cos(a * 0.4 + fl.seed[i] * 1.7) * 1.6;
         s *= Math.min(1, a * 1.2) * Math.min(1, (fl.life[i] - a) / 3);
       }
       tmp.position.set(x, z, -y); tmp.rotation.set(0, a * 0.3 + fl.seed[i], 0); tmp.scale.setScalar(Math.max(s, 0.0001)); tmp.updateMatrix(); flM.setMatrixAt(i, tmp.matrix);
     }
-    flBusy = busy; flM.instanceMatrix.needsUpdate = true;
+    flBusy = busy; flTop = flM.count = top; flM.instanceMatrix.needsUpdate = true;   // after a celebration the loop and the upload shrink back to the hanging wishes
   }
   const landCol = (id, k = 1.6) => { const s = (STYLE[id] || STYLE['lantern-row'])[3]; return [s[0] * k + 0.4, s[1] * k + 0.25, s[2] * k + 0.15]; };
   function celebrate(land) {
@@ -159,7 +161,7 @@ export function init(game) {
     if (l.hidden) revealPole();
     const complete = c >= t;
     if (complete && !st.done.includes(l.land)) { st.done.push(l.land); persist(); game.toast(`<b>${nameOf(l.land)} is lit.</b> Every lamp, every corner.`, { ms: 6000, tone: 'good' }); celebrate(l.land); game.emit('lamps:land', { land: l.land }); }
-    else if (!l.hidden) game.toast(`<b>Lamp lit</b> · ${nameOf(l.land)} ${c} / ${t}`, { ms: 2600, tone: 'good' });
+    else if (!l.hidden) game.toast(`<b>Lamp lit</b> · ${nameOf(l.land)} ${c} / ${t}${l.ini ? '<br>Someone scratched initials on this post.' : ''}`, { ms: l.ini ? 5000 : 2600, tone: 'good' });
     if (countAll() >= L.length && !st.all) { st.all = true; persist(); setTimeout(() => { game.toast('<b>The whole park is lit.</b> Look at the lake.', { ms: 8000, tone: 'good' }); finale(); }, 2500); game.emit('lamps:all', {}); }
     game.journal.refresh(); updateTrack(true); return true;
   }
@@ -200,7 +202,8 @@ export function init(game) {
   document.body.append(wish, card);
   const winp = wish.querySelector('input'), wn = wish.querySelector('.n'); let railAt = null;
   const closeWish = () => { wish.hidden = true; winp.blur(); };
-  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; winp.focus(); setTimeout(() => winp.focus(), 60); }
+  let wishAt = null;
+  function openWish() { if (!railAt) return; document.exitPointerLock?.(); wishAt = railAt; wish.hidden = false; wish.querySelector('.rd').hidden = !st.wishes.length; winp.value = ''; wn.textContent = '0 / 80'; winp.focus(); setTimeout(() => winp.focus(), 60); }
   function release() {
     const text = winp.value.trim().slice(0, 80); if (!text) { winp.focus(); return; }
     const w = { t: Date.now(), text }; st.wishes.unshift(w); st.wishes = st.wishes.slice(0, 12); persist(); closeWish();
@@ -221,6 +224,9 @@ export function init(game) {
     const p = game.player; railAt = null; let bd = 1e9;
     if (p.mode === 'walk') for (const q of rail) { const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; railAt = q; } }
     if (railAt && bd > 3.2 * 3.2) railAt = null; if (railAt) railIt.move(railAt.x, railAt.y, railAt.z ?? 0);
+    // walking away puts the sheet or the note down (they stayed open, stacked under the next card, anywhere in the park)
+    if (!wish.hidden && wishAt && (wishAt.x - p.x) ** 2 + (wishAt.y - p.y) ** 2 > 8 * 8) closeWish();
+    if (!card.hidden && (HIDDEN.pole[0] - p.x) ** 2 + (HIDDEN.pole[1] - p.y) ** 2 > 8 * 8) closeCard();
   }
   // past wishes hang low over the lake, a little brighter than the rest
   const hung = [];
@@ -275,7 +281,7 @@ export function init(game) {
       posts.instanceColor.needsUpdate = heads.instanceColor.needsUpdate = discs.instanceMatrix.needsUpdate = true;
     }
     stepSparks(dt); stepFloaters(dt, time);
-    for (const g of glows) if (g.at) { const f = flaring.has(g.at) ? 1 + 1.8 * Math.exp(-(now() - g.at.litAt) * 2.2) : 1; g.h.set({ size: glowSize(g.at) * f * (1 + 0.05 * Math.sin(time * 7 + g.at.i * 1.7) + 0.03 * Math.sin(time * 13 + g.at.i)) }); }
+    for (const g of glows) if (g.at) { const f = flaring.has(g.at) ? 1 + 1.8 * Math.exp(-(now() - g.at.litAt) * 2.2) : 1; g.h.sprite.scale.setScalar(glowSize(g.at) * f * (1 + 0.05 * Math.sin(time * 7 + g.at.i * 1.7) + 0.03 * Math.sin(time * 13 + g.at.i))); }
     if ((glowT -= dt) < 0) { glowT = 0.35; assignGlows(); if (tintTries < 40 && !tinted) { tintTries++; if (retint()) tinted = 1; } updateTrack(); }
     if ((railT -= dt) < 0) { railT = 0.2; updateRail(); }
   });
