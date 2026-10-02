@@ -58,11 +58,15 @@ const SET = [
   [0xAC, 'flutter', 14, true], [0xB0, 'waterSwing', 10, false], [0xAF, 'waterSwingBack', 10, false], [0xAE, 'waterSwingEnd', 10, false],
   [0x9E, 'waterKnockBack', 20, false], [0xA8, 'waterKnockForward', 20, false],
 ];
+// Slots the park can never reach (carrying objects, poles, cutscenes, death sequences, quicksand) still get lengths
+// past the frames their actions test, so nothing could stall waiting for a frame that never comes.
+const UNREACHED_MIN = { 0x16: 64, 0x17: 64, 0x18: 64, 0x25: 62, 0x26: 62, 0x30: 82, 0x32: 80, 0x36: 30, 0x3F: 64, 0x76: 62, 0x78: 95, 0xA5: 32, 0xA6: 32, 0xBB: 81 };
 export const COUNT = 209;
 export const CLIP = new Array(COUNT).fill('pose');            // id -> clip name ('pose' = neutral stand-in for unused slots)
 export const LEN = new Int16Array(COUNT).fill(20);
 export const LOOP = new Uint8Array(COUNT);
 export const ID = {};                                         // clip name -> id
+for (const [id, k] of Object.entries(UNREACHED_MIN)) LEN[id] = k;
 for (const [id, name, len, loop] of SET) { CLIP[id] = name; LEN[id] = len; LOOP[id] = loop ? 1 : 0; ID[name] = id; }
 
 // The table sm64_global_init_norom() takes: 6 int16 per id (flags, startFrame, loopStart, loopEnd, yTransDivisor, 0).
