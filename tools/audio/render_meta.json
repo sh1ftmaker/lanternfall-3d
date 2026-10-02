@@ -106,10 +106,10 @@
   "true_peak": -9.43
  },
  "bed_gap": {
-  "bytes": 165092,
+  "bytes": 166060,
   "cat": "bed",
   "channels": 2,
-  "doc": "Green gaps and woods: crickets (522299), a breeze in leaves, wind.",
+  "doc": "Green gaps and woods: a breeze in leaves, wind. No crickets: this bed is heard a little everywhere.",
   "file": "beds/bed_gap.m4a",
   "group": null,
   "loop": [
@@ -118,11 +118,9 @@
   ],
   "lufs": -24.0,
   "seconds": 19.0,
-  "sources": [
-   522299
-  ],
-  "src_wrap": 0.091,
-  "true_peak": -12.63
+  "sources": [],
+  "src_wrap": 0.088,
+  "true_peak": -4.76
  },
  "bed_gate": {
   "bytes": 156606,
@@ -222,10 +220,10 @@
   "true_peak": -6.63
  },
  "bed_rosewick": {
-  "bytes": 156975,
+  "bytes": 156707,
   "cat": "bed",
   "channels": 2,
-  "doc": "Gardens: a fountain (618285), crickets (522299) and a soft distant murmur (546676, low-passed).",
+  "doc": "Gardens: a fountain (618285), a breeze in the leaves and a soft distant murmur (546676, low-passed).\n    (The crickets are a few placed emitters now, crickets_loop: in every bed they never let up.)",
   "file": "beds/bed_rosewick.m4a",
   "group": null,
   "loop": [
@@ -235,12 +233,11 @@
   "lufs": -24.0,
   "seconds": 18.0,
   "sources": [
-   522299,
    546676,
    618285
   ],
-  "src_wrap": 0.051,
-  "true_peak": -12.46
+  "src_wrap": 0.038,
+  "true_peak": -13.15
  },
  "bed_sky": {
   "bytes": 172928,
@@ -428,6 +425,25 @@
   ],
   "src_wrap": 0.323,
   "true_peak": -2.96
+ },
+ "crickets_loop": {
+  "bytes": 101853,
+  "cat": "emit",
+  "channels": 1,
+  "doc": "Crickets at night (522299), for a few placed spots only.",
+  "file": "fx/crickets_loop.m4a",
+  "group": null,
+  "loop": [
+   0.5,
+   13.5
+  ],
+  "lufs": -24.0,
+  "seconds": 13.0,
+  "sources": [
+   522299
+  ],
+  "src_wrap": 0.36,
+  "true_peak": -10.77
  },
  "crowd_dense": {
   "bytes": 115610,

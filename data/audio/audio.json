@@ -870,38 +870,6 @@
    ]
   },
   {
-   "id": "tavern_hearth",
-   "file": "fx/torch_loop.m4a",
-   "gain": 0.5,
-   "ref": 2,
-   "max": 12,
-   "pos": [
-    139.75,
-    -15.57,
-    1.1
-   ],
-   "loop": [
-    0.5,
-    9.5
-   ]
-  },
-  {
-   "id": "tavern_room",
-   "file": "beds/crowd_murmur.m4a",
-   "gain": 0.45,
-   "ref": 3,
-   "max": 14,
-   "pos": [
-    137.28,
-    -25.52,
-    2.0
-   ],
-   "loop": [
-    0.5,
-    17.5
-   ]
-  },
-  {
    "id": "lantern_shrine_bell",
    "file": "oneshots/shrine_bell_1.m4a",
    "gain": 0.7,
@@ -1063,6 +1031,86 @@
     "oneshots/oar_1.m4a",
     "oneshots/oar_2.m4a",
     "oneshots/oar_3.m4a"
+   ]
+  },
+  {
+   "id": "tavern_hearth",
+   "file": "fx/torch_loop.m4a",
+   "gain": 0.5,
+   "ref": 2,
+   "max": 12,
+   "pos": [
+    139.75,
+    -15.57,
+    1.1
+   ],
+   "loop": [
+    0.5,
+    9.5
+   ]
+  },
+  {
+   "id": "tavern_room",
+   "file": "beds/crowd_murmur.m4a",
+   "gain": 0.45,
+   "ref": 3,
+   "max": 14,
+   "pos": [
+    137.28,
+    -25.52,
+    2.0
+   ],
+   "loop": [
+    0.5,
+    17.5
+   ]
+  },
+  {
+   "id": "crickets_maze",
+   "file": "fx/crickets_loop.m4a",
+   "gain": 0.45,
+   "ref": 5,
+   "max": 38,
+   "pos": [
+    -114.6,
+    -145.4,
+    0.5
+   ],
+   "loop": [
+    0.5,
+    13.5
+   ]
+  },
+  {
+   "id": "crickets_gap_nw",
+   "file": "fx/crickets_loop.m4a",
+   "gain": 0.45,
+   "ref": 5,
+   "max": 38,
+   "pos": [
+    -186.0,
+    72.0,
+    0.5
+   ],
+   "loop": [
+    0.5,
+    13.5
+   ]
+  },
+  {
+   "id": "crickets_gap_se",
+   "file": "fx/crickets_loop.m4a",
+   "gain": 0.45,
+   "ref": 5,
+   "max": 38,
+   "pos": [
+    124.0,
+    -142.0,
+    0.5
+   ],
+   "loop": [
+    0.5,
+    13.5
    ]
   },
   {
