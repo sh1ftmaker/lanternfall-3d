@@ -32,7 +32,7 @@ export function createMultiplayer(ctx) {
   let enabled = (() => { try { return localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; } })();
   const S = { status: 'idle', me: null, name: null, peers: new Map(), sock: null, timer: 0, openedAt: 0, wsFails: 0, reached: false,
     last: { at: -1e9, x: 0, y: 0, z: 0, yaw: 0, anim: -2, kind: 0 }, lastAny: 0, walking: false,
-    stats: { since: performance.now(), inMsgs: 0, inBytes: 0, outMsgs: 0, outBytes: 0, states: 0 } };
+    stats: { since: performance.now(), inMsgs: 0, inBytes: 0, outMsgs: 0, outBytes: 0, states: 0, ms: 0 } };   // ms: main-thread time in this file (receive + frame, not the figures)
   let avatars = null, avatarsLoading = null, probeWorker = null;
 
   // ── the settings row: "Other visitors" + how many are here. Shown once the server has answered (or if it was switched off) ──
@@ -80,7 +80,7 @@ export function createMultiplayer(ctx) {
     const sock = new PartySocket({ host, room: ROOM, party: PARTY, maxRetries: 0, maxEnqueuedMessages: 0, connectionTimeout: 8000 });
     S.sock = sock;
     sock.addEventListener('open', () => { if (S.sock !== sock) return; S.status = 'open'; S.openedAt = performance.now(); S.wsFails = 0; S.last.at = -1e9; S.last.anim = -2; S.walking = false; drawCount(); });
-    sock.addEventListener('message', (e) => { if (S.sock === sock) receive(e.data); });
+    sock.addEventListener('message', (e) => { if (S.sock !== sock) return; const t0 = performance.now(); receive(e.data); S.stats.ms += performance.now() - t0; });
     sock.addEventListener('close', () => {
       if (S.sock !== sock) return;
       const was = S.status, lived = S.openedAt ? performance.now() - S.openedAt : 0;
@@ -149,12 +149,17 @@ export function createMultiplayer(ctx) {
     if (wick && !(pf.view && pf.view.s)) return null;            // the lamplighter is still waking
     const z = wick ? pf.view.pos.y : walk.z + (walk.hop || 0);
     const land = game && game.player && LANDS.has(game.player.land) ? game.player.land : null;
-    return { kind: wick ? 1 : 2, x: walk.x, y: walk.y, z, yaw: walk.yaw, anim: wick ? pf.view.animID | 0 : -1, frame: wick ? Math.max(0, pf.view.frame || 0) : 0, land };
+    const c = cur; c.kind = wick ? 1 : 2; c.x = walk.x; c.y = walk.y; c.z = z; c.yaw = walk.yaw; c.anim = wick ? pf.view.animID | 0 : -1; c.frame = wick ? Math.max(0, pf.view.frame || 0) : 0; c.land = land;
+    return c;
   }
+  const cur = { kind: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 0, frame: 0, land: null };      // reused every frame
   function frame(dt, time) {
     if (avatars) { avatars.setVisible(enabled && getMode() !== 'tour'); avatars.update(dt, time, ctx.camera); }
     if (S.status !== 'open') return;
-    const now = performance.now(), L = S.last;
+    const now = performance.now(); try { send1(now); } finally { S.stats.ms += performance.now() - now; }
+  }
+  function send1(now) {
+    const L = S.last;
     const st = getMode() === 'walk' && !document.hidden ? local() : null;
     if (!st) {
       if (S.walking || now - S.lastAny > KEEPALIVE) { if (send(['p'])) S.walking = false; }
@@ -165,7 +170,7 @@ export function createMultiplayer(ctx) {
     if (!(since >= (moved ? FAST : SLOW) || (animChanged && since >= MIN_GAP))) return;
     const yaw = Math.atan2(Math.sin(st.yaw), Math.cos(st.yaw));
     const msg = ['s', st.kind, r2(st.x), r2(st.y), r2(st.z), r3(yaw), st.anim, Math.round(st.frame * 10) / 10, Math.round(now), st.land];
-    if (send(msg)) { S.walking = true; Object.assign(L, { at: now, x: st.x, y: st.y, z: st.z, yaw: st.yaw, anim: st.anim, kind: st.kind }); }
+    if (send(msg)) { S.walking = true; L.at = now; L.x = st.x; L.y = st.y; L.z = st.z; L.yaw = st.yaw; L.anim = st.anim; L.kind = st.kind; }
   }
   const keepalive = setInterval(() => { if (S.status === 'open' && performance.now() - S.lastAny > KEEPALIVE - 1000) { if (send(['p'])) S.walking = false; } }, KEEPALIVE);   // also while the tab is hidden (no frames)
   const onVis = () => { if (document.hidden && S.walking && send(['p'])) S.walking = false; };
