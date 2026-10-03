@@ -246,6 +246,9 @@ const SHADOW_FS = /* glsl */`
   uniform float uShadowK; varying vec2 vQ;
   void main(){ float d2 = dot(vQ, vQ); if (d2 > 1.0) discard; float k = uShadowK * exp(-d2 * 3.0) * (1.0 - d2); gl_FragColor = vec4(vec3(1.0 - k), 1.0); }`;
 
+// shared with fx/multiplayer/avatars.js (remote visitors drawn as Wick with the same shaders)
+export const SHADERS = { VS, FS, HALO_VS, HALO_FS, POOL_VS, POOL_FS, SHADOW_VS, SHADOW_FS };
+
 export function createCharacter({ THREE, scene, surface, guests, manifest }) {
   const d = buildCharacterGeometry();
   const geo = new THREE.BufferGeometry();
