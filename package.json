@@ -1,0 +1,13 @@
+{
+  "name": "lanternfall-3d",
+  "private": true,
+  "description": "Only for the multiplayer server (party/): the site itself has no build step and needs none of this.",
+  "scripts": {
+    "party:dev": "partykit dev --port 8970",
+    "party:deploy": "partykit deploy"
+  },
+  "devDependencies": {
+    "partykit": "0.0.115",
+    "partysocket": "1.3.0"
+  }
+}
