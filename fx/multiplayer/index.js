@@ -1,4 +1,4 @@
-// Other visitors: everyone on the site shares one PartyKit room ("park"); visitors walking the park see each other.
+// Other visitors: everyone on the site shares one room ("park", party/server.ts); visitors walking the park see each other.
 // This file is the networking: when to connect, what is sent, what arrives, the settings row and its count. The
 // figures are drawn by ./avatars.js (createAvatars, same interface as ./avatars-stub.js), loaded the first time someone
 // else is seen walking. Wire format and server: party/README.md. app.js loads this unless the address has '#solo'.
@@ -6,7 +6,10 @@
 // If the server cannot be reached the page stays as it was: the server is asked first with a plain GET from a small
 // Worker (so a failed request is not the page's own), at most once a minute, and nothing is shown until it answers.
 
-export const HOST = 'lanternfall-3d.sh1ftmaker.partykit.dev';     // the deployed server: `npx partykit deploy` (party/README.md)
+// The server (party/server.ts on Cloudflare, `npx wrangler deploy`): 'lanternfall-3d.<account subdomain>.workers.dev'.
+// Empty = not deployed yet: nothing connects. data/mp.json ({ "host": "..." }) overrides it without touching code, and
+// '#mp=host[:port]' overrides both for one visit (party/README.md).
+export const HOST = '';
 const ROOM = 'park', PARTY = 'main';
 const KEY = 'lanternfall.visitors';      // 'off' when the visitor switched "Other visitors" off
 const RETRY = 60000, FULL_RETRY = 300000, QUICK = 5000, KEEPALIVE = 25000;
@@ -18,17 +21,20 @@ const CSS = `
 #mp-tog small:empty{display:none}
 `;
 
-// '#mp=127.0.0.1:8970' points a page at a local `partykit dev` (tests); anything else in it is ignored
-function hostFromHash() {
-  for (const t of location.hash.slice(1).split(/[&,+]/)) { const m = /^mp=([\w.-]+(?::\d{1,5})?)$/.exec(t); if (m) return m[1]; }
-  return HOST;
+// a host as written by a person: 'name.example.dev', 'https://name.example.dev/', '127.0.0.1:8970'; null if it is not one
+const cleanHost = (v) => { if (typeof v !== 'string') return null; const h = v.trim().replace(/^(wss?|https?):\/\//, '').replace(/\/+$/, ''); return /^[\w.-]+(:\d{1,5})?$/.test(h) ? h : null; };
+// '#mp=127.0.0.1:8970' (tests, a local `wrangler dev`), else data/mp.json, else HOST; '' = nowhere
+async function findHost() {
+  for (const t of location.hash.slice(1).split(/[&,+]/)) if (t.startsWith('mp=')) return cleanHost(t.slice(3)) || '';
+  try { const r = await fetch('data/mp.json', { cache: 'no-cache' }); if (r.ok) { const j = await r.json(); const h = cleanHost(j && j.host); if (h) return h; } } catch (e) { /* no file: the constant */ }
+  return cleanHost(HOST) || '';
 }
 const isLocal = (h) => /^(localhost|127\.0\.0\.1|192\.168\.|10\.|\[::1\])/.test(h);
 const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
 
 export function createMultiplayer(ctx) {
   const { THREE, scene, walk, getMode, getPlatformer, game } = ctx;
-  const host = hostFromHash(), probeUrl = `${isLocal(host) ? 'http' : 'https'}://${host}/parties/${PARTY}/${ROOM}`;
+  let host = '', probeUrl = '';
   let enabled = (() => { try { return localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; } })();
   const S = { status: 'idle', me: null, name: null, peers: new Map(), sock: null, timer: 0, openedAt: 0, wsFails: 0, reached: false,
     last: { at: -1e9, x: 0, y: 0, z: 0, yaw: 0, anim: -2, kind: 0 }, lastAny: 0, walking: false,
@@ -54,6 +60,7 @@ export function createMultiplayer(ctx) {
   function probe() {
     clearTimeout(S.timer); S.timer = 0;
     if (!enabled || S.sock) return;
+    if (!host) { S.status = 'off'; return; }            // no server configured: solo, nothing asked
     S.status = 'probing';
     if (!probeWorker) {
       const src = 'onmessage=async(e)=>{let r=null;try{const q=await fetch(e.data,{cache:"no-store",credentials:"omit"});if(q.ok)r=await q.json()}catch(_){}postMessage(r)}';
@@ -182,10 +189,10 @@ export function createMultiplayer(ctx) {
     if (on) { S.wsFails = 0; probe(); } else { clearTimeout(S.timer); S.timer = 0; drop(); S.status = 'idle'; if (avatars) avatars.setVisible(false); }
     drawCount();
   }
-  probe();
+  findHost().then((h) => { host = h; probeUrl = `${isLocal(h) ? 'http' : 'https'}://${h}/parties/${PARTY}/${ROOM}`; probe(); });
 
   return {
-    host, frame, setEnabled,
+    get host() { return host; }, frame, setEnabled,
     get enabled() { return enabled; }, get status() { return S.status; }, get me() { return S.me; }, get name() { return S.name; },
     get count() { return S.peers.size; }, get peers() { return [...S.peers.values()].map(({ id, name, walking, land }) => ({ id, name, walking, land })); },
     get avatars() { return avatars; }, stats: S.stats,

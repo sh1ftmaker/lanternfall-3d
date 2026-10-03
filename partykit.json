@@ -1,6 +1,0 @@
-{
-  "$schema": "https://www.partykit.io/schema.json",
-  "name": "lanternfall-3d",
-  "main": "party/server.ts",
-  "compatibilityDate": "2024-07-01"
-}

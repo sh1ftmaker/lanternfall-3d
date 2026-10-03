@@ -13,7 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const up = () => fetch(`http://${HOST}/parties/main/park`).then((r) => r.json()).catch(() => null);
 let pk = null;
-if (!(await up())) { pk = spawn('npx', ['partykit', 'dev', '--port', String(PORT)], { cwd: ROOT, detached: true, stdio: 'ignore' }); for (let i = 0; i < 120 && !(await up()); i++) await wait(500); }
+if (!(await up())) { pk = spawn('npx', ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1'], { cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } }); for (let i = 0; i < 120 && !(await up()); i++) await wait(500); }
 const children = [];
 const stop = () => { for (const c of children) { try { c.kill('SIGTERM'); } catch (e) { /* gone */ } } if (pk) { try { process.kill(-pk.pid, 'SIGTERM'); } catch (e) { /* gone */ } pk = null; } };
 process.on('exit', stop);
