@@ -11,7 +11,7 @@ const run = async (mobile) => {
   page.on('pageerror', (e) => add('pageerror: ' + e.message.slice(0, 160))); page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') add(m.type() + ': ' + m.text().slice(0, 160)); });
   page.on('response', (r) => { if (r.status() >= 400) add('http ' + r.status() + ' ' + r.url().slice(-60)); });
   await page.setViewport({ width: W, height: H, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  await page.goto(URL + '#fp,weather=clear');
+  await page.goto(URL + '#fp,solo,weather=clear');
   await page.waitForFunction('window.__park && window.__park.loaded && window.__park.game', { timeout: 180000 }); await wait(2500);
   const ev = (js) => page.evaluate(js).catch((e) => { add('eval: ' + e.message.slice(0, 160)); });
   const ok = (name, cond, info = '') => { res.push((cond ? 'ok   ' : 'FAIL ') + name + (info ? ' ' + info : '')); if (!cond) add('FAIL ' + name); };

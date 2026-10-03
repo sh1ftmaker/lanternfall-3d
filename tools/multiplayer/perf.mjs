@@ -10,7 +10,7 @@ const run = async (mobile) => {
     args: ['--no-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=gl', '--disable-gpu-vsync', '--disable-frame-rate-limit', '--enable-precise-memory-info', '--js-flags=--expose-gc', `--window-size=${W},${H}`] });
   const page = await browser.newPage();
   await page.setViewport({ width: W, height: H, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  await page.goto(URL + '#fp,weather=clear'); await page.waitForFunction('window.__park && window.__park.loaded && window.__park.game', { timeout: 180000 });
+  await page.goto(URL + '#fp,solo,weather=clear'); await page.waitForFunction('window.__park && window.__park.loaded && window.__park.game', { timeout: 180000 });
   const ev = (js) => page.evaluate(js);
   await wait(3000); await ev('__park.perf.locked = true');
   await ev("__park.setMode('walk',{at:[300,0],yaw:Math.PI})"); await wait(2000);
