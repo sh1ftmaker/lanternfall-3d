@@ -1106,6 +1106,7 @@ Object.defineProperty(window.__park, 'platformer', { get: () => pf });
 window.__park.cull = cull;
 window.__park.game = game;                                  // game hook                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
+window.__park.mpSim = (n = 8, opts) => import('./fx/multiplayer/sim.js').then((M) => M.mpSim(window.__park, n, opts));   // multiplayer hook: fake remote visitors for development (fx/multiplayer/sim.js)
 frame();
 let loadFailed = false;
 load().catch(async (err) => {

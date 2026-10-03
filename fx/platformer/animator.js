@@ -223,10 +223,12 @@ const GAIT = { tiptoeStart: 0.62, tiptoe: 0.62, walk: 1.6, run: 2.24, push: 1.0,
 const BLEND = { default: 0.12, jumpThree: 0.06, backflip: 0.06, sideFlip: 0.06, poundStart: 0.05, poundStartSpin: 0.05, rollForward: 0.05, rollBack: 0.05, ledgeHang: 0.08, ledgeClimbSlow: 0.04, ledgeClimbFast: 0.04, walk: 0.18, run: 0.2, tiptoe: 0.2 };
 
 // ── rig evaluation ──
+const BODY_C = [0, 0.85, 0];      // the clip's root moves about the body centre
 export function createAnimator(THREE) {
   const NB = BONES.length;
   const local = Array.from({ length: NB }, () => new THREE.Matrix4()), world = Array.from({ length: NB }, () => new THREE.Matrix4());
-  const tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), e = new THREE.Euler(), q = new THREE.Quaternion(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), clipRoot = new THREE.Matrix4(), hook = new THREE.Vector3(), hv = new THREE.Vector3(), acc = new THREE.Vector3(), cS = {},   // scratch: no allocation per frame (several remote Wicks run one each)
+    e = new THREE.Euler(), q = new THREE.Quaternion(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   const st = { clip: 'pose', prevClip: 'pose', from: null, blendT: 1, blendDur: 0.12, ph: 0, cur: { ...P0 }, lanternWorld: new THREE.Vector3(), hookPrev: null, swing: [0, 0], swingV: [0, 0], cape: 0, hood: 0, t: 0 };
   // rotation about a pivot, local to the parent: T(p) R T(-p)
   const rotAbout = (out, p, rx, ry, rz, order = 'YXZ') => { e.set(rx, ry, rz, order); q.setFromEuler(e); out.makeRotationFromQuaternion(q); const [x, y, z] = p; v.set(x, y, z).applyMatrix4(out); out.elements[12] = x - v.x; out.elements[13] = y - v.y; out.elements[14] = z - v.z; return out; };
@@ -236,7 +238,7 @@ export function createAnimator(THREE) {
     st.t += dt;
     const name = CLIP[anim.id] || 'pose';
     if (GAIT[name]) st.ph = (st.ph + (ctx.speed * dt) / GAIT[name]) % 1;
-    const c = { ...ctx, t: st.t, ph: st.ph };
+    const c = Object.assign(cS, ctx); c.t = st.t; c.ph = st.ph;
     if (name !== st.clip) { st.from = { ...st.cur }; st.prevClip = st.clip; st.clip = name; st.blendT = 0; st.blendDur = ctx.reduceMotion ? 0.06 : (BLEND[name] ?? BLEND.default); }
     let p = evalClip(name, anim.u, c);
     if (st.blendT < st.blendDur && st.from) { st.blendT += dt; const w = sm(st.blendT / st.blendDur); const o = {}; for (const k of KEYS) o[k] = mix(st.from[k] ?? P0[k], p[k] ?? P0[k], w); p = o; }
@@ -250,8 +252,7 @@ export function createAnimator(THREE) {
   function pose(p, body, dt, ctx) {
     // body: world transform = T(pos) Ry(yaw) Rx(pitch) Rz(roll), then the clip's root move about the body centre
     const root = tmp2.makeRotationFromQuaternion(q.setFromEuler(e.set(body.pitch, body.yaw, body.roll, 'YXZ'))).setPosition(body.pos);
-    const clipRoot = new THREE.Matrix4();
-    rotAbout(clipRoot, [0, 0.85, 0], p.pp, p.pw, p.pr); clipRoot.elements[12] += p.px; clipRoot.elements[13] += p.py; clipRoot.elements[14] += p.pz;
+    rotAbout(clipRoot, BODY_C, p.pp, p.pw, p.pr); clipRoot.elements[12] += p.px; clipRoot.elements[13] += p.py; clipRoot.elements[14] += p.pz;
     root.multiply(clipRoot);
     const L = local;
     rotAbout(L[B.hips], PIVOT[B.hips], 0, 0, 0);
@@ -281,9 +282,10 @@ export function createAnimator(THREE) {
     }
     // lantern: hangs from the hook as a damped pendulum driven by the hook's acceleration (world space)
     const [gx, gy, gz] = PIVOT[B.pole];
-    const hook = v.set(gx, gy + POLE.above + 0.03, gz + POLE.hook).applyMatrix4(world[B.pole]).clone();
-    if (!st.hookPrev || dt <= 0 || dt > 0.25) { st.hookPrev = hook.clone(); st.hookV = new THREE.Vector3(); }
-    const hv = hook.clone().sub(st.hookPrev).divideScalar(Math.max(dt, 1e-3)); const acc = hv.clone().sub(st.hookV).divideScalar(Math.max(dt, 1e-3));
+    hook.set(gx, gy + POLE.above + 0.03, gz + POLE.hook).applyMatrix4(world[B.pole]);
+    if (!st.hookPrev) { st.hookPrev = new THREE.Vector3(); st.hookV = new THREE.Vector3(); st.hookPrev.copy(hook); }
+    else if (dt <= 0 || dt > 0.25) { st.hookPrev.copy(hook); st.hookV.set(0, 0, 0); }
+    hv.copy(hook).sub(st.hookPrev).divideScalar(Math.max(dt, 1e-3)); acc.copy(hv).sub(st.hookV).divideScalar(Math.max(dt, 1e-3));
     st.hookV.copy(hv); st.hookPrev.copy(hook);
     const g = 9.81, len = 0.18, damp = ctx.reduceMotion ? 6 : 2.2;
     for (let k = 0; k < 2; k++) {            // swing[0] about x (tilts toward -z/+z), swing[1] about z
