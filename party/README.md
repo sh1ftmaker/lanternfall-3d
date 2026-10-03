@@ -1,51 +1,85 @@
-# Other visitors: the PartyKit server
+# Other visitors: the server
 
-`party/server.ts` is a small relay on [PartyKit](https://www.partykit.io/). Everyone on the site joins one room,
-`park`. The server gives each connection a short id and a two-word name ("Quiet Moth", "Amber Lantern"). It passes
-walkers' states on to everyone else, tells a newcomer who is already here, and announces when someone leaves. It keeps
-nothing: no history, no storage, no accounts. Nothing about a connection (address, headers, the browser) is ever sent
-to anyone. The site itself (GitHub Pages) does not change: the client is `fx/multiplayer/index.js`.
+`party/server.ts` is a small relay running on Cloudflare Workers with one Durable Object, written with
+[`partyserver`](https://github.com/cloudflare/partykit/tree/main/packages/partyserver) (Cloudflare's successor to
+PartyKit's server runtime). Everyone on the site joins one room, `park`, at `/parties/main/park`; the browser side uses
+`partysocket`, as with PartyKit. The server gives each connection a short id and a two-word name ("Quiet Moth", "Amber
+Lantern"). It passes walkers' states on to everyone else, tells a newcomer who is already here, and announces when
+someone leaves. It keeps nothing: no history, no storage (the Durable Object's SQLite store is never written), no
+accounts. Nothing about a connection (address, headers, the browser) is ever sent to anyone. The site itself (GitHub
+Pages) does not change: the client is `fx/multiplayer/index.js`.
 
 ## Deploy (the owner, once)
 
 ```bash
 cd Lanternfall-3D
-npm install              # partykit + partysocket, dev only (node_modules/ is not committed)
-npx partykit login       # opens GitHub in the browser; log in as the GitHub user that should own the project
-npx partykit deploy      # reads partykit.json: project "lanternfall-3d", main party/server.ts
+npm install              # wrangler, partyserver, partysocket; dev only (node_modules/ is not committed)
+npx wrangler login       # opens Cloudflare in the browser (a free account is enough)
+npx wrangler deploy      # reads wrangler.toml: worker "lanternfall-3d", Durable Object class Park (SQLite-backed)
 ```
 
-The server will then be at **`lanternfall-3d.<github user>.partykit.dev`**, so `lanternfall-3d.sh1ftmaker.partykit.dev`
-for the `sh1ftmaker` account (`npx partykit deploy` prints the exact address). Check it with
-`curl https://lanternfall-3d.sh1ftmaker.partykit.dev/parties/main/park`, which should answer `{"ok":true,"n":0,"max":64}`.
-Nothing has to be pushed to GitHub Pages for this: the client already points there. Logs: `npx partykit tail`.
-Remove it: `npx partykit delete`.
+`npx wrangler deploy` ends by printing the address, `https://lanternfall-3d.<account subdomain>.workers.dev`. The account
+subdomain is chosen once per Cloudflare account; the first deploy asks for one if the account has none (later:
+dashboard, Workers & Pages, the subdomain on the right). Check it:
 
-Until the server is deployed, the live page asks for it once a minute from a small Worker and shows nothing. Chrome
-still prints its own network notice for that request in DevTools, under the Worker. The page itself logs nothing.
-
-## Changing the host
-
-`HOST` at the top of `fx/multiplayer/index.js` is the only place:
-
-```js
-export const HOST = 'lanternfall-3d.sh1ftmaker.partykit.dev';
+```bash
+curl https://lanternfall-3d.<account subdomain>.workers.dev/parties/main/park     # {"ok":true,"n":0,"max":64}
 ```
 
-For a single page load, `#mp=<host[:port]>` in the address overrides it, for example
-`index.html#mp=127.0.0.1:8970`. Local addresses (`localhost`, `127.0.0.1`, `192.168.*`, `10.*`) use `ws://` and
-`http://`; everything else uses `wss://` and `https://`. The client library is `partysocket`, pinned in the import map
-in `index.html` (`https://unpkg.com/partysocket@1.3.0/dist/index.js`).
+Then point the live site at it: put the host in **`data/mp.json`** and push that one file:
+
+```json
+{ "host": "lanternfall-3d.<account subdomain>.workers.dev" }
+```
+
+(the URL exactly as wrangler printed it also works: `https://` and a trailing `/` are ignored). Logs: `npx wrangler tail`.
+Remove it: `npx wrangler delete`.
+
+**Free plan.** It fits the Workers Free plan: SQLite-backed Durable Objects are the kind it allows (`new_sqlite_classes`
+in `wrangler.toml`); the older key-value-backed ones need the paid plan. The free plan's daily limits are 100,000
+requests and 13,000 GB-s of Durable Object duration. Incoming WebSocket messages count as one request per 20; outgoing
+ones are free. One visitor walking sends about 10 messages a second, which is about 1,800 requests an hour, so the free
+plan covers roughly 50 visitor-hours of walking a day (Tour and Explore cost almost nothing: one message per 25 s). The
+room is not hibernated (the visitors live in memory while anyone is connected), so duration is counted while anyone is
+connected: one room for a whole day is about 11,000 GB-s, within the limit. When a limit is reached Cloudflare refuses
+connections until the next day, and the page carries on alone, as when the server is away.
+
+## Which host the page uses
+
+1. `#mp=<host[:port]>` in the address, for one visit (tests, a local server): `index.html#mp=127.0.0.1:8970`.
+2. Else `data/mp.json`, `{ "host": "..." }`, fetched once when the park has loaded. Keep the file there (an empty host
+   is fine): a missing file would show up as a 404 in the console.
+3. Else `HOST` at the top of `fx/multiplayer/index.js` (empty in the repository).
+
+With no host at all, nothing connects and nothing is shown. Local addresses (`localhost`, `127.0.0.1`, `192.168.*`,
+`10.*`) use `ws://` and `http://`; everything else uses `wss://` and `https://`. The client library is `partysocket`,
+pinned in the import map in `index.html` (`https://unpkg.com/partysocket@1.3.0/dist/index.js`).
+
+If the host is set but the server cannot be reached, the page asks for it once a minute from a small Worker and shows
+nothing. Chrome still prints its own network notice for that request in DevTools, under the Worker; the page itself logs
+nothing.
 
 ## Run locally
 
 ```bash
 npm install
-npx partykit dev --port 8970                      # the server, on http://127.0.0.1:8970
-python3 -m http.server 8962                       # the site, in another terminal
+npx wrangler dev --port 8970 --ip 127.0.0.1          # the server, on http://127.0.0.1:8970 (no login needed)
+python3 -m http.server 8962                           # the site, in another terminal
 # open http://127.0.0.1:8962/index.html#mp=127.0.0.1:8970 in two windows and walk in both (key 3)
-node tools/multiplayer/test.mjs http://127.0.0.1:8962/index.html   # starts its own partykit dev on 8970; stop yours first
+node tools/multiplayer/test.mjs http://127.0.0.1:8962/index.html   # starts its own wrangler dev on 8970; stop yours first
+node tools/multiplayer/bots.mjs 8 --host 127.0.0.1:8970             # eight pretend walkers at the East Gate
+node tools/multiplayer/cost.mjs http://127.0.0.1:8962/index.html    # frame time with 0, 8 and 24 others
 ```
+
+## Why not PartyKit's hosting
+
+The server was first written for PartyKit's own platform (`npx partykit deploy`, host
+`lanternfall-3d.<github user>.partykit.dev`). The deploy registers the project but fails to give it an address: the
+shared `partykit.dev` zone has reached Cloudflare's limit of 10,000 custom domains ("You have exceeded the limit of
+10000 Workers custom domains on zone 'partykit.dev'", PartyKit issue #985). The project is still listed under the
+owner's PartyKit account and can be removed with `npx partykit delete --name lanternfall-3d`. The same server runs on
+the owner's own Cloudflare account through `partyserver` instead, with the same URLs and client. Moving back would only
+take a `partykit.json` and the PartyKit `Party.Server` signatures.
 
 ## Wire format (JSON arrays, text frames)
 
@@ -73,7 +107,7 @@ Server to client:
 `GET /parties/main/park` answers `{"ok":true,"n":<visitors>,"max":64}` (with `access-control-allow-origin: *`). The
 client asks this before it opens a socket.
 
-What the server checks: the room must be `park` (other rooms are closed, 4004); a message is at most 200 characters,
+What the server checks: the room must be `park` (any other path gets a 404 from the Worker, before any Durable Object); a connection id (`_pk`, chosen by the client) already in the room is refused (4005); a message is at most 200 characters,
 JSON, one of the shapes above; positions inside the park's box (x -320..400, y -280..280, z -30..160); every number
 finite; `anim` a whole number in range and -1 exactly for first person; `land` from the list. Anything else is dropped
 (after 200 dropped messages the connection is closed, 4002). At most 15 messages a second per visitor (a bucket of 20);

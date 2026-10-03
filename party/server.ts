@@ -1,8 +1,9 @@
 // Lanternfall 3D: the "other visitors" relay. One room ("park") for the whole site. The server gives each connection a
 // short id and a two-word name, passes walkers' states on to everyone else, tells a newcomer who is already here, and
 // keeps nothing: no history, no storage, nothing about the connection (address, headers) ever leaves this file.
-// Wire format: party/README.md.
-import type * as Party from "partykit/server";
+// Runs on Cloudflare Workers + a Durable Object through `partyserver` (wrangler.toml); the URL layout is PartyKit's,
+// /parties/main/park, so the `partysocket` client is unchanged. Wire format and deploying: party/README.md.
+import { routePartykitRequest, Server, type Connection, type WSMessage } from "partyserver";
 
 const ROOM = "park";
 const MAX = 64;                       // visitors in the room; the 65th is told the park is full and walks alone
@@ -21,7 +22,7 @@ const SECOND = ["Moth", "Lantern", "Heron", "Ember", "Owl", "Firefly", "Willow",
   "Comet", "Reed", "Pebble", "Kite", "Lamplight", "Sparrow", "Ripple", "Thistle", "Beacon", "Clover", "Nightjar", "Puddle"];
 
 type Walker = [kind: number, x: number, y: number, z: number, yaw: number, anim: number, frame: number, t: number, land: string | null];
-interface Visitor { id: string; name: string; state: Walker | null; seen: number; tokens: number; refill: number; bad: number }
+interface Visitor { conn: Connection; id: string; name: string; state: Walker | null; seen: number; tokens: number; refill: number; bad: number }
 
 const round = (v: number, k: number) => Math.round(v * k) / k;
 const num = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
@@ -38,13 +39,17 @@ function parseState(m: unknown[]): Walker | null {
   return [kind, round(x, 100), round(y, 100), round(z, 100), round(a, 1000), anim as number, round(frame, 10), Math.round(t), land as string | null];
 }
 
-export default class Park implements Party.Server {
+const CORS = { "access-control-allow-origin": "*", "cache-control": "no-store", "content-type": "application/json" };
+
+// The one room. Not hibernating: the visitors live in memory for as long as anyone is connected (and are gone after).
+export class Park extends Server {
+  static options = { hibernate: false };
   visitors = new Map<string, Visitor>();      // by connection id
   timer: ReturnType<typeof setInterval> | null = null;
-  constructor(readonly room: Party.Room) {}
 
-  onConnect(conn: Party.Connection) {
-    if (this.room.id !== ROOM) { conn.close(4004, "no such room"); return; }
+  onConnect(conn: Connection) {
+    if (this.name !== ROOM) { conn.close(4004, "no such room"); return; }
+    if (this.visitors.has(conn.id)) { conn.close(4005, "already connected"); return; }      // the client picks the connection id (_pk)
     if (this.visitors.size >= MAX) { conn.send(JSON.stringify(["f"])); conn.close(4001, "the park is full"); return; }
     const taken = new Set([...this.visitors.values()].flatMap((v) => [v.id, v.name]));
     let id = "", name = "";
@@ -53,56 +58,63 @@ export default class Park implements Party.Server {
     for (let i = 0; i < 60 && (!name || taken.has(name)); i++) { const a = pick(FIRST), b = pick(SECOND); if (a !== b) name = a + " " + b; }
     const now = Date.now();
     const others = [...this.visitors.values()].map((v) => [v.id, v.name, v.state]);
-    this.visitors.set(conn.id, { id, name, state: null, seen: now, tokens: BURST, refill: now, bad: 0 });
+    this.visitors.set(conn.id, { conn, id, name, state: null, seen: now, tokens: BURST, refill: now, bad: 0 });
     conn.send(JSON.stringify(["w", id, name, others]));
-    this.room.broadcast(JSON.stringify(["j", id, name]), [conn.id]);
+    this.broadcast(JSON.stringify(["j", id, name]), [conn.id]);
     if (!this.timer) this.timer = setInterval(() => this.sweep(), 15_000);
   }
 
-  onMessage(message: string | ArrayBuffer | ArrayBufferView, conn: Party.Connection) {
-    const v = this.visitors.get(conn.id); if (!v) return;
+  onMessage(conn: Connection, message: WSMessage) {
+    const v = this.visitors.get(conn.id); if (!v || v.conn !== conn) return;
     const now = Date.now(); v.seen = now;
     v.tokens = Math.min(BURST, v.tokens + (now - v.refill) * RATE / 1000); v.refill = now;
     if (v.tokens < 1) return;                         // over the rate: dropped (not counted as bad)
     v.tokens -= 1;
     let m: unknown = null;
     if (typeof message === "string" && message.length <= MAX_BYTES) { try { m = JSON.parse(message); } catch { m = null; } }
-    if (!Array.isArray(m) || typeof m[0] !== "string") return this.bad(v, conn);
+    if (!Array.isArray(m) || typeof m[0] !== "string") return this.bad(v);
     if (m[0] === "s") {
-      const s = parseState(m); if (!s) return this.bad(v, conn);
+      const s = parseState(m); if (!s) return this.bad(v);
       v.state = s;
-      this.room.broadcast(JSON.stringify(["s", v.id, ...s]), [conn.id]);
+      this.broadcast(JSON.stringify(["s", v.id, ...s]), [conn.id]);
     } else if (m[0] === "p" && m.length === 1) {      // here, but not walking (Tour, Explore, a hidden tab); also the keep-alive
-      if (v.state) { v.state = null; this.room.broadcast(JSON.stringify(["p", v.id]), [conn.id]); }
-    } else this.bad(v, conn);
+      if (v.state) { v.state = null; this.broadcast(JSON.stringify(["p", v.id]), [conn.id]); }
+    } else this.bad(v);
   }
 
-  bad(v: Visitor, conn: Party.Connection) { if (++v.bad > BAD_MAX) conn.close(4002, "too many bad messages"); }
+  bad(v: Visitor) { if (++v.bad > BAD_MAX) this.drop(v, 4002, "too many bad messages"); }
+  drop(v: Visitor, code: number, why: string) { this.leave(v.conn); try { v.conn.close(code, why); } catch { /* already closed */ } }
 
-  onClose(conn: Party.Connection) { this.leave(conn.id); }
-  onError(conn: Party.Connection) { this.leave(conn.id); }
-  leave(cid: string) {
-    const v = this.visitors.get(cid); if (!v) return;
-    this.visitors.delete(cid);
-    this.room.broadcast(JSON.stringify(["l", v.id]));
+  onClose(conn: Connection) { this.leave(conn); }
+  onError(conn: Connection) { this.leave(conn); }
+  leave(conn: Connection) {
+    const v = this.visitors.get(conn.id); if (!v || v.conn !== conn) return;      // (a refused duplicate must not take the original with it)
+    this.visitors.delete(conn.id);
+    this.broadcast(JSON.stringify(["l", v.id]));
     if (!this.visitors.size && this.timer) { clearInterval(this.timer); this.timer = null; }
   }
   sweep() {
     const now = Date.now();
-    for (const conn of this.room.getConnections()) {
-      const v = this.visitors.get(conn.id);
-      if (v && now - v.seen > IDLE_MS) { conn.close(4003, "idle"); this.leave(conn.id); }
+    for (const v of [...this.visitors.values()]) {
+      if (now - v.seen > IDLE_MS) this.drop(v, 4003, "idle");
+      else if (v.conn.readyState > 1) this.leave(v.conn);         // closed without a close event
     }
-    // a visitor whose connection vanished without a close event
-    const live = new Set([...this.room.getConnections()].map((c) => c.id));
-    for (const cid of [...this.visitors.keys()]) if (!live.has(cid)) this.leave(cid);
   }
 
   // GET: is the server up, and how many are here (the client asks before it opens a socket)
-  onRequest(req: Party.Request) {
-    const cors = { "access-control-allow-origin": "*", "cache-control": "no-store", "content-type": "application/json" };
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": "GET" } });
-    if (req.method !== "GET" || this.room.id !== ROOM) return new Response("{}", { status: 404, headers: cors });
-    return new Response(JSON.stringify({ ok: true, n: this.visitors.size, max: MAX }), { headers: cors });
+  onRequest(req: Request) {
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, "access-control-allow-methods": "GET" } });
+    if (req.method !== "GET" || this.name !== ROOM) return new Response("{}", { status: 404, headers: CORS });
+    return new Response(JSON.stringify({ ok: true, n: this.visitors.size, max: MAX }), { headers: CORS });
   }
 }
+
+interface Env { Main: DurableObjectNamespace<Park> }
+export default {
+  // only /parties/main/park reaches the Durable Object (binding "Main" = party "main"); anything else is answered here
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const path = new URL(req.url).pathname.replace(/\/+$/, "");
+    if (path !== `/parties/main/${ROOM}`) return new Response("{}", { status: 404, headers: CORS });
+    return (await routePartykitRequest(req, env as unknown as Record<string, unknown>)) || new Response("{}", { status: 404, headers: CORS });
+  },
+};

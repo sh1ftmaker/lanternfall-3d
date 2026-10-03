@@ -101,7 +101,7 @@ Other visitors are only something to see. They do not bump into you, and they ca
 Privacy: there are no accounts and nothing to type. Names are made up by the server for each visit. Only your position,
 heading and animation in the park are sent, and only while you walk. Nothing is stored: the server keeps who is here
 right now and forgets them when they leave. If the server cannot be reached, the page works exactly as before.
-The server is a small [PartyKit](https://www.partykit.io/) relay in `party/` (deploying, running it locally and the
+The server is a small relay in `party/` that runs on Cloudflare Workers with `partyserver` (deploying, running it locally and the
 wire format: [`party/README.md`](party/README.md)); the client is `fx/multiplayer/`.
 
 ## Weather
@@ -142,7 +142,7 @@ Add these after `#` in the address, separated by commas, then reload.
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
 | `solo` | No other visitors: nothing connects |
-| `mp=host[:port]` | Use another visitors server for this visit (for example a local `partykit dev`) |
+| `mp=host[:port]` | Use another visitors server for this visit (for example a local `wrangler dev`) |
 
 ## How it is built
 

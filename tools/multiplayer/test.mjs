@@ -1,11 +1,13 @@
-// Other visitors, end to end: the PartyKit server (party/server.ts) under `partykit dev`, then real pages.
+// Other visitors, end to end: the server (party/server.ts, partyserver on a Durable Object) under `wrangler dev`, then real pages.
 //   1. protocol: welcome, names, snapshot, validation, rate limit, leave, the room cap, nothing about the connection sent
 //   2. pages: A walks as Wick, B (first person) sees A where A is within 300 ms, animating, named; C sits in Tour and
-//      counts but is not drawn; A leaves and goes from B; '#solo' connects nothing; an unreachable host leaves a clean page
+//      counts but is not drawn; A leaves and goes from B; '#solo' connects nothing; an unreachable host leaves a clean page;
+//      data/mp.json names the host (served by the test), and with no host configured nothing connects
 //   3. cost of the networking: bytes per second per walker, each way
 // usage: node tools/multiplayer/test.mjs [http://127.0.0.1:8962/index.html] [--shots DIR] [--port 8970]
-//   needs the site served at the URL and `npm install` in the repo (partykit); puppeteer-core resolved like the other
-//   tests (PUPPETEER_CORE=<path to puppeteer-core.js> overrides). Starts `partykit dev` itself and stops it at the end.
+//   needs the site served at the URL and `npm install` in the repo (wrangler, partyserver); puppeteer-core resolved like
+//   the other tests (PUPPETEER_CORE=<path to puppeteer-core.js> overrides). Starts `wrangler dev` itself (no login
+//   needed) and stops it at the end.
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -20,13 +22,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = { checks: {}, notes: {} }; let failed = 0;
 const ok = (name, cond, info) => { out.checks[name] = cond ? true : (info === undefined ? false : info); if (!cond) failed++; console.error((cond ? 'ok   ' : 'FAIL ') + name + (cond || info === undefined ? '' : ' ' + JSON.stringify(info))); };
 
-// ── partykit dev ──
+// ── wrangler dev ──
 const up = () => fetch(`http://${HOST}/parties/main/park`).then((r) => r.json()).catch(() => null);
 let pk = null;
 if (await up()) { out.notes.server = 'already running on ' + PORT + ' (not started by this test, left running)'; }
 else {
-  pk = spawn('npx', ['partykit', 'dev', '--port', String(PORT)], { cwd: ROOT, detached: true, stdio: 'ignore' });
-  out.notes.partykitPid = pk.pid;
+  pk = spawn('npx', ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1'], { cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } });
+  out.notes.wranglerPid = pk.pid;
   for (let i = 0; i < 120 && !(await up()); i++) await wait(500);
 }
 const stopAll = () => { if (pk) { try { process.kill(-pk.pid, 'SIGTERM'); } catch (e) { /* gone */ } pk = null; } };
@@ -71,7 +73,14 @@ function client(room = 'park') {
   ok('rate limit: 60 states sent at once, at most ~20 relayed', relayed >= 15 && relayed <= 22, relayed);
   ok('nothing about the connection reaches clients', ![...a.raw, ...b.raw].some((t) => /127\.0\.0\.1|::1|user-agent|mozilla/i.test(t)));
   b.ws.close(); ok('leave is broadcast', !!(await a.until((m) => m && m[0] === 'l' && m[1] === wb[1])));
-  const o = client('elsewhere'); await o.open; await wait(500); ok('only the room "park" exists', o.closed === 4004, o.closed);
+  const o = client('elsewhere'); const oOpen = await o.open; await wait(500); ok('only the room "park" exists (others refused before the Durable Object)', !oOpen && (await fetch(`http://${HOST}/parties/main/elsewhere`)).status === 404, { oOpen, closed: o.closed });
+  { // the client picks its connection id (_pk): a second socket with the same one is refused, the first keeps working
+    const pkId = 'dup' + Math.random().toString(36).slice(2, 8), mk = () => { const ws = new WebSocket(`ws://${HOST}/parties/main/park?_pk=${pkId}`), c = { ws, msgs: [], closed: null }; ws.onmessage = (e) => c.msgs.push(JSON.parse(e.data)); ws.onclose = (e) => { c.closed = e.code; }; c.open = new Promise((r) => { ws.onopen = () => r(true); ws.onerror = () => r(false); }); return c; };
+    const n0 = (await up()).n; const d1 = mk(); await d1.open; await wait(200); const d2 = mk(); await d2.open; await wait(500);
+    const n1 = (await up()).n; d1.ws.send(JSON.stringify(['p'])); await wait(200);
+    ok('a duplicate connection id is refused and the first stays', d2.closed === 4005 && d1.closed === null && n1 === n0 + 1, { d2: d2.closed, d1: d1.closed, n0, n1 });
+    d1.ws.close(); await wait(300);
+  }
   // the cap: 64 in the room, the 65th is told the park is full
   const many = []; for (let i = 0; i < 63; i++) { const c = client(); many.push(c); } await Promise.all(many.map((c) => c.open)); await wait(500);
   const probe = await up(); ok('64 in the room', probe && probe.n === 64, probe);
@@ -172,6 +181,28 @@ ok('unreachable: page clean, row hidden, waiting a minute', (await E.ev(`__park.
 await E.ev(`__park.setMode('walk', { at: [288, 0], yaw: Math.PI })`); await wait(3000);
 ok('unreachable: Walk works, still clean', E.errs.size === 0 && (await E.ev('__park.mode')) === 'walk', [...E.errs]);
 if (SHOTS) await E.shot('unreachable_desktop');
+// data/mp.json names the host (the test serves it); and the file as committed (no host) connects nothing
+async function openWith(tag, hash, mpjson) {
+  const browser = await launch(), page = (await browser.pages())[0]; const errs = new Map(), reqs = [], add = (k) => errs.set(k, (errs.get(k) || 0) + 1);
+  page.on('pageerror', (e) => add('pageerror: ' + e.message.slice(0, 200)));
+  page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warn') && !/GPU stall|Context Lost|Context Restored|CONTEXT_LOST/.test(m.text())) add(m.type() + ': ' + m.text().slice(0, 200)); });
+  page.on('response', (r) => { if (r.status() >= 400) add('http ' + r.status() + ' ' + r.url().slice(-60)); });
+  page.on('request', (r) => reqs.push(r.url()));
+  // the page's data/mp.json, answered in the page (request interception would also hold the probe Worker's requests)
+  if (mpjson !== undefined) await page.evaluateOnNewDocument((body) => { const f = window.fetch; window.fetch = (u, o) => (String(u).includes('data/mp.json') ? Promise.resolve(new Response(body, { headers: { 'content-type': 'application/json' } })) : f(u, o)); }, mpjson);
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.goto(URL0 + '#' + hash);
+  await page.waitForFunction('window.__park && window.__park.loaded', { timeout: 240000 });
+  return { tag, page, errs, reqs, ev: (js) => page.evaluate(js).catch((e) => { add('eval: ' + e.message.slice(0, 160)); return null; }), until: (js, ms = 10000) => page.waitForFunction(js, { timeout: ms, polling: 50 }).then(() => true).catch(() => false) };
+}
+const F = await openWith('F', 'weather=clear', JSON.stringify({ host: `http://${HOST}/` }));
+ok('data/mp.json names the host (a pasted URL is fine)', await F.until(`__park.multiplayer && __park.multiplayer.status === 'open' && __park.multiplayer.host === ${JSON.stringify(HOST)}`, 20000), await F.ev('__park.multiplayer && [__park.multiplayer.status, __park.multiplayer.host]'));
+await F.page.browser().close();
+const G = await openWith('G', 'weather=clear', '{ "host": "" }');
+await wait(4000);
+const gHost = await G.ev('__park.multiplayer.host'), gStatus = await G.ev('__park.multiplayer.status');
+ok('no host configured (data/mp.json empty, HOST empty): nothing connects, nothing shown, clean', gStatus === 'off' && !G.reqs.some((u) => /parties\/main/.test(u)) && (await G.ev(`document.querySelector('#mp-tog').hidden`)) && G.errs.size === 0, { gHost, gStatus, errs: [...G.errs] });
+await G.page.browser().close();
 for (const P of [B, C, M, D]) out.notes['errs' + P.tag] = [...P.errs].map(([k, v]) => v + 'x ' + k);
 const ignorable = (k) => /avatars\.js|Failed to load resource: the server responded with a status of 404/.test(k);        // the real figures (fx/multiplayer/avatars.js) come from another branch; until then the stub stands in
 ok('no console errors on the connected pages', [B, C, M, D].every((P) => [...P.errs.keys()].every(ignorable)), [B, C, M, D].map((P) => [...P.errs]));
