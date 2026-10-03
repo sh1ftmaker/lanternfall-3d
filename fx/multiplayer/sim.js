@@ -5,11 +5,12 @@
 //   (await __park.mpSim(8, { teleport: true, measure: true })).report()   // as the test runs it
 //
 // Each visitor walks a chain of straight legs between walk-grid points near the start (legs checked on the grid at
-// 0.5 m steps), pauses at each point (a Wick sometimes jumps there), and sends its state as a client would: 10 times a
-// second while moving, twice a second while still (a tick every 100 ms; it sends when it has moved, else every 500 ms), stamped with its own clock (a random offset from ours). Delivery
-// takes a base latency plus jitter (mostly small, now and then 150 ms late) and keeps order, like a WebSocket. One
-// visitor in four is first person ('fp', anim -1). With `teleport`, visitor 0 jumps 40 m away halfway through.
-// With `measure`, every frame compares each drawn avatar with where its sender was 120 ms + the base latency ago.
+// 0.5 m steps) and pauses at each point (a Wick sometimes jumps there). It ticks 10 times a second like a client and
+// sends its state when it has moved, turned, stopped or changed animation, else every 500 ms, stamped with its own
+// clock (a random offset from ours). Delivery takes a base latency plus exponential jitter (and, with `spikes`, that
+// share of packets 150 ms late) and keeps order, like a WebSocket. One visitor in four is first person ('fp', anim -1).
+// With `teleport`, visitor 0 jumps 40 m away after 6 s. With `measure`, every frame compares each drawn avatar with
+// where its sender was 120 ms + the base latency ago (report() gives mean, p95, max per sender, and any snaps).
 import * as THREE from 'three';
 import { createAvatars } from './avatars.js';
 import { ID, LEN } from '../platformer/anims.js';

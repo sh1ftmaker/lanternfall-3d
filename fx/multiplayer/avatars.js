@@ -20,8 +20,9 @@
 // Drawing: one geometry (the local Wick's attributes, shared) and one material for all bodies; each body is its own
 // mesh whose onBeforeRender points the shared uniforms at that avatar's bones, lantern and fade (one draw call per
 // body), plus the lantern halo, and within 30 m the light pool and contact shadow. Only the 24 nearest the camera are
-// drawn; the others are still interpolated. Name tags are canvas sprites from a pool of 24, readable at 15 m and gone
-// by 40 m. Nothing here casts the moon shadow (surface.js renders only the park meshes into it), collides, or registers
+// drawn; the others are still interpolated. Poses are evaluated every frame within 20 m, every 2nd frame to 45 m,
+// every 4th beyond, and not at all out of view (the last pose is carried along). Name tags (canvas sprites, a pool of
+// 12) go on the nearest 12, a constant size on screen, readable at 15 m and faded out by 40 m. Nothing here casts the moon shadow (surface.js renders only the park meshes into it), collides, or registers
 // with the game layer (no prompts, swings, rides or secrets).
 //
 // Development: `__park.mpSim(8)` in the console spawns 8 fake visitors walking near the player (fx/multiplayer/sim.js,
@@ -116,10 +117,10 @@ export function createAvatars({ THREE, scene, surface, guests, manifest, game })
   // ── avatars ──
   const map = new Map(), list = [];
   let leaving = 0, visibleOn = true, frameNo = 0;
-  const v3a = new THREE.Vector3(), v3b = new THREE.Vector3(), smp = { x: 0, y: 0, z: 0, yaw: 0, anim: 0, frame: 0, vx: 0, vy: 0, vz: 0, cut: false, extrap: false };
+  const smp = { x: 0, y: 0, z: 0, yaw: 0, anim: 0, frame: 0, vx: 0, vy: 0, vz: 0, cut: false, extrap: false };
   function makeAvatar(id) {
     const a = {
-      id, name: 'Visitor', kind: 'wick',
+      id, name: 'Visitor', rawName: undefined, kind: 'wick', rank: MAX_DRAWN, extrap: false,
       st: Array.from({ length: RING }, () => ({ t: 0, rx: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 0, frame: 0 })), head: -1, n: 0,
       off: 0, play: 0, lastRx: 0,
       raw: new THREE.Vector3(), corr: new THREE.Vector3(), pos: new THREE.Vector3(), feet: new THREE.Vector3(), yaw: 0, yawCorr: 0, init: false,
@@ -371,7 +372,7 @@ export function createAvatars({ THREE, scene, surface, guests, manifest, game })
     bodyGeo.dispose(); quadGeo.dispose(); T.dispose();
   }
   // for tests and tools: the drawn state of one avatar (Blender frame), and counters
-  function debug(id) { const a = map.get(id); return a ? { x: a.pos.x, y: a.pos.y, z: a.pos.z, yaw: a.yaw, drawn: a.drawn, fade: a.fade, anim: a.animId, tag: !!(a.tag && a.tag.sp.visible), name: a.name, play: a.play, off: a.off, corr: +a.corr.length().toFixed(3), extrap: a.extrap } : null; }
+  function debug(id) { const a = map.get(id); return a ? { x: a.pos.x, y: a.pos.y, z: a.pos.z, yaw: a.yaw, drawn: a.drawn, fade: a.fade, anim: a.animId, tag: !!(a.tag && a.tag.sp.visible), name: a.name, play: a.play, off: a.off, corr: +a.corr.length().toFixed(3), extrap: a.extrap, inView: a.inView } : null; }
   return {
     upsert, remove, update, setVisible, dispose, debug, stats, root, tags,
     get count() { return map.size - leaving; },
