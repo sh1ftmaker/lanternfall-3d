@@ -575,6 +575,8 @@ async function load() {
   FX.fxPark(Q, { park, uTime });
   bar.style.width = '100%'; pill.hidden = true; loaded = true; perf.n = 0; moonShadow();
   game.start();                                                               // game hook: the whole park is in
+  if (!HASH.has('solo')) import('./fx/multiplayer/index.js').then((M) => { mp = M.createMultiplayer({ THREE, scene, camera, surface, walk, game, getMode: () => mode, getPlatformer: () => pf, getGuests: () => guests, getManifest: () => manifest }); })
+    .catch((e) => console.warn('visitors:', e));                               // multiplayer hook: other visitors ('#solo' turns it off)
 }
 
 /* ───────────────────────── places + captions ───────────────────────── */
@@ -1059,7 +1061,8 @@ function frame() {
   if (Math.abs(view.want - view.dy) > 0.5) { view.dy += (view.want - view.dy) * Math.min(1, dt * 4); if (Math.abs(view.want - view.dy) < 0.5) view.dy = view.want; applyFov(); }
   updateLOD(); FX.fxUpdate(Q, camera, { time, dt, tour: ready && mode === 'tour' ? tourClock % tourLen : -1 });
   if (pf) pf.frame(dt, mode);
-  game.frame(dt, time);                                                       // game hook: after the walker / lamplighter has moved                                                 // platformer hook: leaves it when the mode changes
+  game.frame(dt, time);                                                       // game hook: after the walker / lamplighter has moved
+  if (mp) mp.frame(dt, time);                                                 // multiplayer hook: send this visitor's state, move the others                                                 // platformer hook: leaves it when the mode changes
   if (guests) { camera.updateMatrixWorld(); guests.update(camera, dt); }     // guests hook: before the lake's mirror pass
   sound.update(dt, time);                                   // after the fireworks, before the lake consumes its tap splats
   dayFog.pre(); weather.update(dt, time); dayFog.post();    // game hook: daynight (the dusk fog colour is added after the weather's)
@@ -1104,6 +1107,7 @@ $('#btn-pf').addEventListener('click', togglePlatformer);
 addEventListener('keydown', (e) => { if (e.code === 'KeyP' && mode === 'walk' && ready && !e.ctrlKey && !e.metaKey && !e.altKey && !(pf && pf.active)) { e.preventDefault(); if (!e.repeat) togglePlatformer(); } });
 Object.defineProperty(window.__park, 'platformer', { get: () => pf });
 window.__park.cull = cull;
+let mp = null; Object.defineProperty(window.__park, 'multiplayer', { get: () => mp });   // multiplayer hook
 window.__park.game = game;                                  // game hook                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 window.__park.mpSim = (n = 8, opts) => import('./fx/multiplayer/sim.js').then((M) => M.mpSim(window.__park, n, opts));   // multiplayer hook: fake remote visitors for development (fx/multiplayer/sim.js)

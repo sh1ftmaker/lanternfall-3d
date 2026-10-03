@@ -2,3 +2,6 @@ page.html
 make_index.py
 __pycache__/
 .DS_Store
+node_modules/
+.partykit/
+.wrangler/

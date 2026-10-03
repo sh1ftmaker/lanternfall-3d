@@ -90,6 +90,20 @@ made for this project, and collision comes from the park's own geometry. What ex
 licences, are listed in [`fx/platformer/CREDITS.md`](fx/platformer/CREDITS.md). Nothing of it is downloaded until
 Walk is first entered.
 
+## Other visitors
+
+Everyone on the site shares one park. In Walk, the other visitors who are walking show up where they are as
+lamplighters with their lanterns, each with a small generated name over them ("Quiet Moth", "Amber Lantern"). Visitors
+on the Tour or in Explore count, but are not drawn. The settings sheet has an **Other visitors** switch (remembered,
+on by default) and says how many others are in the park. `#solo` in the address turns it all off for that visit.
+Other visitors are only something to see. They do not bump into you, and they cannot use rides, prompts or secrets for you.
+
+Privacy: there are no accounts and nothing to type. Names are made up by the server for each visit. Only your position,
+heading and animation in the park are sent, and only while you walk. Nothing is stored: the server keeps who is here
+right now and forgets them when they leave. If the server cannot be reached, the page works exactly as before.
+The server is a small relay in `party/` that runs on Cloudflare Workers with `partyserver` (deploying, running it locally and the
+wire format: [`party/README.md`](party/README.md)); the client is `fx/multiplayer/`.
+
 ## Weather
 
 The weather changes by itself every two minutes: it starts clear, then rain, storm, mist, clear again, snow, and
@@ -127,6 +141,8 @@ Add these after `#` in the address, separated by commas, then reload.
 | `guests=N` | Set the number of guests |
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
+| `solo` | No other visitors: nothing connects |
+| `mp=host[:port]` | Use another visitors server for this visit (for example a local `wrangler dev`) |
 
 ## How it is built
 

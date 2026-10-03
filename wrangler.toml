@@ -1,0 +1,13 @@
+# The "other visitors" server on Cloudflare Workers + one Durable Object (partyserver). Deploy: party/README.md.
+name = "lanternfall-3d"
+main = "party/server.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "Main"            # routePartykitRequest serves /parties/main/<room> from the binding named Main
+class_name = "Park"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Park"]   # SQLite-backed: the kind the Workers Free plan allows (nothing is stored in it)
