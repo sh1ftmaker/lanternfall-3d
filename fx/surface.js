@@ -105,6 +105,7 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
       varying vec3 vCol; varying float vDist; varying vec3 vW; varying vec3 vAlb; varying float vCls;
       #include <packing>
       ${GLSL_DETAIL}
+      // @decl  (modules insert declarations here; see the marker list in createSurface)
       float shTap(vec2 uv, float z){ return step(z, unpackRGBAToDepth(texture2D(tShadow, uv))); }
       float shadowAt(vec3 p, vec3 n){
         vec4 sc = uShadowM * vec4(p + n * (uSTexel * 1.4), 1.0); vec3 q = sc.xyz * 0.5 + 0.5;
@@ -130,6 +131,7 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
       }
       void main(){
         vec3 col = vCol;
+        vec3 ng = vec3(0.0, 1.0, 0.0), nb = ng; vec2 dt = vec2(1.0, 0.5); float fw = 1.0;   // set below for the lit classes
         if (uDay > 0.0) {                                           // game hook: daynight (lamps: lit things fade up; unlit lamp housings, signs and windows are painted by the sky)
           float lk = dnLamp(vW.xz);
           col *= lk;
@@ -138,13 +140,13 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
         if (vCls < 6.5 && (uDetail > 0.5 || uMoonOn > 0.5 || uDay > 0.0)) {
           vec3 dx = dFdx(vW), dy = dFdy(vW);
           vec3 nv = normalize(cross(dx, dy));                    // faces the viewer
-          vec3 ng = gl_FrontFacing ? nv : -nv;                   // the side the bake lit
-          float fw = max(length(dx), length(dy));
-          vec2 dt = vec2(1.0, 0.5);
+          ng = gl_FrontFacing ? nv : -nv;                        // the side the bake lit
+          fw = max(length(dx), length(dy));
+          nb = ng;
           if (uDetail > 0.5 && vCls < 5.5) dt = detail(vCls, vW, ng, fw);
+          // @surface  (dt.x = albedo multiplier, dt.y = height; modules may replace dt and nb here)
           col *= dt.x;
           if (uMoonOn > 0.5 || uDay > 0.0) {
-            vec3 nb = ng;
             if (uDetail > 0.5 && vCls > 0.5 && vCls < 5.5 && (vCls < 3.5 || vCls > 4.5)) { nb = bumpN(vW, nv, dt.y * uBump); if (!gl_FrontFacing) nb = -nb; }   // only classes with joints
             if (uMoonOn > 0.5) {
               float ndl = max(dot(nb, uMoon), 0.0);
@@ -154,6 +156,7 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
             if (uDay > 0.0) col += max(vAlb, vec3(0.015)) * dt.x * dnLight(nb, ng, vW);       // game hook: daynight
           }
         }
+        // @light  (col = lit surface before fog; ng/nb/fw/dt valid for classes < 6.5)
         float f = 1.0 - exp(-vDist * vDist * uFogD);
         gl_FragColor = vec4(mix(col, uFog, f), 1.0);
         #include <tonemapping_fragment>
@@ -161,6 +164,8 @@ export function createSurface({ FOG, fogD, moonDir, moonCol, mobile, DN = create
       }`,
     side: THREE.DoubleSide,
   });
+  // Insertion points for modules that extend this shader by string patching (fx/weather/shade.js does the same with
+  // the fog line): '// @decl' before main(), '// @surface' after the detail pattern, '// @light' after all lighting.
   material.defaultAttributeValues.aLay = [0];
   material.defaultAttributeValues.aAux = [0, 0, 0, 1];      // no albedo/class in the data: class 255, baked colour only
 
