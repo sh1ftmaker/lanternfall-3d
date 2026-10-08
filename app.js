@@ -542,7 +542,7 @@ async function load() {
   // One part ahead only, so a fast link does not hold every decompressed part in memory at once. The monorail cars and
   // the walk grid come right after 'transit', where the park opens.
   const bins = new Map(); let chain = Promise.resolve();
-  const queue = (f, meshes) => { if (!f || bins.has(f)) return; const raw = chain.then(() => fetchRaw(f)); chain = raw.catch(() => {}); bins.set(f, raw.then((b) => (meshes ? decodeOff(b, meshes) : unpackBin(b)))); };   // the next download starts before this one is gunzipped; parts decode in the worker
+  const queue = (f, meshes) => { if (!f || bins.has(f)) return; const raw = chain.then(() => fetchRaw(f)); chain = raw.then(() => {}, () => {});   /* (not raw itself: the chain would keep the last buffer alive) */ bins.set(f, raw.then((b) => (meshes ? decodeOff(b, meshes) : unpackBin(b)))); };   // the next download starts before this one is gunzipped; parts decode in the worker
   const bin = (f) => { queue(f); const p = bins.get(f); bins.set(f, null); return p; };      // taken: the buffer is not kept here
   const ahead = (i) => { const part = manifest.parts[i]; if (!part) return; queue(part.file, part.meshes); if (part.id === 'transit') { if (ex.train_file) queue(ex.train_file.file); if (manifest.nav) queue(manifest.nav.file); } };
   queue(ex.file.file); ahead(0);

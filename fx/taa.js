@@ -128,7 +128,11 @@ export class TAAPass extends Pass {
   drawLate(renderer, target) {
     if (!this.hidden.length) return;
     const ac = renderer.autoClear; renderer.autoClear = false; renderer.setRenderTarget(target);
-    for (const o of this.hidden) { o.visible = true; renderer.render(o, this.camera); }
+    // the scene's own children in one render call (listed in a bare Scene without being re-parented: their parent, the
+    // scene, has an identity matrix), anything deeper one call each
+    const ls = this.lateScene || (this.lateScene = new THREE.Scene()); ls.matrixWorldAutoUpdate = false;
+    for (const o of this.hidden) { o.visible = true; if (o.parent === this.scene) ls.children.push(o); else renderer.render(o, this.camera); }
+    if (ls.children.length) { renderer.render(ls, this.camera); ls.children.length = 0; }        // (matrices: updated by the scene render, hidden or not)
     renderer.autoClear = ac; this.hidden.length = 0;
   }
   setSize(w, h) { for (const r of this.hist) r.setSize(w, h); this.first = true; }
