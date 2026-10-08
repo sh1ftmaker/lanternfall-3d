@@ -5,6 +5,11 @@
 // motion only: the park is static, lantern drift and trains are handled by the neighbourhood clamp),
 // clamps it to the 3x3 colour range (in a tone-mapped space so HDR bulbs do not dominate) and blends.
 // Works in linear HDR, before bloom and the final pass. Costs one full-res resolve + one copy.
+// On every preset (the LanternTown lesson: pixel ratio 1 everywhere, TAA doing the smoothing; '#traa=0' only for
+// debugging). Things that move without the camera (guests, the monorail, drifting lantern sprites, fireworks) have no
+// motion vectors: where the history had to be clamped hard the blend leans on the current frame (uReact), so a moving
+// edge leaves no trail. In the Fast / HD chain (no FinalPass) the copy back into the scene buffer adds the light
+// unsharp mask FinalPass does in Cinematic ('#u_taasharp=0.3'; the history itself stays unsharpened).
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { VERT, DEPTH_GLSL, depthDefines, depthUniforms, updateDepthUniforms } from './depthtex.js';
@@ -14,7 +19,7 @@ const SEQ = Array.from({ length: 8 }, (_, i) => [halton(i + 1, 2) - 0.5, halton(
 
 const RESOLVE = /* glsl */`
   precision highp float; precision highp sampler2D;
-  uniform sampler2D tCur, tHist, tDepth; uniform mat4 uCamWorld, uPrevVP; uniform vec2 uJitter; uniform float uAlpha, uReset;
+  uniform sampler2D tCur, tHist, tDepth; uniform mat4 uCamWorld, uPrevVP; uniform vec2 uJitter; uniform float uAlpha, uReset, uReact, uDepthRej;
   varying vec2 vUv;
   ${DEPTH_GLSL}
   vec3 tm(vec3 c){ return c / (1.0 + max(c.r, max(c.g, c.b))); }
@@ -45,17 +50,41 @@ const RESOLVE = /* glsl */`
     vec4 prev = uPrevVP * (uCamWorld * vec4(vp, 1.0));
     vec2 puv = prev.xy / prev.w * 0.5 + 0.5;
     bool off = any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0))) || uReset > 0.5;
-    vec3 h = off ? cur : clamp(tm(histCR(puv)), mn, mxc);
-    float a = off ? 1.0 : uAlpha;
-    gl_FragColor = vec4(itm(mix(h, cur, a)), cur4.a);
+    // the history keeps each pixel's view distance in alpha: where the reprojected point was at another distance last
+    // frame, something moved across it (a guest, the monorail, Wick) or it was hidden: no history there
+    bool sky = isSky(d);
+    float vz = sky ? 60000.0 : -vp.z;
+    if (!off && uDepthRej > 0.0) {
+      float pz = texelFetch(tHist, clamp(ivec2(puv * vec2(textureSize(tHist, 0))), ivec2(0), textureSize(tHist, 0) - 1), 0).a;
+      if (pz >= 59000.0) off = !sky;                                                  // was sky, now something
+      else if (!sky) off = abs(pz - prev.w) > uDepthRej * prev.w + 0.05;            // prev.w: its distance from last frame's camera
+    }
+    vec3 h0 = tm(histCR(puv)), h = off ? cur : clamp(h0, mn, mxc);
+    // history far outside this frame's neighbourhood = something moved here (no motion vectors): lean on the current frame
+    float clampd = length(h0 - h) / (length(mxc - mn) + 0.02);
+    float a = off ? 1.0 : mix(uAlpha, 0.6, clamp(clampd * uReact, 0.0, 1.0));
+    gl_FragColor = vec4(itm(mix(h, cur, a)), vz);
   }`;
-const COPY = /* glsl */`precision highp float; uniform sampler2D tSrc; varying vec2 vUv; void main(){ gl_FragColor = texelFetch(tSrc, ivec2(gl_FragCoord.xy), 0); }`;
+const COPY = /* glsl */`precision highp float; uniform sampler2D tSrc; uniform float uSharp; varying vec2 vUv;
+  void main(){ ivec2 ip = ivec2(gl_FragCoord.xy); vec4 c = texelFetch(tSrc, ip, 0);
+    #ifdef SHARPEN
+    // light unsharp mask in a compressed space (as FinalPass's), so bulbs do not halo
+    ivec2 mx = textureSize(tSrc, 0) - 1;
+    vec3 a = texelFetch(tSrc, min(ip + ivec2(1, 0), mx), 0).rgb, b = texelFetch(tSrc, max(ip - ivec2(1, 0), ivec2(0)), 0).rgb,
+         e = texelFetch(tSrc, min(ip + ivec2(0, 1), mx), 0).rgb, f = texelFetch(tSrc, max(ip - ivec2(0, 1), ivec2(0)), 0).rgb;
+    vec3 nb = (a + b + e + f) * 0.25, lo = min(c.rgb, min(min(a, b), min(e, f))), hi = max(c.rgb, max(max(a, b), max(e, f)));
+    vec3 tc = c.rgb / (1.0 + c.rgb), tn = nb / (1.0 + nb);
+    // never past the local range: an overshoot on a bulb would be an HDR spike, and bloom spreads it over the frame
+    tc = clamp(tc + (tc - tn) * uSharp, lo / (1.0 + lo), hi / (1.0 + hi)); c.rgb = tc / (1.0 - tc);
+    #endif
+    gl_FragColor = c; }`;
 
 export class TAAJitterPass extends Pass {
   constructor(camera, taa) { super(); this.__name = 'TAAJitter'; this.needsSwap = false; this.camera = camera; this.taa = taa; }
   render(renderer, writeBuffer, readBuffer) {
     const t = this.taa, cam = this.camera, j = SEQ[t.index++ % SEQ.length];
     t.saved.copy(cam.projectionMatrix);
+    t.hideLate();
     const w = readBuffer.width, h = readBuffer.height;
     t.jitter.set(j[0] / w, j[1] / h);
     cam.projectionMatrix.elements[8] += 2 * t.jitter.x; cam.projectionMatrix.elements[9] += 2 * t.jitter.y;
@@ -70,11 +99,33 @@ export class TAAPass extends Pass {
     this.index = 0; this.saved = new THREE.Matrix4(); this.jitter = new THREE.Vector2(); this.prevVP = new THREE.Matrix4(); this.first = true;
     const rt = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
     this.hist = [rt(), rt()]; this.cur = 0;
-    this.u = Object.assign(depthUniforms(), { tCur: { value: null }, tHist: { value: null }, tDepth: { value: null }, uCamWorld: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() }, uJitter: { value: new THREE.Vector2() }, uAlpha: { value: 0.1 }, uReset: { value: 1 } });
+    this.u = Object.assign(depthUniforms(), { tCur: { value: null }, tHist: { value: null }, tDepth: { value: null }, uCamWorld: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() }, uJitter: { value: new THREE.Vector2() }, uAlpha: { value: 0.1 }, uReset: { value: 1 }, uReact: { value: ctx.react ?? 1 }, uDepthRej: { value: ctx.depthRej ?? 0.04 } });
     this.m = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: RESOLVE, uniforms: this.u, defines: depthDefines(ctx.renderer || { capabilities: {} }), depthTest: false, depthWrite: false });
-    this.mCopy = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: COPY, uniforms: { tSrc: { value: null } }, depthTest: false, depthWrite: false });
+    this.mCopy = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: COPY, uniforms: { tSrc: { value: null }, uSharp: { value: ctx.sharpen || 0 } }, defines: ctx.sharpen ? { SHARPEN: '' } : {}, depthTest: false, depthWrite: false });
     this.q = new FullScreenQuad(null);
+    this.scene = ctx.scene || null; this.late = []; this.lateAge = 1e9; this.hidden = [];
+    this.lateOn = !/(?:^|[#,&])taalate=0/.test(typeof location !== 'undefined' ? location.hash : '');
     this.jitterPass = new TAAJitterPass(camera, this);
+  }
+  // Additive / premultiplied glows that move on their own (paper lanterns, motes, fireworks, rain, their reflections on the lake)
+  // have no depth and no motion vectors: accumulated, a drifting sprite smears into a blob. They are left out of the
+  // jittered scene render and drawn after the resolve, unjittered, into the scene buffer (depth-tested against it),
+  // as engines draw particles after TAA. Draw order among additive glows does not matter. '#taalate=0' compares.
+  hideLate() {
+    if (!this.lateOn || !this.scene) return;
+    if (++this.lateAge > 30) {                                      // the set is re-collected twice a second
+      this.lateAge = 0; this.late = [];
+      const glow = (m) => m.blending === THREE.AdditiveBlending || (m.blending === THREE.CustomBlending && m.blendSrc === THREE.OneFactor);   // additive or premultiplied (the paper lanterns)
+      const isLate = (o) => { const m = o.material; return !!m && !Array.isArray(m) && m.transparent && !m.depthWrite && glow(m) && (o.isPoints || o.isMesh); };
+      this.scene.traverse((o) => { if (isLate(o)) { for (let p = o.parent; p; p = p.parent) if (isLate(p)) return; this.late.push(o); } });
+    }
+    for (const o of this.late) if (o.visible) { o.visible = false; this.hidden.push(o); }
+  }
+  drawLate(renderer, target) {
+    if (!this.hidden.length) return;
+    const ac = renderer.autoClear; renderer.autoClear = false; renderer.setRenderTarget(target);
+    for (const o of this.hidden) { o.visible = true; renderer.render(o, this.camera); }
+    renderer.autoClear = ac; this.hidden.length = 0;
   }
   setSize(w, h) { for (const r of this.hist) r.setSize(w, h); this.first = true; }
   render(renderer, writeBuffer, readBuffer) {
@@ -85,11 +136,27 @@ export class TAAPass extends Pass {
     u.uReset.value = this.first ? 1 : 0; this.first = false;
     this.q.material = this.m; renderer.setRenderTarget(this.hist[this.cur]); this.q.render(renderer);
     this.mCopy.uniforms.tSrc.value = this.hist[this.cur].texture; this.q.material = this.mCopy; renderer.setRenderTarget(readBuffer);
+    // colour only: the scene's alpha stays (FinalPass reads lantern glow from it), the history's alpha is its depth
+    const gl = renderer.getContext(), cb = renderer.state.buffers.color;
+    cb.setMask(true); gl.colorMask(true, true, true, false); cb.setLocked(true);                 // three would reset the mask
     const ac = renderer.autoClear; renderer.autoClear = false; this.q.render(renderer); renderer.autoClear = ac;   // keep the scene depth
+    cb.setLocked(false); gl.colorMask(true, true, true, true);    // = three's cached state (setMask(true) above)
     this.cur = 1 - this.cur;
     // un-jitter for everything after (bloom, final, the next frame's LOD maths) and remember this frame's VP
     cam.projectionMatrix.copy(this.saved); cam.projectionMatrixInverse.copy(this.saved).invert();
     this.prevVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.drawLate(renderer, readBuffer);
   }
   dispose() { for (const r of this.hist) r.dispose(); this.m.dispose(); this.mCopy.dispose(); this.q.dispose(); }
 }
+
+// Fast / HD chain (app.js buildComposer): jitter in front of the scene render, resolve right after it, before bloom.
+// The scene target needs a depth texture (app.js gives it one when Q.taa is on).
+export function addTAA(composer, camera, { renderer, scene, mobile, sharpen = 0.3 } = {}) {
+  const p = new TAAPass(camera, { mobile, renderer, scene, sharpen, react: hashNum('u_taareact', 1) });
+  p.mCopy.uniforms.uSharp.value = hashNum('u_taasharp', sharpen);
+  const i = composer.passes.findIndex((q) => q.constructor.name === 'RenderPass' || q.__name === 'Scene');
+  composer.insertPass(p.jitterPass, 0); composer.insertPass(p, i + 2);
+  return p;
+}
+function hashNum(k, d) { const m = new RegExp('(?:^|[#,&])' + k + '=([-\\d.]+)').exec(location.hash); return m ? +m[1] : d; }

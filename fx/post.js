@@ -71,7 +71,7 @@ export function buildFx(ctx) {
   if (F.ao) { ao = makeAO(F.ao, ctx); if (ao) { composer.addPass(ao); out.passes.ao = ao; } }
 
   if (F.aa === 'taa') {                     // jitter goes in front of the scene render; resolve after AO (which wants the jittered matrix)
-    const p = new TAAPass(camera, { mobile, renderer }); composer.insertPass(p.jitterPass, 0); composer.addPass(p); out.passes.taa = p;
+    const p = new TAAPass(camera, { mobile, renderer, scene }); composer.insertPass(p.jitterPass, 0); composer.addPass(p); out.passes.taa = p;
   }
 
   const useFinal = F.final || F.bloom === 'mip' || F.tilt || (ao && ao.isTextureOnly);

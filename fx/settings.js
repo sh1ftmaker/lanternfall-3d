@@ -7,7 +7,7 @@ export const PRESETS = {
   // what ships: non-HD keeps rendering straight to the canvas; HD gets the combined final pass,
   // mip bloom and half-res AO; ultra adds the tour-only tilt-shift and temporal AA.
   off: {},
-  hd: { final: true, bloom: 'mip', ao: 'lite', aa: 'auto' },
+  hd: { final: true, bloom: 'mip', ao: 'lite', aa: 'taa' },          // Cinematic; TAA on every preset ('#traa=0': SMAA / none)
   ultra: { final: true, bloom: 'mip', ao: 'lite', aa: 'taa', tilt: true, streaks: true },
   legacy: {},
 };
@@ -20,6 +20,7 @@ export function readFx(hash = location.hash) {
   const kv = tok.map((t) => { const i = t.indexOf('='); return i < 0 ? [t, true] : [t.slice(0, i), t.slice(i + 1)]; });
   if (!kv.some(([k]) => k === 'fx') && PRESETS[DEFAULT_PRESET]) { Object.assign(out, PRESETS[DEFAULT_PRESET]); out.preset = DEFAULT_PRESET; }
   for (const [k, v] of kv) if (k === 'fx' && PRESETS[v]) { Object.assign(out, PRESETS[v]); out.preset = v; }
+  if (out.aa === 'taa' && typeof location !== 'undefined' && /(?:^|[#,&])traa=0/.test(location.hash)) out.aa = 'auto';   // TAA off: debugging only
   for (const [k, v] of kv) {
     if (k === 'fx' || !(k in out)) continue;
     const b = typeof out[k] === 'boolean';

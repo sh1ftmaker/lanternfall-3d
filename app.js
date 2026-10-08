@@ -10,6 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { createDepth, depthTargetOptions } from './fx/depth.js';
 import { readFx } from './fx/settings.js';
 import { buildFx, fxActive } from './fx/post.js';
+import { addTAA } from './fx/taa.js';
 import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
@@ -75,16 +76,20 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
-const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+// Pixel ratio 1 on every preset and device, temporal AA doing the smoothing (the LanternTown lesson, measured on the
+// phone canvas: ratio 1.5 shaded 2.25x the pixels for a sharpness TAA gives back). '#ratio=2' compares; '#traa=0'
+// turns the temporal AA off (debugging only).
+const RATIO = (() => { const m = /(?:^|[#,&])ratio=([\d.]+)/.exec(location.hash); return m ? Math.min(Math.max(+m[1], 0.5), devicePixelRatio || 1) : 1; })();
+const Q = { dpr: RATIO, taa: !/(?:^|[#,&])traa=0/.test(location.hash), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
 Q.post = readFx();                     // post-processing tokens from the URL hash (fx/settings.js)
-let composer, bloomPass, composerSamples = -1, fxOut = null;
+let composer, bloomPass, composerSamples = -1, fxOut = null, taaPass = null;
 // z-fighting: per-frame near plane from the camera's clearance to the park (fx/depth.js); '#fixednear' turns it off
 const depth = createDepth(THREE, camera, { on: !/fixednear/.test(location.hash) });
 // Stillwater, the lake (fx/water.js): settings below; '#nosim' and '#noboat' turn its ripple simulation and punt off.
 const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
 // waterMirror (HD) / waterMirrorLow (non-HD): 2 = full planar mirror, 1 = captured lands + planar Spire layer + reflected lantern sprites, 0 = capture + sprites
 Object.assign(Q, { waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
-  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
+  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.75 : 0.4,   /* phone: 0.75 of ratio 1 = the mirror size it had at ratio 1.5 */ waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 FX.fxConfig(Q, { mobile, reduceMotion });     // atmosphere / particle systems (fx/index.js) -> Q.fx
 for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean' && !HASH.has(k) && !HASH.has('no-' + k)) Q.fx[k] = PREFS[k];
 // picture quality: 'fast' (no bloom, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
@@ -97,12 +102,13 @@ if (!hasFxToken && quality === 'cinematic') Q.post = readFx('#fx=hd');
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-  composerSamples = (Q.bloom && !mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce (not in Fast)
+  composerSamples = (Q.bloom && !Q.taa && !mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce (not in Fast), and never with TAA
   if (fxActive(Q.post)) {                                                          // fx/post.js: AO, mip bloom, final pass, AA ...
     fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => fxWater && fxWater.mesh, focus: () => camLook, tour: () => mode === 'tour' });
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
   const dopt = depthTargetOptions(THREE, renderer, size.x, size.y);
+  if (Q.taa && !dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType);   // TAA reprojects with depth
   if (Q.photo && Q.photo.depth) {             // game hook: photo (focus blur reads depth)
     if (!dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);
     dopt.resolveDepthBuffer = true;           // reversed depth turns the resolve off; with MSAA (HD on desktop) the blur then read an empty depth texture
@@ -110,6 +116,7 @@ function buildComposer() {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...dopt });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
+  taaPass = Q.taa ? addTAA(composer, camera, { renderer, scene, mobile }) : null;      // fx/taa.js: jitter + resolve, before bloom
   bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.10, 0.35, 1.8);
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
@@ -128,7 +135,7 @@ function buildComposer() {
 function disposeComposer() {      // EffectComposer.dispose() frees only its own two targets: the passes hold the rest
   if (!composer) return;
   for (const p of composer.passes) if (p.dispose) p.dispose();
-  composer.dispose(); composer = null; bloomPass = null; fxOut = null;
+  composer.dispose(); composer = null; bloomPass = null; fxOut = null; taaPass = null;
 }
 let baseFov = 52;
 // Where the interface covers the scene (caption and dock on a phone), the projection centre is moved up into the free
@@ -158,7 +165,7 @@ function resize() {
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   view.w = w; view.h = h; applyFov();
   if (composer) {
-    const want = (Q.bloom && !mobile && pr <= 1.3) ? 4 : 0;
+    const want = (Q.bloom && !Q.taa && !mobile && pr <= 1.3) ? 4 : 0;
     if (want !== composerSamples) { disposeComposer(); buildComposer(); }
     composer.setPixelRatio(pr); composer.setSize(w, h);
   }
@@ -174,6 +181,7 @@ const glCtx = watchContext(renderer, { onRestored() {
   prof.restore();
   if (fxWater) fxWater.contextRestored();
   if (fxOut && fxOut.passes.taa) fxOut.passes.taa.first = true;
+  if (taaPass) taaPass.first = true;
   if (ready) moonShadow();                                            // the moon's shadow map (fx/surface.js) is rendered once
 } });
 
@@ -211,7 +219,13 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
   uniforms: { uTime, uMoon: { value: MOON }, ...DN },
   vertexShader: /* glsl */`
     varying vec3 vDir;
-    void main(){ vDir = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 100.0, 1.0); p.z = p.w * 0.99995; gl_Position = p; }`,
+    void main(){ vDir = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 100.0, 1.0);
+      #ifdef USE_REVERSED_DEPTH_BUFFER
+      p.z = p.w * 1e-5;
+      #else
+      p.z = p.w * 0.99995;
+      #endif
+      gl_Position = p; }`,
   fragmentShader: /* glsl */`
     precision highp float;
     uniform float uTime; uniform vec3 uMoon; varying vec3 vDir;
@@ -267,9 +281,14 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
-  side: THREE.BackSide, depthTest: false, depthWrite: false,
+  side: THREE.BackSide, depthWrite: false,
 }));
-sky.frustumCulled = false; sky.renderOrder = -1000;
+sky.frustumCulled = false; sky.renderOrder = -1000;          // (fx/sky.js and fx/weather/shade.js find the sky by this)
+// ... but it is drawn after everything opaque, on the far plane with the depth test: its fbm clouds, moon and stars are
+// shaded only where no park is in front (drawn first it shaded every pixel: 20-50 % of the scene pass on the phone
+// canvas). The sort is three's own painterSortStable (r186) with the sky moved to the end.
+renderer.setOpaqueSort((a, b) => ((a.object === sky) - (b.object === sky)) || (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder)
+  || (a.material.id - b.material.id) || ((a.materialVariant || 0) - (b.materialVariant || 0)) || (a.z - b.z) || (a.id - b.id));
 scene.add(sky);
 
 /* ───────────────────────── data loading ───────────────────────── */
@@ -931,7 +950,7 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 function setHD(on) {
   Q.hd = on;
   if (fxWater) fxWater.setHD(on);
-  Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1, Q.dpr); resize();   // never raises what adapt() lowered
+  Q.bloom = on; Q.dpr = Math.min(RATIO, Q.dpr); resize();   // the same pixel ratio on every preset; never raises what adapt() lowered
 }
 function setQuality(q, user) {
   quality = q; if (user) { perf.locked = true; undoAdapt(); }     // a visitor's choice is not overridden by adapt(), and gets the whole preset: what adapt() took away comes back
@@ -1000,17 +1019,18 @@ function adapt(ms) {
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step); weather.degrade(perf.step);   // weather hook
-  // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
-  // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
+  // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO, tilt-shift; never the temporal
+  // AA, which carries pixel ratio 1), resolution, the lake's simulation, then Fast (no bloom); particles follow in
+  // FX.fxDegrade(), the settings sheet follows setQuality(); the guests are never thinned (fx/guests/render.js)
   if (perf.step === 1) {
     Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); Q.waterSimHz = 30;
-    if (Q.post.ao || Q.post.aa === 'taa' || Q.post.tilt) { Q.post = { ...Q.post, ao: '', tilt: false, aa: Q.post.aa === 'taa' ? 'auto' : Q.post.aa }; disposeComposer(); buildComposer(); }
+    if (Q.post.ao || Q.post.tilt) { Q.post = { ...Q.post, ao: '', tilt: false }; disposeComposer(); buildComposer(); }
     resize();
   }
-  else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
-  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; if (fxWater) { perf.simWas = perf.simWas || fxWater.sim.on; fxWater.sim.on = false; } resize(); }
+  else if (perf.step === 2) { Q.dpr = Q.dpr > 1 ? Math.max(1, Q.dpr - 0.5) : Math.min(Q.dpr, 0.9); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
+  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.min(Q.dpr, 0.8); Q.lod = 3.2; if (fxWater) { perf.simWas = perf.simWas || fxWater.sim.on; fxWater.sim.on = false; } resize(); }
   else if (perf.step === 4) { setQuality('fast'); }
-  else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.75; resize(); }
+  else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.7; resize(); }
 }
 let lodTick = 0;
 function updateLOD() {
@@ -1077,7 +1097,7 @@ function frame() {
   adapt(dt * 1000);
 }
 window.__park = { sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
-  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
+  post: { prof, get out() { return fxOut; }, get composer() { return composer; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 // ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
 // switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of
 // it is downloaded or built until Walk is first entered)
@@ -1111,6 +1131,7 @@ let mp = null; Object.defineProperty(window.__park, 'multiplayer', { get: () => 
 window.__park.game = game;                                  // game hook                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 window.__park.mpSim = (n = 8, opts) => import('./fx/multiplayer/sim.js').then((M) => M.mpSim(window.__park, n, opts));   // multiplayer hook: fake remote visitors for development (fx/multiplayer/sim.js)
+import('./fx/telemetry.js').then((M) => { window.__park.telemetry = M.startTelemetry(window.__park, { mobile, DATA, quality: () => quality, chosen: () => perf.locked, weather: () => weather.state, guests: () => !!(guests && guests.group.visible), build: () => manifest && manifest.build }); }).catch(() => {});   // frame-time reports (fx/telemetry.js; README)
 frame();
 let loadFailed = false;
 load().catch(async (err) => {
