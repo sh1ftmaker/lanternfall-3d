@@ -136,20 +136,20 @@ export function createWetLights({ THREE, getPark, glassMat }) {
     // metric: distance, shortened for strong lights, lengthened behind the eye (their streaks fall behind it too)
     let k = 0; const K = count + 1;
     const bi = Math.floor(cx / 20), bj = Math.floor(cz / 20);
-    for (let u = bi - 4; u <= bi + 4; u++) for (let v = bj - 4; v <= bj + 4; v++) {
+    for (let u = bi - 7; u <= bi + 7; u++) for (let v = bj - 7; v <= bj + 7; v++) {
       const bl = B.get(bkey(u, v)); if (!bl) continue;
       for (const i of bl) {
       const o = i * 8, dx = L[o] - cx, dy = L[o + 1] - cy, dz = L[o + 2] - cz, d = Math.sqrt(dx * dx + dz * dz + dy * dy * 0.25);
-      if (d > 75) continue;
+      if (d > 150) continue;
       const dh = Math.hypot(dx, dz), cosf = (dx * fx + dz * fz) / Math.max(1, dh);
       // a light straight overhead is mirrored under the eye, out of sight: closer than ~4 m counts as farther
       const x = Math.min(1, Math.max(0, (dh - 1) / 4)), m = Math.max(d * 0.8, (d + 6 * (1 - x * x * (3 - 2 * x))) * (1 + 0.8 * Math.max(0, -cosf)) / L[o + 7]);
-      if (m >= 60) continue;                                 // (60 = the reach: weight 0 there, see cut)
+      if (m >= 120) continue;                                // (120 = the reach: weight 0 there, see cut; doubled from 60 at the owner's request)
       if (k < K) { let j = k++; while (j > 0 && bm[j - 1] > m) { bm[j] = bm[j - 1]; best[j] = best[j - 1]; j--; } bm[j] = m; best[j] = i; }
       else if (m < bm[K - 1]) { let j = K - 1; while (j > 0 && bm[j - 1] > m) { bm[j] = bm[j - 1]; best[j] = best[j - 1]; j--; } bm[j] = m; best[j] = i; }
       }
     }
-    const cut = k === K ? bm[K - 1] : 60;                    // metric of the first light left out (or the reach)
+    const cut = k === K ? bm[K - 1] : 120;                   // metric of the first light left out (or the reach)
     for (let j = 0; j < WET_N; j++) {
       const P = U.uWL.value[j], C = U.uWC.value[j];
       if (j >= Math.min(k, count)) { C.set(0, 0, 0, 0); P.set(0, -1000, 0, 0); continue; }

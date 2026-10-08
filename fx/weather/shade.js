@@ -42,13 +42,13 @@ const SURF_DECL = /* glsl */`
       // feathered over 15 cm measured in metres, following the joints (which fill first), a darker damp ring round
       // each; more and larger while it rains and where the ground sags
       float pud = 0.0, halo = 0.0;
-      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6 && uWet.w > 0.0) {
+      if (flatk > 0.0 && vCls < 3.5 && fw < 1.2 && uWet.w > 0.0) {
         float water = max(wr, wb * 0.55) * uWet.w;
         vec2 q = vW.xz;
         float pn = vn(q * 0.75) * 0.6 + vn(q * 2.1 + 3.1) * 0.4 + 0.06 * (1.0 - hgt);
         float sag = vn(q * 0.13 + 7.7);
         float t = 0.86 - 0.2 * water - 0.12 * sag, fp = fwidth(pn), fe = max(0.15 * fp / max(fw, 1e-4), fp);
-        float fade = smoothstep(0.6, 0.15, fw) * flatk * step(0.02, water);
+        float fade = smoothstep(1.2, 0.3, fw) * flatk * step(0.02, water);
         pud = smoothstep(t, t + fe, pn) * fade;
         halo = smoothstep(t - fe * 1.2, t, pn) * (1.0 - pud) * fade;
       }
