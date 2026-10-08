@@ -153,3 +153,73 @@ export class MipBloomPass extends Pass {
   }
   dispose() { for (const r of [...this.down, ...this.up, ...(this.sDown || []), ...(this.sUp || [])]) r.dispose(); this.combine?.dispose(); this.q.dispose(); }
 }
+
+// Natural bloom (after Sonic Ether's natural bloom, as in the LanternTown skill's natbloom): no threshold, no Karis
+// average. The frame is blurred into a pyramid and the final pass blends the picture *towards* the weighted sum
+// (fx/final.js: mix(colour, blurred, ~0.14)), so a lamp spreads its own light and a dim wall spreads almost nothing;
+// the fog reads the same pyramid. Levels are tied to a 720-high picture and weighted by octave (blur width as a
+// share of the picture height), not by level index, so a phone and a desktop show the same halo. Cost: one pass that
+// reads the full frame and writes at 1/2 or 1/4 size (1/4 when that still leaves 450+ rows), then small levels only;
+// no full-resolution pass of its own (FinalPass does the blend while tone mapping).
+const NDOWN = /* glsl */`
+  precision highp float; uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
+  void main(){   // 4 bilinear taps = a 4x4 box (exact for 1/4, a tent for 1/2)
+    vec3 o = texture2D(tSrc, vUv + vec2(-1.0, -1.0) * uTexel).rgb + texture2D(tSrc, vUv + vec2(1.0, -1.0) * uTexel).rgb
+           + texture2D(tSrc, vUv + vec2(-1.0, 1.0) * uTexel).rgb + texture2D(tSrc, vUv + vec2(1.0, 1.0) * uTexel).rgb;
+    gl_FragColor = vec4(min(o * 0.25, vec3(6.0e4)), 1.0);
+  }`;
+const NUP = /* glsl */`
+  precision highp float; uniform sampler2D tSrc, tBase; uniform vec2 uTexel; uniform float uBaseW, uSrcW; varying vec2 vUv;
+  void main(){   // 4 bilinear taps half a texel out: a 3x3 tent of the coarser level, plus this level by its octave weight
+    vec3 t = texture2D(tSrc, vUv + vec2(-0.5, -0.5) * uTexel).rgb + texture2D(tSrc, vUv + vec2(0.5, -0.5) * uTexel).rgb
+           + texture2D(tSrc, vUv + vec2(-0.5, 0.5) * uTexel).rgb + texture2D(tSrc, vUv + vec2(0.5, 0.5) * uTexel).rgb;
+    gl_FragColor = vec4(texture2D(tBase, vUv).rgb * uBaseW + t * (0.25 * uSrcW), 1.0);
+  }`;
+
+export class NatBloomPass extends Pass {
+  // refH: the picture height levels are tied to; octW(o): weight of a level o octaves below refH
+  constructor({ refH = 720, minH = 6, fall = 0.7, type = THREE.HalfFloatType } = {}) {
+    super();
+    this.__name = 'NatBloom';
+    this.needsSwap = false;
+    Object.assign(this, { refH, minH, fall, type, strength: 1, norm: 1, levels: 0 });
+    this.down = []; this.up = []; this.w = [];
+    this.mDown = mat(NDOWN, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() } });
+    this.mUp = mat(NUP, { tSrc: { value: null }, tBase: { value: null }, uTexel: { value: new THREE.Vector2() }, uBaseW: { value: 1 }, uSrcW: { value: 1 } });
+    this.q = new FullScreenQuad(null);
+  }
+  // weight by octave: sharper levels (o < 1) fade in, wider ones fall off by `fall` per octave
+  octW(o) { return THREE.MathUtils.smoothstep(o, 0.0, 1.0) * Math.pow(this.fall, Math.max(0, o - 1)); }
+  get texture() { return (this.up.length ? this.up[0] : this.down[0]).texture; }
+  setSize(w, h) {
+    this.base = h / 4 >= 440 ? 4 : 2;                 // first level at 1/4 where that still leaves ~450 rows (dense phones)
+    let x = Math.max(1, Math.round(w / this.base)), y = Math.max(1, Math.round(h / this.base));
+    const sizes = [];
+    while (y >= this.minH && sizes.length < 9) { sizes.push([x, y]); x = Math.max(1, x >> 1); y = y >> 1; }
+    const rt = () => new THREE.WebGLRenderTarget(1, 1, { type: this.type, depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter });
+    while (this.down.length < sizes.length) this.down.push(rt());
+    while (this.down.length > sizes.length) this.down.pop().dispose();
+    while (this.up.length < sizes.length - 1) this.up.push(rt());
+    while (this.up.length > sizes.length - 1) this.up.pop().dispose();
+    sizes.forEach(([a, b], i) => { this.down[i].setSize(a, b); if (i < this.up.length) this.up[i].setSize(a, b); });
+    this.levels = sizes.length;
+    this.w = sizes.map(([, b]) => this.octW(Math.log2(this.refH / b)));
+    this.norm = 1 / Math.max(1e-4, this.w.reduce((s, v) => s + v, 0));
+  }
+  _draw(renderer, m, target) { this.q.material = m; renderer.setRenderTarget(target); this.q.render(renderer); }
+  render(renderer, writeBuffer, readBuffer) {
+    let src = readBuffer;
+    for (let i = 0; i < this.levels; i++) {      // taps at +-1 source texel: each bilinear tap averages a 2x2 block
+      this.mDown.uniforms.tSrc.value = src.texture; this.mDown.uniforms.uTexel.value.set(1 / src.width, 1 / src.height);
+      this._draw(renderer, this.mDown, this.down[i]); src = this.down[i];
+    }
+    // up[i] = down[i] * w[i] + tent(up[i+1]); the smallest level seeds the chain with its own weight
+    for (let i = this.levels - 2; i >= 0; i--) {
+      const s = i === this.levels - 2 ? this.down[i + 1] : this.up[i + 1];
+      const u = this.mUp.uniforms; u.tSrc.value = s.texture; u.tBase.value = this.down[i].texture; u.uTexel.value.set(1 / s.width, 1 / s.height);
+      u.uBaseW.value = this.w[i]; u.uSrcW.value = i === this.levels - 2 ? this.w[i + 1] : 1;
+      this._draw(renderer, this.mUp, this.up[i]);
+    }
+  }
+  dispose() { for (const r of [...this.down, ...this.up]) r.dispose(); this.q.dispose(); }
+}

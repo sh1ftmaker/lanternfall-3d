@@ -14,6 +14,7 @@ import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createSurface } from './fx/surface.js';
+import { installLook } from './fx/light/look.js';                                  // look hook: exposure, tone mapping, HDR emitters, fog
 import { createMaterials } from './fx/light/materials.js';   // tiling PBR materials on the surfaces (fx/light/materials.js)
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
@@ -67,8 +68,8 @@ trackDisposables(THREE);                           // context-loss hygiene (fx/c
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
-renderer.toneMapping = THREE.AgXToneMapping;
-renderer.toneMappingExposure = 2.1;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;     // look hook: fx/light/look.js sets both from its knobs (#u_tm, #u_exposure)
+renderer.toneMappingExposure = 1.6;
 renderer.setClearColor(0x05040f);
 stage.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
@@ -273,6 +274,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
 }));
 sky.frustumCulled = false; sky.renderOrder = -1000;
 scene.add(sky);
+const lookFx = installLook({ surface, scene, renderer, getWater: () => fxWater && fxWater.mesh });   // look hook (fx/light/look.js): after the sky, before the weather patches
 
 /* ───────────────────────── data loading ───────────────────────── */
 const bar = $('#bar'), veilMsg = $('#veil-msg');
