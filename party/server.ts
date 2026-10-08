@@ -4,6 +4,8 @@
 // Runs on Cloudflare Workers + a Durable Object through `partyserver` (wrangler.toml); the URL layout is PartyKit's,
 // /parties/main/park, so the `partysocket` client is unchanged. Wire format and deploying: party/README.md.
 import { routePartykitRequest, Server, type Connection, type WSMessage } from "partyserver";
+import { Frames, framesRoute } from "./frames";      // frame-time reports (POST /api/frames), party/frames.ts
+export { Frames };
 
 const ROOM = "park";
 const MAX = 64;                       // visitors in the room; the 65th is told the park is full and walks alone
@@ -109,11 +111,12 @@ export class Park extends Server {
   }
 }
 
-interface Env { Main: DurableObjectNamespace<Park> }
+interface Env { Main: DurableObjectNamespace<Park>; Frames: DurableObjectNamespace<Frames>; READ_KEY?: string }
 export default {
   // only /parties/main/park reaches the Durable Object (binding "Main" = party "main"); anything else is answered here
   async fetch(req: Request, env: Env): Promise<Response> {
     const path = new URL(req.url).pathname.replace(/\/+$/, "");
+    if (path === "/api/frames") return framesRoute(req, env);
     if (path !== `/parties/main/${ROOM}`) return new Response("{}", { status: 404, headers: CORS });
     return (await routePartykitRequest(req, env as unknown as Record<string, unknown>)) || new Response("{}", { status: 404, headers: CORS });
   },

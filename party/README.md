@@ -134,3 +134,22 @@ count, dispose()
 
 The test (`tools/multiplayer/test.mjs`) also reads an optional `list` getter, `[{ id, name, kind, anim, fade, pos }]`
 (`pos` a three.js position), to check where and what is drawn. `fx/multiplayer/avatars-stub.js` has it.
+
+## Frame-time reports (`/api/frames`)
+
+The same worker takes the page's frame-time reports (`fx/telemetry.js`; what is sent: the README, "Other visitors").
+`POST /api/frames` with a JSON body as `text/plain` (so `navigator.sendBeacon` needs no preflight); the report is
+rebuilt in `party/frames.ts` from known, typed, length-bounded fields and kept in a second SQLite-backed Durable Object,
+`Frames` (binding and migration `v2` in `wrangler.toml`): at most 20,000 reports and 30 days, at most 60 per visit id.
+Nothing about the connection is read. Reading needs a secret, set once:
+
+```bash
+npx wrangler secret put READ_KEY          # any long random string; without it the reports cannot be read back
+LF_READ_KEY=<that string> node tools/telemetry/read.mjs --days 7          # per device: frame times, presets, loads, errors
+node tools/telemetry/read.mjs --key <key> --visits                          # one line per visit
+```
+
+Locally: `npx wrangler dev --port 8970 --var READ_KEY:test`, then open the page with
+`#mp=127.0.0.1:8970,telemetry` (`#telemetry` sends reports even from a local address) and read them with
+`node tools/telemetry/read.mjs --host 127.0.0.1:8970 --key test`. Cost on the free plan: about 6-10 requests per visit
+(a report is one Worker request plus one Durable Object request), next to the visitors' sockets.

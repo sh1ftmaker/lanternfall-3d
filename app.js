@@ -546,7 +546,16 @@ async function load() {
   fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, DN, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
   FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
-  const exU8 = await fetchBin(ex.file.file);
+  // Downloads run one after another in the order they are needed (the link is shared, so the first file is not slowed
+  // by the rest), each starting as soon as the one before has arrived: decoding a part overlaps the next download.
+  // One part ahead only, so a fast link does not hold every decompressed part in memory at once. The monorail cars and
+  // the walk grid come right after 'transit', where the park opens.
+  const bins = new Map(); let chain = Promise.resolve();
+  const queue = (f) => { if (!f || bins.has(f)) return; const p = chain.then(() => fetchBin(f)); chain = p.catch(() => {}); bins.set(f, p); };
+  const bin = (f) => { queue(f); const p = bins.get(f); bins.set(f, null); return p; };      // taken: the buffer is not kept here
+  const ahead = (i) => { const part = manifest.parts[i]; if (!part) return; queue(part.file); if (part.id === 'transit') { if (ex.train_file) queue(ex.train_file.file); if (manifest.nav) queue(manifest.nav.file); } };
+  queue(ex.file.file); ahead(0);
+  const exU8 = await bin(ex.file.file);
   if (ex.lanterns) {
     const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
     lanterns = FX.fxLanterns(Q, { f32: lf, count: ex.lanterns.count, waterY: manifest.water_z, uTime });
@@ -555,11 +564,12 @@ async function load() {
   if (ex.forest) { buildForest(exU8, ex.forest); cull.splitForest(forest); }      // culling hook: one instance buffer per species, drawn by visible cell
   const names = { core: 'Filling Stillwater', transit: 'Raising the monorail' };
   const pill = $('#loadpill');
-  for (const part of manifest.parts) {
+  for (const [pi, part] of manifest.parts.entries()) {
+    ahead(pi + 1);
     const land = manifest.lands.find((l) => l.id === part.id);
     const label = (names[part.id] || ('Lighting ' + (land ? land.name : part.id))) + '…';
     veilMsg.textContent = label; pill.textContent = label;
-    const u8 = await fetchBin(part.file); let off = 0;
+    const u8 = await bin(part.file); let off = 0;
     for (const m of part.meshes) {
       const d = decodeMesh(u8, off, m); off = d.next;
       const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); 
@@ -570,8 +580,8 @@ async function load() {
     }
     await new Promise((r) => setTimeout(r, 0));
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
-      if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
-      if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
+      if (ex.train_file) buildTrains(await bin(ex.train_file.file), ex);
+      if (manifest.nav) decodeNav(await bin(manifest.nav.file), manifest.nav);
       // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
