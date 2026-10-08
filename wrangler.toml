@@ -11,3 +11,11 @@ class_name = "Park"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Park"]   # SQLite-backed: the kind the Workers Free plan allows (nothing is stored in it)
+
+[[durable_objects.bindings]]
+name = "Frames"          # frame-time reports, POST /api/frames (party/frames.ts): a rolling window in SQLite
+class_name = "Frames"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Frames"]

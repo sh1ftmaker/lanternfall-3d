@@ -10,6 +10,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { createDepth, depthTargetOptions } from './fx/depth.js';
 import { readFx } from './fx/settings.js';
 import { buildFx, fxActive } from './fx/post.js';
+import { addTAA } from './fx/taa.js';
+import { decodeMeshArrays, decodePart } from './fx/meshcodec.js';   // the mesh format; parts decode in fx/meshcodec-worker.js
 import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
@@ -26,6 +28,7 @@ import { createDayUniforms, DN_DECL, DN_LAMP, DN_SKY } from './fx/game/daynight/
 import { createCull } from './fx/cull/index.js';          // culling hook: per-camera frustum culling of chunks + forest cells (fx/cull/)
 
 const DATA = 'data/';
+const manifestReq = fetch(DATA + 'manifest.json', { cache: 'no-cache' });   // asked first thing: the renderer and UI set up while it travels (load())
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
 addEventListener('error', (e) => { if (!window.__park || !window.__park.loaded) { if (e.error) refreshCode('boot-error'); } });
 const $ = (s) => document.querySelector(s);
@@ -62,12 +65,14 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
-const CAN = probe();                              // WebGL2, DecompressionStream, reversed depth, HDR targets (fx/ui.js)
+// WebGL2, DecompressionStream, reversed depth, HDR targets (fx/ui.js); the probed context becomes the renderer's
+// (the attributes three asked for before: alpha, no stencil, no MSAA)
+const CAN = probe({ alpha: true, depth: true, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false });
 if (CAN.fail) { veilFail(CAN.fail.title, CAN.fail.text, false); await new Promise(() => {}); }
 trackDisposables(THREE);                           // context-loss hygiene (fx/context.js)
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
+const renderer = new THREE.WebGLRenderer({ canvas: CAN.canvas, context: CAN.gl, antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;     // look hook: fx/light/look.js sets both from its knobs (#u_tm, #u_exposure)
 renderer.toneMappingExposure = 1.6;
 renderer.setClearColor(0x05040f);
@@ -77,16 +82,20 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 1, 0.6, 5000);
 camera.position.copy(B(150, -470, 250)); camera.lookAt(0, 8, 0);
 
-const Q = { dpr: Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
+// Pixel ratio 1 on every preset and device, temporal AA doing the smoothing (the LanternTown lesson, measured on the
+// phone canvas: ratio 1.5 shaded 2.25x the pixels for a sharpness TAA gives back). '#ratio=2' compares; '#traa=0'
+// turns the temporal AA off (debugging only).
+const RATIO = (() => { const m = /(?:^|[#,&])ratio=([\d.]+)/.exec(location.hash); return m ? Math.min(Math.max(+m[1], 0.5), devicePixelRatio || 1) : 1; })();
+const Q = { dpr: RATIO, taa: !/(?:^|[#,&])traa=0/.test(location.hash), maxPixels: mobile ? 1.5e6 : 2.4e6, hd: true, mirrorEvery: mobile ? 2 : 1, mirrorLite: mobile, bloom: true, lod: mobile ? 1.8 : 1, forest: mobile ? 0.55 : 1 };
 Q.post = readFx();                     // post-processing tokens from the URL hash (fx/settings.js)
-let composer, bloomPass, composerSamples = -1, fxOut = null;
+let composer, bloomPass, composerSamples = -1, fxOut = null, taaPass = null;
 // z-fighting: per-frame near plane from the camera's clearance to the park (fx/depth.js); '#fixednear' turns it off
 const depth = createDepth(THREE, camera, { on: !/fixednear/.test(location.hash) });
 // Stillwater, the lake (fx/water.js): settings below; '#nosim' and '#noboat' turn its ripple simulation and punt off.
 const HASH = new Set(location.hash.slice(1).split(/[&,+]/));
 // waterMirror (HD) / waterMirrorLow (non-HD): 2 = full planar mirror, 1 = captured lands + planar Spire layer + reflected lantern sprites, 0 = capture + sprites
 Object.assign(Q, { waterMirror: mobile ? 1 : 2, waterMirrorLow: 1, mirrorScale: 0.5, mirrorBoost: 1.5, mirrorLod: 1.5,
-  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.5 : 0.4, waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
+  mirrorEveryLow: 1, mirrorScaleLow: mobile ? 0.75 : 0.4,   /* phone: 0.75 of ratio 1 = the mirror size it had at ratio 1.5 */ waterSim: HASH.has('nosim') ? 0 : mobile ? 1 : 2, waterSimHz: mobile ? 30 : 60, waterGloss: mobile ? 3 : 5, waterTap: true, waterBoat: !HASH.has('noboat'), waterScanBudget: 250000, waterEnv: true, waterPools: true, waterEnvSize: mobile ? 256 : 512 });
 FX.fxConfig(Q, { mobile, reduceMotion });     // atmosphere / particle systems (fx/index.js) -> Q.fx
 for (const k of ['fireworks', 'mist', 'beams']) if (typeof PREFS[k] === 'boolean' && !HASH.has(k) && !HASH.has('no-' + k)) Q.fx[k] = PREFS[k];
 // picture quality: 'fast' (no bloom, DPR 1), 'hd' (bloom chain), 'cinematic' (fx/post.js chain: AO, mip bloom, SMAA).
@@ -99,12 +108,13 @@ if (!hasFxToken && quality === 'cinematic') Q.post = readFx('#fx=hd');
 function effDpr(w, h) { return Math.max(0.6, Math.min(Q.dpr, Math.sqrt(Q.maxPixels / Math.max(1, w * h)))); }
 function buildComposer() {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-  composerSamples = (Q.bloom && !mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce (not in Fast)
+  composerSamples = (Q.bloom && !Q.taa && !mobile && renderer.getPixelRatio() <= 1.3) ? 4 : 0;       // MSAA only where pixels are scarce (not in Fast), and never with TAA
   if (fxActive(Q.post)) {                                                          // fx/post.js: AO, mip bloom, final pass, AA ...
     fxOut = buildFx({ renderer, scene, camera, Q, size, samples: composerSamples, mobile, lanterns: () => lanterns, water: () => fxWater && fxWater.mesh, focus: () => camLook, tour: () => mode === 'tour' });
     composer = fxOut.composer; bloomPass = fxOut.bloomPass; prof.wrapComposer(composer); return;
   }
   const dopt = depthTargetOptions(THREE, renderer, size.x, size.y);
+  if (Q.taa && !dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType);   // TAA reprojects with depth
   if (Q.photo && Q.photo.depth) {             // game hook: photo (focus blur reads depth)
     if (!dopt.depthTexture) dopt.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);
     dopt.resolveDepthBuffer = true;           // reversed depth turns the resolve off; with MSAA (HD on desktop) the blur then read an empty depth texture
@@ -112,6 +122,7 @@ function buildComposer() {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: composerSamples, ...dopt });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
+  taaPass = Q.taa ? addTAA(composer, camera, { renderer, scene, mobile }) : null;      // fx/taa.js: jitter + resolve, before bloom
   bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.10, 0.35, 1.8);
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
@@ -130,7 +141,7 @@ function buildComposer() {
 function disposeComposer() {      // EffectComposer.dispose() frees only its own two targets: the passes hold the rest
   if (!composer) return;
   for (const p of composer.passes) if (p.dispose) p.dispose();
-  composer.dispose(); composer = null; bloomPass = null; fxOut = null;
+  composer.dispose(); composer = null; bloomPass = null; fxOut = null; taaPass = null;
 }
 let baseFov = 52;
 // Where the interface covers the scene (caption and dock on a phone), the projection centre is moved up into the free
@@ -160,7 +171,7 @@ function resize() {
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   view.w = w; view.h = h; applyFov();
   if (composer) {
-    const want = (Q.bloom && !mobile && pr <= 1.3) ? 4 : 0;
+    const want = (Q.bloom && !Q.taa && !mobile && pr <= 1.3) ? 4 : 0;
     if (want !== composerSamples) { disposeComposer(); buildComposer(); }
     composer.setPixelRatio(pr); composer.setSize(w, h);
   }
@@ -176,6 +187,7 @@ const glCtx = watchContext(renderer, { onRestored() {
   prof.restore();
   if (fxWater) fxWater.contextRestored();
   if (fxOut && fxOut.passes.taa) fxOut.passes.taa.first = true;
+  if (taaPass) taaPass.first = true;
   if (ready) moonShadow();                                            // the moon's shadow map (fx/surface.js) is rendered once
 } });
 
@@ -214,7 +226,13 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
   uniforms: { uTime, uMoon: { value: MOON }, ...DN },
   vertexShader: /* glsl */`
     varying vec3 vDir;
-    void main(){ vDir = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 100.0, 1.0); p.z = p.w * 0.99995; gl_Position = p; }`,
+    void main(){ vDir = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 100.0, 1.0);
+      #ifdef USE_REVERSED_DEPTH_BUFFER
+      p.z = p.w * 1e-5;
+      #else
+      p.z = p.w * 0.99995;
+      #endif
+      gl_Position = p; }`,
   fragmentShader: /* glsl */`
     precision highp float;
     uniform float uTime; uniform vec3 uMoon; varying vec3 vDir;
@@ -270,9 +288,14 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.Shader
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
-  side: THREE.BackSide, depthTest: false, depthWrite: false,
+  side: THREE.BackSide, depthWrite: false,
 }));
-sky.frustumCulled = false; sky.renderOrder = -1000;
+sky.frustumCulled = false; sky.renderOrder = -1000;          // (fx/sky.js and fx/weather/shade.js find the sky by this)
+// ... but it is drawn after everything opaque, on the far plane with the depth test: its fbm clouds, moon and stars are
+// shaded only where no park is in front (drawn first it shaded every pixel: 20-50 % of the scene pass on the phone
+// canvas). The sort is three's own painterSortStable (r186) with the sky moved to the end.
+renderer.setOpaqueSort((a, b) => ((a.object === sky) - (b.object === sky)) || (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder)
+  || (a.material.id - b.material.id) || ((a.materialVariant || 0) - (b.materialVariant || 0)) || (a.z - b.z) || (a.id - b.id));
 scene.add(sky);
 const lookFx = installLook({ surface, scene, renderer, getWater: () => fxWater && fxWater.mesh });   // look hook (fx/light/look.js): after the sky, before the weather patches
 
@@ -294,7 +317,8 @@ async function refreshCode(why) {
   await Promise.all([...urls].map((u) => fetch(u, { cache: 'reload' }).catch(() => {})));
   location.reload(); return true;
 }
-async function fetchBin(file) {
+async function fetchBin(file) { return unpackBin(await fetchRaw(file)); }
+async function fetchRaw(file) {                       // the bytes as they arrive (the progress bar counts them)
   const res = await fetch(DATA + file + (B64 ? '.txt' : '') + dataTag);
   if (!res.ok) throw new Error(file + ': ' + res.status);
   let buf;
@@ -303,6 +327,9 @@ async function fetchBin(file) {
     for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); n += value.length; loadedBytes += value.length; bar.style.width = (100 * Math.min(1, loadedBytes / totalBytes)).toFixed(1) + '%'; }
     buf = new Uint8Array(n); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
   } else buf = new Uint8Array(await res.arrayBuffer());
+  return buf;
+}
+async function unpackBin(buf) {                       // base64 (text-only hosts) and gzip off
   if (B64) {
     const txt = new TextDecoder('latin1').decode(buf).trim();
     if (Uint8Array.fromBase64) buf = Uint8Array.fromBase64(txt);
@@ -314,52 +341,34 @@ async function fetchBin(file) {
   }
   return buf;
 }
-function decodeMesh(u8, off, m) {
-  const nv = m.nv, ni = m.ni;
-  const pos = new Uint16Array(nv * 3);
-  for (let c = 0; c < 3; c++) {
-    const lo = off + c * 2 * nv, hi = lo + nv; let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[lo + i] | (u8[hi + i] << 8); acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFFFF; pos[i * 3 + c] = acc; }
-  }
-  off += nv * 6;
-  const col = new Uint8Array(nv * 4);
-  for (let c = 0; c < 4; c++) {
-    const o = off + c * nv; let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; col[i * 4 + c] = acc; }
-  }
-  off += nv * 4;
-  let aux = null;
-  if (m.aux) {                                         // albedo rgb (sqrt-encoded) + surface class, for fx/surface.js
-    aux = new Uint8Array(nv * 4);
-    for (let c = 0; c < 4; c++) { const o = off + c * nv; let acc = 0; for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; aux[i * 4 + c] = acc; } }
-    off += nv * 4;
-  }
-  const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
-  let mx = -1; const p1 = off + ni, p2 = p1 + ni, p3 = p2 + ni;
-  for (let i = 0; i < ni; i++) {
-    const code = (u8[off + i] | (u8[p1 + i] << 8) | (u8[p2 + i] << 16) | (u8[p3 + i] << 24)) >>> 0;
-    const v = mx + 1 - code; if (v > mx) mx = v; idx[i] = v;
-  }
-  off += ni * 4;
+function geometryFrom(d, m) {                         // decoded arrays (fx/meshcodec.js) -> BufferGeometry
   const g = new THREE.BufferGeometry();
-  if (m.lay) {                     // optional coplanar-priority plane (zigzag-delta u8 per vertex): a higher rank wins ties
-    const lay = new Uint8Array(nv); let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
-    off += nv; g.setAttribute('aLay', new THREE.BufferAttribute(lay, 1)); bakedMat.uniforms.uZBias.value.y = 0;   // ranks replace the brightness guess
-  }
-  if (m.mat) {                     // optional tiling-material slot plane (zigzag-delta u8 per vertex; fx/light/materials.js)
-    const mt = new Uint8Array(nv); let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; mt[i] = acc; }
-    off += nv; g.setAttribute('aMat', new THREE.BufferAttribute(mt, 1));
-  }
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
-  g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
-  if (aux) g.setAttribute('aAux', new THREE.BufferAttribute(aux, 4, true));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  if (d.lay) { g.setAttribute('aLay', new THREE.BufferAttribute(d.lay, 1)); bakedMat.uniforms.uZBias.value.y = 0; }   // ranks replace the brightness guess
+  if (d.mat) g.setAttribute('aMat', new THREE.BufferAttribute(d.mat, 1));       // tiling-material slots (fx/light/materials.js)
+  g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3, false));
+  g.setAttribute('aCol', new THREE.BufferAttribute(d.col, 4, true));
+  if (d.aux) g.setAttribute('aAux', new THREE.BufferAttribute(d.aux, 4, true));
+  g.setIndex(new THREE.BufferAttribute(d.idx, 1));
   const o = m.origin, s = m.step, bb = m.bbox;
   g.boundingBox = new THREE.Box3(new THREE.Vector3((bb[0] - o[0]) / s, (bb[1] - o[1]) / s, (bb[2] - o[2]) / s), new THREE.Vector3((bb[3] - o[0]) / s, (bb[4] - o[1]) / s, (bb[5] - o[2]) / s));
   g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
-  return { geometry: g, next: off };
+  return g;
+}
+function decodeMesh(u8, off, m) { const d = decodeMeshArrays(u8, off, m); return { geometry: geometryFrom(d, m), next: d.next }; }
+// A part (as downloaded) gunzipped and decoded in a worker, so the walk does not hitch while lands stream in (a part
+// is 100-250 ms of main thread at 4x CPU throttle); in this thread when module workers are missing or fail.
+let codec = null, codecSeq = 0; const codecWait = new Map();
+function decodeOff(raw, meshes) {
+  const here = () => unpackBin(raw).then((u8) => decodePart(u8, meshes));
+  if (codec === null) {
+    try {
+      codec = new Worker(new URL('./fx/meshcodec-worker.js', import.meta.url), { type: 'module' });
+      codec.onmessage = (e) => { const w = codecWait.get(e.data.id); if (!w) return; codecWait.delete(e.data.id); if (e.data.error) w.here().then(w.res, w.rej); else w.res(e.data.meshes); };
+      codec.onerror = () => { codec = false; for (const w of codecWait.values()) w.here().then(w.res, w.rej); codecWait.clear(); };
+    } catch (e) { codec = false; }
+  }
+  if (!codec || B64) return here();
+  return new Promise((res, rej) => { const id = ++codecSeq; codecWait.set(id, { res, rej, here }); codec.postMessage({ id, buf: raw, meshes }); });   // raw is not transferred: the fallback may need it
 }
 function meshFrom(geometry, m) {
   const mesh = new THREE.Mesh(geometry, m.kind === 'glass' ? glassMat : bakedMat);
@@ -521,13 +530,22 @@ function moonShadow() {
   surface.buildShadow(renderer, scene, casters);
 }
 async function load() {
-  manifest = await (await fetch(DATA + 'manifest.json', { cache: 'no-cache' })).json();
+  manifest = await (await manifestReq).json();
   materials.setManifest(manifest);                                   // materials hook: slot names -> texture layers
   if ((manifest.format || 1) > DATA_FORMAT && await refreshCode('f' + manifest.format + (manifest.build || ''))) return new Promise(() => {});   // reloading
   if (manifest.build) dataTag = '?v=' + manifest.build;
   const ex = manifest.extras;
   totalBytes = manifest.parts.reduce((s, p) => s + p.bytes, 0) + ex.file.bytes + (ex.train_file ? ex.train_file.bytes : 0) + (manifest.nav ? manifest.nav.bytes : 0);
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
+  // Downloads run one after another in the order they are needed (the link is shared, so the first file is not slowed
+  // by the rest), each starting as soon as the one before has arrived: decoding a part overlaps the next download.
+  // One part ahead only, so a fast link does not hold every decompressed part in memory at once. The monorail cars and
+  // the walk grid come right after 'transit', where the park opens.
+  const bins = new Map(); let chain = Promise.resolve();
+  const queue = (f, meshes) => { if (!f || bins.has(f)) return; const raw = chain.then(() => fetchRaw(f)); chain = raw.then(() => {}, () => {});   /* (not raw itself: the chain would keep the last buffer alive) */ bins.set(f, raw.then((b) => (meshes ? decodeOff(b, meshes) : unpackBin(b)))); };   // the next download starts before this one is gunzipped; parts decode in the worker
+  const bin = (f) => { queue(f); const p = bins.get(f); bins.set(f, null); return p; };      // taken: the buffer is not kept here
+  const ahead = (i) => { const part = manifest.parts[i]; if (!part) return; queue(part.file, part.meshes); if (part.id === 'transit') { if (ex.train_file) queue(ex.train_file.file); if (manifest.nav) queue(manifest.nav.file); } };
+  queue(ex.file.file); ahead(0);
   bakedMat.uniforms.uRange.value = manifest.range;
   if (manifest.moon && !manifest.moon.baked) {         // moonlight is added per pixel (it is not in the baked colours)
     surface.uniforms.uMoon.value.fromArray(manifest.moon.dir).normalize(); surface.uniforms.uMoonCol.value.fromArray(manifest.moon.col);
@@ -537,7 +555,7 @@ async function load() {
   fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, DN, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
   FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
-  const exU8 = await fetchBin(ex.file.file);
+  const exU8 = await bin(ex.file.file);
   if (ex.lanterns) {
     const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
     lanterns = FX.fxLanterns(Q, { f32: lf, count: ex.lanterns.count, waterY: manifest.water_z, uTime });
@@ -546,14 +564,14 @@ async function load() {
   if (ex.forest) { buildForest(exU8, ex.forest); cull.splitForest(forest); }      // culling hook: one instance buffer per species, drawn by visible cell
   const names = { core: 'Filling Stillwater', transit: 'Raising the monorail' };
   const pill = $('#loadpill');
-  for (const part of manifest.parts) {
+  for (const [pi, part] of manifest.parts.entries()) {
+    ahead(pi + 1);
     const land = manifest.lands.find((l) => l.id === part.id);
     const label = (names[part.id] || ('Lighting ' + (land ? land.name : part.id))) + '…';
     veilMsg.textContent = label; pill.textContent = label;
-    const u8 = await fetchBin(part.file); let off = 0;
-    for (const m of part.meshes) {
-      const d = decodeMesh(u8, off, m); off = d.next;
-      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); 
+    const arrays = await bin(part.file);
+    for (const [k, m] of part.meshes.entries()) {
+      const mesh = meshFrom(geometryFrom(arrays[k], m), m); park.add(mesh); depth.addMesh(mesh);
       const cx = (m.bbox[0] + m.bbox[3]) / 2, cz = (m.bbox[2] + m.bbox[5]) / 2;
       if (Math.hypot(cx, cz) > 420) farMeshes.push(mesh);
       if (part.id !== 'core') landMeshes.push(mesh);
@@ -561,8 +579,8 @@ async function load() {
     }
     await new Promise((r) => setTimeout(r, 0));
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
-      if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
-      if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
+      if (ex.train_file) buildTrains(await bin(ex.train_file.file), ex);
+      if (manifest.nav) decodeNav(await bin(manifest.nav.file), manifest.nav);
       // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
@@ -941,7 +959,7 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 function setHD(on) {
   Q.hd = on;
   if (fxWater) fxWater.setHD(on);
-  Q.bloom = on; Q.dpr = on ? Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2) : Math.min(devicePixelRatio || 1, 1, Q.dpr); resize();   // never raises what adapt() lowered
+  Q.bloom = on; Q.dpr = Math.min(RATIO, Q.dpr); resize();   // the same pixel ratio on every preset; never raises what adapt() lowered
 }
 function setQuality(q, user) {
   quality = q; if (user) { perf.locked = true; undoAdapt(); }     // a visitor's choice is not overridden by adapt(), and gets the whole preset: what adapt() took away comes back
@@ -1010,17 +1028,18 @@ function adapt(ms) {
   perf.ema += (Math.min(ms, 100) - perf.ema) * 0.04; perf.cool -= 1;
   if (perf.locked || perf.cool > 0 || perf.ema < 26) return;
   perf.cool = 150; perf.ema = 20; perf.step++; FX.fxDegrade(Q, perf.step); if (guests) guests.degrade(perf.step); weather.degrade(perf.step);   // weather hook
-  // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO / temporal AA), resolution, the
-  // lake's simulation, then Fast (no bloom, DPR 1); particles follow in FX.fxDegrade(), the settings sheet follows setQuality()
+  // the ladder: pixels and the mirror first, then the costly post passes (Cinematic's AO, tilt-shift; never the temporal
+  // AA, which carries pixel ratio 1), resolution, the lake's simulation, then Fast (no bloom); particles follow in
+  // FX.fxDegrade(), the settings sheet follows setQuality(); the guests are never thinned (fx/guests/render.js)
   if (perf.step === 1) {
     Q.maxPixels *= 0.6; Q.mirrorEvery = Math.max(Q.mirrorEvery, 2); Q.mirrorLite = true; Q.waterMirror = Math.min(Q.waterMirror, 1); Q.lod = Math.max(Q.lod, 1.8); Q.waterSimHz = 30;
-    if (Q.post.ao || Q.post.aa === 'taa' || Q.post.tilt) { Q.post = { ...Q.post, ao: '', tilt: false, aa: Q.post.aa === 'taa' ? 'auto' : Q.post.aa }; disposeComposer(); buildComposer(); }
+    if (Q.post.ao || Q.post.tilt) { Q.post = { ...Q.post, ao: '', tilt: false }; disposeComposer(); buildComposer(); }
     resize();
   }
-  else if (perf.step === 2) { Q.dpr = Math.max(1, Q.dpr - 0.5); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
-  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.max(0.85, Q.dpr - 0.25); Q.lod = 3.2; if (fxWater) { perf.simWas = perf.simWas || fxWater.sim.on; fxWater.sim.on = false; } resize(); }
+  else if (perf.step === 2) { Q.dpr = Q.dpr > 1 ? Math.max(1, Q.dpr - 0.5) : Math.min(Q.dpr, 0.9); setForest(Math.min(Q.forest, 0.5)); Q.lod = 2.4; resize(); }
+  else if (perf.step === 3) { Q.mirrorEvery = 3; Q.dpr = Math.min(Q.dpr, 0.8); Q.lod = 3.2; if (fxWater) { perf.simWas = perf.simWas || fxWater.sim.on; fxWater.sim.on = false; } resize(); }
   else if (perf.step === 4) { setQuality('fast'); }
-  else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.75; resize(); }
+  else if (perf.step === 5) { setForest(0.25); Q.dpr = 0.7; resize(); }
 }
 let lodTick = 0;
 function updateLOD() {
@@ -1087,7 +1106,7 @@ function frame() {
   adapt(dt * 1000);
 }
 window.__park = { materials, sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
-  post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
+  post: { prof, get out() { return fxOut; }, get composer() { return composer; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 // ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
 // switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of
 // it is downloaded or built until Walk is first entered)
@@ -1121,6 +1140,7 @@ let mp = null; Object.defineProperty(window.__park, 'multiplayer', { get: () => 
 window.__park.game = game;                                  // game hook                                  // culling hook: .set(on), .stats
 Object.assign(window.__park, { loadPlatformer: platformer, togglePlatformer, setPlatformer });
 window.__park.mpSim = (n = 8, opts) => import('./fx/multiplayer/sim.js').then((M) => M.mpSim(window.__park, n, opts));   // multiplayer hook: fake remote visitors for development (fx/multiplayer/sim.js)
+import('./fx/telemetry.js').then((M) => { window.__park.telemetry = M.startTelemetry(window.__park, { mobile, DATA, quality: () => quality, chosen: () => perf.locked, weather: () => weather.state, guests: () => !!(guests && guests.group.visible), build: () => manifest && manifest.build }); }).catch(() => {});   // frame-time reports (fx/telemetry.js; README)
 frame();
 let loadFailed = false;
 load().catch(async (err) => {

@@ -9,10 +9,10 @@ export const PRESETS = {
   // 'legacy' (Fast and HD) and 'hd' (Cinematic) share the natural bloom + fog smear + final pass (fx/light/look.js);
   // 'off' is the original chain (RenderPass, UnrealBloom, OutputPass, grade) and 'mip' the previous HD chain, for comparison.
   off: {},
-  hd: { final: true, bloom: 'nat', fogsmear: true, ao: 'lite', aa: 'auto' },
+  hd: { final: true, bloom: 'nat', fogsmear: true, ao: 'lite', aa: 'taa' },          // Cinematic; TAA on every preset ('#traa=0': SMAA / none)
   mip: { final: true, bloom: 'mip', ao: 'lite', aa: 'auto' },
   ultra: { final: true, bloom: 'nat', fogsmear: true, ao: 'lite', aa: 'taa', tilt: true },
-  legacy: { final: true, bloom: 'nat', fogsmear: true },
+  legacy: { final: true, bloom: 'nat', fogsmear: true, aa: 'taa' },   // Fast and HD; TAA on every preset
 };
 // What HD uses when the URL names nothing. 'off' keeps the original chain (RenderPass, UnrealBloom, OutputPass,
 // grade); set to 'hd' to ship the new chain by default (#fx=legacy then brings the old one back for comparison).
@@ -23,6 +23,7 @@ export function readFx(hash = location.hash) {
   const kv = tok.map((t) => { const i = t.indexOf('='); return i < 0 ? [t, true] : [t.slice(0, i), t.slice(i + 1)]; });
   if (!kv.some(([k]) => k === 'fx') && PRESETS[DEFAULT_PRESET]) { Object.assign(out, PRESETS[DEFAULT_PRESET]); out.preset = DEFAULT_PRESET; }
   for (const [k, v] of kv) if (k === 'fx' && PRESETS[v]) { Object.assign(out, PRESETS[v]); out.preset = v; }
+  if (out.aa === 'taa' && typeof location !== 'undefined' && /(?:^|[#,&])traa=0/.test(location.hash)) out.aa = 'auto';   // TAA off: debugging only
   for (const [k, v] of kv) {
     if (k === 'fx' || !(k in out)) continue;
     const b = typeof out[k] === 'boolean';

@@ -1,15 +1,18 @@
 // Interface helpers that are not about the 3D scene: failure messages in the loading veil.
 const $ = (s) => document.querySelector(s);
 
-// What this browser can do, checked on a throw-away context before the renderer is made, so a visitor gets a message
-// instead of a blank page and the renderer is not asked for features that only produce console warnings.
+// What this browser can do, checked before the renderer is made, so a visitor gets a message instead of a blank page
+// and the renderer is not asked for features that only produce console warnings.
 //   fail: {title, text} when the viewer cannot run; clip: EXT_clip_control (reversed depth); hdr: float colour targets
-export function probe() {
-  let gl = null;
-  try { gl = document.createElement('canvas').getContext('webgl2'); } catch (e) { gl = null; }
+// With context attributes (attrs) the context is kept and handed to the renderer (out.canvas, out.gl): making a WebGL
+// context is slow (~0.2 s on this laptop, ~0.8 s at 4x CPU throttle), and the throw-away one cost a second one.
+export function probe(attrs) {
+  let gl = null; const canvas = document.createElement('canvas');
+  try { gl = canvas.getContext('webgl2', attrs); } catch (e) { gl = null; }
   if (!gl) return { fail: { title: 'This browser cannot show the park.', text: 'Lanternfall needs WebGL 2. It works in current Chrome, Edge, Firefox and Safari (15 or newer); if you use one of those, check that hardware acceleration is turned on.' } };
   const out = { fail: null, clip: !!gl.getExtension('EXT_clip_control'), hdr: !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float')) };
-  const lc = gl.getExtension('WEBGL_lose_context'); if (lc) lc.loseContext();            // free the probe context
+  if (attrs) { canvas.style.display = 'block'; out.canvas = canvas; out.gl = gl; }      // (as three's own canvas)
+  else { const lc = gl.getExtension('WEBGL_lose_context'); if (lc) lc.loseContext(); }      // free the probe context
   if (typeof DecompressionStream === 'undefined') out.fail = { title: 'This browser is too old for the park.', text: 'Lanternfall unpacks its 3D data with DecompressionStream, available in browsers from 2023 on. Updating the browser will fix it.' };
   return out;
 }

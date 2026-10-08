@@ -104,6 +104,17 @@ right now and forgets them when they leave. If the server cannot be reached, the
 The server is a small relay in `party/` that runs on Cloudflare Workers with `partyserver` (deploying, running it locally and the
 wire format: [`party/README.md`](party/README.md)); the client is `fx/multiplayer/`.
 
+**Frame-time reports.** To learn how the park runs on real phones, the page sends a short report to the same server
+(`POST /api/frames`): when it opens, after 15 seconds, after a minute, every four minutes and when you leave. A report
+holds a random id made for this visit (kept only in the page's memory, so the next visit has another), the kind of
+device (phone or computer), operating system and browser with their major versions, the graphics chip the browser
+names, the number of processor cores and the memory class, screen and canvas size, the picture setting and whether you
+chose it, how far the page lowered quality by itself, how smooth the frames were (median and slowest frame times),
+how long the park took to load, and up to five script error messages. Nothing else: no accounts, no cookies, nothing
+saved on your device, no position in the park, nothing you type; the server does not keep addresses or headers, and it
+keeps reports for 30 days at most (`party/frames.ts`). `#notelemetry` or `#solo` turns the reports off for a visit;
+they are never sent from local addresses or automated browsers. Reading them: `tools/telemetry/read.mjs`.
+
 ## Weather
 
 The weather changes by itself every two minutes: it starts clear, then rain, storm, mist, clear again, snow, and
@@ -129,8 +140,10 @@ Add these after `#` in the address, separated by commas, then reload.
 
 | Token | Effect |
 |---|---|
-| `fx=hd` | The Cinematic post chain: ambient occlusion, mip bloom, SMAA (same as the setting) |
-| `fx=ultra` | The above plus temporal anti-aliasing, tilt-shift on aerial tour shots and light streaks |
+| `fx=hd` | The Cinematic post chain: ambient occlusion, mip bloom, temporal anti-aliasing (same as the setting) |
+| `fx=ultra` | The above plus tilt-shift on aerial tour shots and light streaks |
+| `ratio=2` | Draw at pixel ratio 2 instead of 1 (every setting draws at 1, smoothed by temporal anti-aliasing), for comparison |
+| `traa=0` | No temporal anti-aliasing (for debugging; it is on in every setting) |
 | `fx=legacy` | The HD chain (bloom), whatever the saved setting |
 | `nodetail` | Turn off the procedural paving, plank, masonry and roof detail |
 | `noshadow` | Turn off moon shadows |
@@ -141,7 +154,8 @@ Add these after `#` in the address, separated by commas, then reload.
 | `guests=N` | Set the number of guests |
 | `no-motes`, `no-fireworks`, `no-beams`, `no-mist`, `no-carousel` | Turn individual effects off |
 | `nosim`, `noboat` | No ripple simulation on the lake, no punt |
-| `solo` | No other visitors: nothing connects |
+| `solo` | No other visitors: nothing connects (no frame-time reports either) |
+| `notelemetry` | No frame-time reports for this visit |
 | `mp=host[:port]` | Use another visitors server for this visit (for example a local `wrangler dev`) |
 
 ## How it is built
