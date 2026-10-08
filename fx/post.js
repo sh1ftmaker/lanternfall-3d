@@ -6,8 +6,8 @@
 //   [AO]               fx/ao.js       half-res AO texture only (applied in FinalPass, linear, before tone mapping)
 //   [TAA resolve]      fx/taa.js      HDR reprojection + clamp, written back into the scene buffer
 //   [DOF / tilt-shift] fx/tiltshift.js  half-res blur + CoC, composited in FinalPass
-//   [bloom]            fx/bloom.js    mip chain (texture only) or the stock UnrealBloomPass
-//   FinalPass          fx/final.js    AO + DOF + bloom + AgX + sRGB + grade + vignette (+ grain) in one pass
+//   [bloom]            fx/bloom.js    natural pyramid ('nat', no threshold; also feeds the fog smear), mip chain or UnrealBloomPass
+//   FinalPass          fx/final.js    AO + DOF + bloom/fog smear + exposure + tone mapping + sRGB + vignette (+ grain) in one pass
 //   [FXAA / SMAA]      fx/aa.js       LDR, last
 //   [style]            fx/styles.js   pixel / halftone toggles
 import * as THREE from 'three';
@@ -17,7 +17,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FinalPass } from './final.js';
-import { MipBloomPass } from './bloom.js';
+import { MipBloomPass, NatBloomPass } from './bloom.js';
 import { makeAO } from './ao.js';
 import { makeAA } from './aa.js';
 import { TiltShiftPass } from './tiltshift.js';
@@ -38,7 +38,7 @@ export const GRADE = {
 // Does this browser render to R11F_G11F_B10F? (needs EXT_color_buffer_float; most phones lack it)
 function canRG11(renderer) { return !!renderer.getContext().getExtension('EXT_color_buffer_float'); }
 
-export function fxActive(F) { return !!(F.final || F.ao || F.aa || F.tilt || F.style || F.bloom !== 'unreal' || F.fmt || F.prof || F.streaks || F.rays); }
+export function fxActive(F) { return !!(F.final || F.bloom === 'nat' || F.ao || F.aa || F.tilt || F.style || F.bloom !== 'unreal' || F.fmt || F.prof || F.streaks || F.rays); }
 
 export function buildFx(ctx) {
   const { renderer, scene, camera, Q, size, mobile } = ctx;
@@ -48,7 +48,8 @@ export function buildFx(ctx) {
   // edges), nothing on dense screens and phones (as the original chain)
   if (F.aa === 'auto') F.aa = (!mobile && dpr <= 1.3) ? 'smaa' : 'none';
   const msaa = F.aa === 'msaa' ? 4 : (F.aa ? 0 : ctx.samples);                 // a post AA replaces MSAA
-  const needDepth = !!(F.ao || F.tilt || F.aa === 'taa' || (Q.photo && Q.photo.depth));   // game hook: photo
+  const smear = F.bloom === 'nat' && F.fogsmear;
+  const needDepth = !!(smear || F.ao || F.tilt || F.aa === 'taa' || (Q.photo && Q.photo.depth));   // game hook: photo
   const rg11 = F.fmt === 'rg11' && canRG11(renderer) && !F.ao;                  // no alpha in RG11: AO uses it for lantern glow
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: rg11 ? THREE.UnsignedInt101111Type : THREE.HalfFloatType, format: rg11 ? THREE.RGBFormat : THREE.RGBAFormat,
@@ -74,12 +75,14 @@ export function buildFx(ctx) {
     const p = new TAAPass(camera, { mobile, renderer, scene }); composer.insertPass(p.jitterPass, 0); composer.addPass(p); out.passes.taa = p;
   }
 
-  const useFinal = F.final || F.bloom === 'mip' || F.tilt || (ao && ao.isTextureOnly);
+  const useFinal = F.final || F.bloom === 'mip' || F.bloom === 'nat' || F.tilt || (ao && ao.isTextureOnly);
   let dof = null;
   if (F.tilt && useFinal) { dof = new TiltShiftPass(camera, ctx); composer.addPass(dof); out.passes.dof = dof; }
 
   let bloom = null;
-  if (F.bloom === 'mip') {
+  if (F.bloom === 'nat') {
+    bloom = new NatBloomPass(); composer.addPass(bloom); out.passes.bloom = bloom; out.bloomPass = bloom;   // app.js turns it off in Fast
+  } else if (F.bloom === 'mip') {
     const hi = dpr > 1.3 || mobile;                                              // dense or weak screens: start at quarter res
     bloom = new MipBloomPass({ base: hi ? 4 : 2, levels: hi ? 5 : 6, threshold: 1.8, knee: 0.7, strength: 0.22, radius: 1.0, streaks: F.streaks });
     if (F.rays) bloom.enableRays(new THREE.Vector3(0, 47, 0), camera);         // the Spire beacon
@@ -90,9 +93,10 @@ export function buildFx(ctx) {
   }
 
   if (useFinal) {
-    const fin = new FinalPass({ camera, renderer, ao: !!(ao && ao.isTextureOnly), bloom: F.bloom === 'mip', dof: !!dof, grain: F.grain, aoDebug: F.aodebug, sharpen: F.aa === 'taa' });
+    const fin = new FinalPass({ camera, renderer, ao: !!(ao && ao.isTextureOnly), bloom: F.bloom === 'mip' || F.bloom === 'nat', natural: F.bloom === 'nat', fogSmear: smear, dof: !!dof, grain: F.grain, aoDebug: F.aodebug, sharpen: F.aa === 'taa' });
     if (ao && ao.isTextureOnly) fin.ao = ao;
     if (F.bloom === 'mip') { fin.bloom = bloom; fin.uniforms.uBloom.value = bloom.strength; }
+    if (F.bloom === 'nat') fin.bloom = bloom;
     fin.dof = dof;
     composer.addPass(fin); out.passes.final = fin;
   } else {

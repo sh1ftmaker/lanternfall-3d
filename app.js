@@ -16,6 +16,8 @@ import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createSurface } from './fx/surface.js';
+import { installLook } from './fx/light/look.js';                                  // look hook: exposure, tone mapping, HDR emitters, fog
+import { createMaterials } from './fx/light/materials.js';   // tiling PBR materials on the surfaces (fx/light/materials.js)
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
@@ -71,8 +73,8 @@ trackDisposables(THREE);                           // context-loss hygiene (fx/c
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
 const renderer = new THREE.WebGLRenderer({ canvas: CAN.canvas, context: CAN.gl, antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
-renderer.toneMapping = THREE.AgXToneMapping;
-renderer.toneMappingExposure = 2.1;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;     // look hook: fx/light/look.js sets both from its knobs (#u_tm, #u_exposure)
+renderer.toneMappingExposure = 1.6;
 renderer.setClearColor(0x05040f);
 stage.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
@@ -196,6 +198,7 @@ const uTime = { value: 0 };
 const DN = createDayUniforms();                                  // game hook: daynight
 const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile, DN });
 const bakedMat = surface.material;
+const materials = createMaterials({ surface, renderer, mobile, DATA });    // materials hook: patches the surface shader, loads the texture array
 if (/nodetail/.test(location.hash)) surface.uniforms.uDetail.value = 0;
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, ...DN },
@@ -294,6 +297,7 @@ sky.frustumCulled = false; sky.renderOrder = -1000;          // (fx/sky.js and f
 renderer.setOpaqueSort((a, b) => ((a.object === sky) - (b.object === sky)) || (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder)
   || (a.material.id - b.material.id) || ((a.materialVariant || 0) - (b.materialVariant || 0)) || (a.z - b.z) || (a.id - b.id));
 scene.add(sky);
+const lookFx = installLook({ surface, scene, renderer, getWater: () => fxWater && fxWater.mesh });   // look hook (fx/light/look.js): after the sky, before the weather patches
 
 /* ───────────────────────── data loading ───────────────────────── */
 const bar = $('#bar'), veilMsg = $('#veil-msg');
@@ -340,6 +344,7 @@ async function unpackBin(buf) {                       // base64 (text-only hosts
 function geometryFrom(d, m) {                         // decoded arrays (fx/meshcodec.js) -> BufferGeometry
   const g = new THREE.BufferGeometry();
   if (d.lay) { g.setAttribute('aLay', new THREE.BufferAttribute(d.lay, 1)); bakedMat.uniforms.uZBias.value.y = 0; }   // ranks replace the brightness guess
+  if (d.mat) g.setAttribute('aMat', new THREE.BufferAttribute(d.mat, 1));       // tiling-material slots (fx/light/materials.js)
   g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3, false));
   g.setAttribute('aCol', new THREE.BufferAttribute(d.col, 4, true));
   if (d.aux) g.setAttribute('aAux', new THREE.BufferAttribute(d.aux, 4, true));
@@ -526,6 +531,7 @@ function moonShadow() {
 }
 async function load() {
   manifest = await (await manifestReq).json();
+  materials.setManifest(manifest);                                   // materials hook: slot names -> texture layers
   if ((manifest.format || 1) > DATA_FORMAT && await refreshCode('f' + manifest.format + (manifest.build || ''))) return new Promise(() => {});   // reloading
   if (manifest.build) dataTag = '?v=' + manifest.build;
   const ex = manifest.extras;
@@ -1099,7 +1105,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { materials, sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, get composer() { return composer; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 // ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
 // switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of

@@ -4,7 +4,7 @@
 // BufferGeometry from what this returns.
 //   positions: Uint16 xyz (grid units; mesh.position = origin, scale = step), zigzag-delta per plane
 //   aCol: RGBM u8 x4 (baked HDR light), aAux: albedo rgb + surface class u8 x4 (optional), indices: u32 "high-water
-//   mark" code, aLay: optional per-vertex coplanar rank u8
+//   mark" code, aLay: optional per-vertex coplanar rank u8, aMat: optional tiling-material slot u8
 export function decodeMeshArrays(u8, off, m) {
   const nv = m.nv, ni = m.ni;
   const pos = new Uint16Array(nv * 3);
@@ -38,7 +38,13 @@ export function decodeMeshArrays(u8, off, m) {
     for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
     off += nv;
   }
-  return { pos, col, aux, idx, lay, next: off };
+  let mat = null;
+  if (m.mat) {                     // optional tiling-material slot plane (zigzag-delta u8 per vertex; fx/light/materials.js)
+    mat = new Uint8Array(nv); let acc = 0;
+    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; mat[i] = acc; }
+    off += nv;
+  }
+  return { pos, col, aux, idx, lay, mat, next: off };
 }
 
 // every mesh of a part, in order

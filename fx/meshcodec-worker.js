@@ -5,7 +5,7 @@ self.onmessage = async (e) => {
   const { id, buf, meshes } = e.data;
   try {
     const u8 = await gunzip(buf), out = decodePart(u8, meshes), tr = [];
-    for (const d of out) for (const k of ['pos', 'col', 'aux', 'idx', 'lay']) if (d[k]) tr.push(d[k].buffer);
+    for (const d of out) for (const k of ['pos', 'col', 'aux', 'idx', 'lay', 'mat']) if (d[k]) tr.push(d[k].buffer);
     self.postMessage({ id, meshes: out }, tr);
   } catch (err) { self.postMessage({ id, error: String(err && err.message || err) }); }
 };
