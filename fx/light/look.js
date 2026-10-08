@@ -18,22 +18,24 @@ import { loadGlare } from './glare.js';
 
 // knob: [default, softer, stronger] (the report hands over all three)
 export const KNOBS = {
+  // emitters, bloom and glare calmed after the owner found the lamps themselves too bright and the bloom too strong (the
+  // light they throw is baked and unchanged); the strongest column is the first shipped look
   exposure: [2.5, 2.1, 2.9],    // multiplies the scene before tone mapping (grey card 0.18 -> pixel 127 at 1.0 with ACES, 128 AgX;
                                 // this park's bake is dim, paving 0.01-0.03; the owner asked for the old look's brightness, and 2.5
                                 // matches the old captures' mean brightness view by view to within a few %; the old look sat at 169)
   tm: [2, 1, 0],                // 0 = the old look (AgX x2.1 + S-curve grade), 1 = AgX, 2 = ACES
   grade: [0, 0, 0.42],          // the old S-curve grade strength (saturation follows it)
-  bloom: [0.14, 0.10, 0.20],    // natural bloom: blend towards the blurred pyramid
+  bloom: [0.10, 0.07, 0.14],    // natural bloom: blend towards the blurred pyramid
   fogsmear: [0.7, 0.5, 1.0],    // how much fogged pixels take the blurred picture instead of the sharp one
-  glow: [1.2, 1.0, 1.5],        // emitter gain at and below the pivot
-  hot: [2.5, 2.0, 3.0],         // how fast the gain rises with baked brightness above the pivot
+  glow: [0.85, 0.65, 1.2],        // emitter gain at and below the pivot
+  hot: [2.0, 1.5, 2.5],         // how fast the gain rises with baked brightness above the pivot
   pivot: [3.0, 3.5, 2.5],       // baked value where the gain starts rising (this park bakes lit windows ~3, mantles and festoons ~5.6)
-  top: [48, 24, 64],            // emitter ceiling (scene units)
-  neon: [2.5, 1.8, 3.2],        // gain and ceiling factor for colours no flame has
+  top: [16, 8, 48],            // emitter ceiling (scene units)
+  neon: [1.8, 1.4, 2.5],        // gain and ceiling factor for colours no flame has
   fog: [1.0, 0.6, 1.5],         // fog density multiplier (on top of the weather's)
   fogh: [18, 12, 30],           // fog scale height (m)
   fogfloor: [0.3, 0.5, 0.15],   // share of the haze that does not thin with height (views from high up keep some air; 0 = all thins)
-  glare: [1.5, 1.0, 2.5],       // glare sprites on real fittings (fx/light/glare.js)
+  glare: [1.0, 0.6, 1.5],       // glare sprites on real fittings (fx/light/glare.js)
 };
 function readHash() {
   const out = {}; const h = location.hash.replace(/^#/, '');
