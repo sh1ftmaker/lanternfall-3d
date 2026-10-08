@@ -40,6 +40,43 @@ def mat_class(m, part):
         if re.search(rx, n): return c
     return 0
 
+# Tiling PBR material per triangle for the viewer's textured surfaces (fx/light/materials.js, layers baked by the
+# viewer's tools/materials/build.py): (layer name, regex on the material name without the part prefix, parts or None);
+# first match wins; 0 = none (procedural detail only). Written as an optional per-vertex plane ("mat" in the mesh meta),
+# the names in manifest["matslots"]; the viewer maps names to layers, so the two tables can change independently.
+MATSLOTS = [
+    ("", r"glass|iron|brass|gold|chrome|steel|copper|bronze|metal|wire|rail|pipe|truss|silver|grate|gilt|snow|ice|water|lakebed|neon|panel|canopy|skin|facade_[abc]|asphalt|road|concrete|pylon|beam|sign|banner|cloth|fabric|canvas|paint|lacquer", None),
+    ("roof_slate", r"slate|roof_grey|roof_blue", None),
+    ("roof_slate", r"^roof$", ("meridian",)),
+    ("wood_shingle", r"^shingle$|shingle_wood|shake", None),
+    ("roof_tile_clay", r"roof|shingle|tile(?!_edge)|thatch", None),
+    ("wood_planks", r"boardwalk|wharf|deck|plank|siding|floorboard|tar_board", None),
+    ("hedge", r"hedge|boxwood|topiary|shrub|bush|leaf|leaves|conifer|pine|foliage|ivy", None),
+    ("cobble_granite", r"cobble", None),
+    ("sett_basalt", r"sett|^pave$|^prom$", ("lantern-row",)),
+    ("slate", r"pav|plaza|prom", ("meridian",)),
+    ("flagstone_york", r"flag|pave|paving|plaza|prom|court|terrace|rosestone|parade|walk", None),
+    ("stone_smooth", r"kerb|curb|coping|wallcap|marble|stone_pale|trim", None),
+    ("rubble_fieldstone", r"rock|rubble|boulder|field", None),
+    ("brick_red", r"brick", None),
+    ("ashlar_limestone", r"stone|wall|masonry|ashlar|pillar|column|plinth|granite|quay|balustrade", None),
+    ("plaster_lime", r"plaster|stucco|pastel|render", None),
+    ("wood_weathered", r"wood|timber|bench|barrel|crate|board|fence|door|shutter|hull|tabletop|counter", None),
+    ("gravel", r"gravel", None),
+    ("soil", r"soil|earth|dirt|mud", None),
+    ("bark", r"bark|trunk", None),
+    ("moss", r"grass|lawn|turf|moss", None),
+]
+MATSLOT_NAMES = [""] + sorted({n for n, _, _ in MATSLOTS if n})
+def mat_slot(m, part):
+    if m["estr"] > 0 and max(m["emit"]) > 0: return 0
+    n = m["name"]; pre = part.replace("-", "_") + "_"
+    n = n[len(pre):] if n.startswith(pre) else n.split("_", 1)[-1]
+    for name, rx, parts in MATSLOTS:
+        if parts and part not in parts: continue
+        if re.search(rx, n): return MATSLOT_NAMES.index(name)
+    return 0
+
 MOON = np.array(pc.MOON_DIR, np.float64); MOON /= np.linalg.norm(MOON)
 MOON_SAMPLES = []      # per-part estimates of the moon's irradiance colour (for the manifest)
 
@@ -90,16 +127,20 @@ def encode_mesh(pos, col, tri, cls=None, aux=None):
     czz = ((cd.astype(np.int16) << 1) ^ (cd.astype(np.int16) >> 15)).astype(np.uint8)
     for c in range(4): planes.append(czz[:, c])
     if aux is not None:                                 # albedo rgb (sqrt-encoded) + surface class, same coding as the colours
-        ad = np.diff(aux.astype(np.int16), axis=0, prepend=0).astype(np.int8)
+        ad = np.diff(aux[:, :4].astype(np.int16), axis=0, prepend=0).astype(np.int8)
         azz = ((ad.astype(np.int16) << 1) ^ (ad.astype(np.int16) >> 15)).astype(np.uint8)
         for c in range(4): planes.append(azz[:, c])
     # indices: code = next - idx  (0 => a new vertex)
     nxt = np.maximum.accumulate(flat); prev_max = np.concatenate([[-1], nxt[:-1]])
     code = (prev_max + 1 - flat).astype(np.uint32)
     for b in range(4): planes.append(((code >> (8 * b)) & 0xFF).astype(np.uint8))
+    hasmat = aux is not None and aux.shape[1] > 4 and bool(aux[:, 4].any())
+    if hasmat:                                          # tiling material slot (MATSLOTS), zigzag-delta u8, after the indices
+        md = np.diff(aux[:, 4].astype(np.int16), prepend=0).astype(np.int8)
+        planes.append(((md.astype(np.int16) << 1) ^ (md.astype(np.int16) >> 15)).astype(np.uint8))
     blob = b"".join(p.tobytes() for p in planes)
     bb = [float(v) for v in (origin + q.min(0) * step)] + [float(v) for v in (origin + q.max(0) * step)]
-    return blob, dict(nv=int(len(pos)), ni=int(len(flat)), n0=n0, n1=n1, aux=int(aux is not None), origin=[float(v) for v in origin], step=float(step), bbox=bb)
+    return blob, dict(nv=int(len(pos)), ni=int(len(flat)), n0=n0, n1=n1, aux=int(aux is not None), **({"mat": 1} if hasmat else {}), origin=[float(v) for v in origin], step=float(step), bbox=bb)
 
 def weld(co, tri, key_extra, colors, weights):
     """Group corners by (vertex, key_extra); average colours per group. Returns new pos idx, per-group colour, tri."""
@@ -167,12 +208,14 @@ def process(d, part, glass_ok=True):
     fkey = np.where(fine, 125 + np.arange(T), nkey)
     _, fkey = np.unique(fkey, return_inverse=True)
     mcls_mat = np.array([mat_class(m, part) for m in mats], np.int64)
+    mslot_mat = np.array([mat_slot(m, part) for m in mats], np.int64)
     for kind, sel in (("opaque", ok & ~glass), ("glass", ok & glass)):
         if not sel.any(): continue
         t = tri[sel]; c = color[sel].reshape(-1, 3); fk = np.repeat(fkey[sel], 3)
         if kind == "opaque":                             # surface class is part of the vertex identity (flat per triangle)
             tcl = np.where(memis[sel] | (color[sel].max(axis=(1, 2)) > 1.2), 7, mcls_mat[mi[sel]])
-            fk = fk * 8 + np.repeat(tcl, 3); _, fk = np.unique(fk, return_inverse=True)
+            tsl = np.where(tcl == 7, 0, mslot_mat[mi[sel]])                # tiling material slot, also part of the identity
+            fk = (fk * 8 + np.repeat(tcl, 3)) * 32 + np.repeat(tsl, 3); _, fk = np.unique(fk, return_inverse=True)
             c = np.concatenate([c, alb[sel].reshape(-1, 3), lightnm[sel].reshape(-1, 3), emit[sel].reshape(-1, 3)], 1)
         if kind == "glass":
             aq = np.clip(np.round(alpha[sel] * 20), 2, 20).astype(np.int64)     # opacity bucket in the key
@@ -182,6 +225,7 @@ def process(d, part, glass_ok=True):
         ang = corner_angles(co, t)
         vidx, gcol, nt = weld(co, t, fk, c, w * ang + 1e-9)
         pt = co[t]; el = np.linalg.norm(pt - np.roll(pt, 1, axis=1), axis=2).max(1)
+        if "elc" in d.files: el = np.maximum(el, d["elc"][sel])      # pieces of a face split for light keep its class
         bright = color[sel].max(axis=(1, 2)) > 1.2
         cls = np.where(bright | (kind == "glass"), 0, np.where(el < 0.22, 2, np.where(el < 0.6, 1, 0)))
         r = dict(kind=kind, pos=co[vidx], tri=nt, cls=cls, mat=mi[sel].astype(np.int32), names=names, oid=oid[sel].astype(np.int64),
@@ -196,7 +240,8 @@ def process(d, part, glass_ok=True):
             Ls = smooth_light(gcol[:, 6:9], nt[~fine[sel]]) if (~fine[sel]).any() else gcol[:, 6:9]
             r["hdr"] = gcol[:, 3:6] * Ls + gcol[:, 9:12]
             first = np.zeros(len(vidx), np.int64); first[nt.ravel()] = np.arange(nt.size)
-            r["aux"] = np.concatenate([gcol[:, 3:6], np.repeat(tcl, 3)[first][:, None].astype(np.float64)], 1)   # albedo rgb, class
+            r["aux"] = np.concatenate([gcol[:, 3:6], np.repeat(tcl, 3)[first][:, None].astype(np.float64),
+                                       np.repeat(tsl, 3)[first][:, None].astype(np.float64)], 1)   # albedo rgb, class, material slot
         out.append(r)
     return out
 
@@ -206,7 +251,7 @@ def finish(r):
     aux = None
     if r["kind"] != "glass" and "aux" in r:
         a = r["aux"]
-        aux = np.concatenate([np.clip(np.round(np.sqrt(np.clip(a[:, :3], 0, 1)) * 255), 0, 255), np.clip(np.round(a[:, 3:4]), 0, 7)], 1).astype(np.uint8)
+        aux = np.concatenate([np.clip(np.round(np.sqrt(np.clip(a[:, :3], 0, 1)) * 255), 0, 255), np.clip(np.round(a[:, 3:4]), 0, 7), np.clip(np.round(a[:, 4:5]), 0, 31)], 1).astype(np.uint8)
     return r["kind"], to_three(r["pos"]), col, r["tri"], r["cls"], aux
 
 def smooth_light(L, tri, iters=4, lam=0.6):
@@ -527,6 +572,15 @@ def build_nav():
 if "--no-nav" not in sys.argv:
     hA, hB = build_nav()
     np.save(opt("--nav-debug", os.path.join(SRC, "nav_debug.npy")), np.stack([hA, hB]))
+# ground maps (contact occlusion, lamp-shadow detail) from web_export/ground.py's bake: web_export/groundmap.py
+if "--no-ground" not in sys.argv:
+    import groundmap
+    _g = groundmap.build(SRC, OUT, log=log)
+    if _g: manifest["ground"] = _g
+# the light list for the viewer's shaders (wet reflections, glare sprites): web_export/lights.py
+if glob.glob(os.path.join(SRC, "lights__*.json")) and "--no-lights" not in sys.argv:
+    import lights
+    lights.build(SRC, OUT, log=log)
 # moonlight for the viewer: direction (three.js axes) and the diffuse light it adds to a surface facing it
 if MOON_SAMPLES:
     wsum = sum(n for _, n in MOON_SAMPLES); mcol = sum(c * n for c, n in MOON_SAMPLES) / wsum
@@ -538,6 +592,7 @@ log("moon light colour", [round(float(v), 4) for v in mcol], "(analytic %s)" % [
 import hashlib
 _h = hashlib.sha1()
 for _p in manifest["parts"]: _h.update(open(os.path.join(OUT, _p["file"]), "rb").read())
+manifest["matslots"] = MATSLOT_NAMES
 manifest["format"] = 2; manifest["build"] = _h.hexdigest()[:10]
 json.dump(manifest, open(os.path.join(OUT, "manifest.json"), "w"), separators=(",", ":"))
 log("manifest written; total download %.1f MB" % (sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT)) / 1e6))

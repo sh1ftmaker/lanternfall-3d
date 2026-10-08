@@ -14,7 +14,8 @@ import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createSurface } from './fx/surface.js';
-import { createMaterials } from './fx/light/materials.js';   // tiling PBR materials on the surfaces (fx/light/materials.js)
+import { createMaterials } from './fx/light/materials.js';
+import { createGround } from './fx/light/ground.js';         // ground maps: contact occlusion + lamp-shadow detail (fx/light/ground.js)   // tiling PBR materials on the surfaces (fx/light/materials.js)
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
@@ -185,7 +186,8 @@ const uTime = { value: 0 };
 const DN = createDayUniforms();                                  // game hook: daynight
 const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile, DN });
 const bakedMat = surface.material;
-const materials = createMaterials({ surface, renderer, mobile, DATA });    // materials hook: patches the surface shader, loads the texture array
+const materials = createMaterials({ surface, renderer, mobile, DATA });
+const ground = createGround({ surface, renderer, mobile });                  // ground hook: patches the surface shader at // @light    // materials hook: patches the surface shader, loads the texture array
 if (/nodetail/.test(location.hash)) surface.uniforms.uDetail.value = 0;
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, ...DN },
@@ -561,6 +563,7 @@ async function load() {
     if (part.id === 'transit' && !ready) {            // the lake, Spire and monorail are in: open the park, keep lighting lands
       if (ex.train_file) buildTrains(await fetchBin(ex.train_file.file), ex);
       if (manifest.nav) decodeNav(await fetchBin(manifest.nav.file), manifest.nav);
+      ground.load(manifest, fetchBin, nav);                            // ground hook: data/ground.bin (after the walk grid)
       // ── guests hook ── (fx/guests/render.js draws a stand-in crowd until fx/guests/sim.js is wired in)
       if (!HASH.has('no-guests')) {
         const focus = () => (mode === 'walk' ? { x: walk.x, y: walk.y, z: walk.z, mode } : { x: camera.position.x, y: -camera.position.z, z: camera.position.y, mode, tour: mode === 'tour' ? tourClock % tourLen : -1 });
@@ -1084,7 +1087,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { materials, sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { materials, ground, sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 // ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
 // switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of

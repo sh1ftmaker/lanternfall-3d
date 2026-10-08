@@ -40,3 +40,15 @@ lanterns, smaller tables stand against the walls. All nine parts re-baked.
 land, three for all), the default tier for final data, `--full` from scratch. The whole park at final quality took
 11 minutes on 2026-10-02 (bake 497 s with two Blenders at once, pack 133 s); the old serial bake and pack took about 26.
 Guest data afterwards: `GUESTS_NPZ=<cache>/npz python tools/guests/build.py`.
+
+Lighting pass (agent `bake`, Blender-Park branch `bake`):
+- `lights.py` (run by `pack.py`): `data/lights.json`, every light the bake uses in three.js axes (light objects matched to
+  their glowing fittings, emissive fittings and glowing surfaces that act as lamps); fields in its header.
+- `bake.py`: light-driven sampling. After the uniform grid cut, edges near lights are split until each is <= 0.5 x its
+  distance to the nearest light (light objects and lamp / lantern / flame fittings; >= 8 cm, <= 6 passes), worst first,
+  capped at +25 % triangles per part (`--lk --lmin --lpasses --lgrow`). The face attribute `elc` keeps each split face's
+  detail class in `pack.py`. Lamp shape (`lampshape.py`, also used by `ground.py`): soft near field (Light Falloff
+  Smooth 0.45 m) and point lamps / lanterns capped to 25 % upward light (`--lsoft --lcap`).
+- `ground.py` (Blender, run by `build.py` after the bakes, ~10 min) + `groundmap.py` (run by `pack.py`): ground maps,
+  contact AO and lamp-shadow detail on 12.5 cm texels over the walk grid's 16 m tiles -> `data/ground.bin`,
+  `data/ground_lo.bin`, `manifest.ground`; runtime `fx/light/ground.js`.

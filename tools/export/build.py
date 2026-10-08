@@ -22,6 +22,7 @@ Options
   --workers N      Blender processes at once (default: what free GPU memory and RAM allow, at most 3)
   --samples N      bake samples (default 64, as bake.py)
   --dry-run        print what would be done
+  --no-ground      skip the ground-map bake (web_export/ground.py, ~10 min; pack keeps NPZ/ground_raw.npz)
 """
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, time, glob
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
@@ -40,6 +41,7 @@ g = ap.add_mutually_exclusive_group(); g.add_argument("--draft", action="store_t
 ap.add_argument("--parts", default=""); ap.add_argument("--workers", type=int, default=0); ap.add_argument("--samples", type=int, default=64)
 ap.add_argument("--blender", default="blender"); ap.add_argument("--dry-run", action="store_true")
 ap.add_argument("--no-pack", action="store_true", help="bake only; pack later")
+ap.add_argument("--no-ground", action="store_true", help="do not re-bake the ground maps (pack keeps the last ones)")
 a = ap.parse_args()
 CACHE = os.path.abspath(a.cache); OUT = os.path.abspath(a.out)
 NPZ = os.path.join(CACHE, "npz"); FINAL = os.path.join(CACHE, "final"); LOGS = os.path.join(CACHE, "logs")
@@ -66,7 +68,7 @@ def global_hash():
     """everything outside the parts that changes how the park is lit: bake.py and the world / render setup"""
     src = open(os.path.join(ROOT, "park_common.py")).read()
     fns = "".join(m.group(0) for m in re.finditer(r"^def (setup_world|_enable_gpu|setup_render)\(.*?(?=^def |\Z)", src, re.S | re.M))
-    return sha(os.path.join(HERE, "bake.py"), extra=(fns + "samples=%d" % a.samples).encode())
+    return sha(os.path.join(HERE, "bake.py"), os.path.join(HERE, "lampshape.py"), extra=(fns + "samples=%d" % a.samples).encode())
 
 def run(cmd, logf, cwd=ROOT):
     with open(logf, "w") as fh:
@@ -129,7 +131,7 @@ def bake_cmd(out, export, extra=()):
             "--samples", str(a.samples)] + list(extra)
 
 def install(stage_dir, final):
-    for f in glob.glob(os.path.join(stage_dir, "*.npz")):
+    for f in glob.glob(os.path.join(stage_dir, "*.npz")) + glob.glob(os.path.join(stage_dir, "lights__*.json")):
         shutil.copy2(f, os.path.join(NPZ, os.path.basename(f)))
         if final: shutil.copy2(f, os.path.join(FINAL, os.path.basename(f)))
 
@@ -188,6 +190,14 @@ elif dirty:
         for n, t in sorted(JOBT.items(), key=lambda x: -x[1]): TIMES.append(("  bake " + n, t))
 else:
     save_state()
+
+# ───────────── 2b. ground maps (Cycles; web_export/ground.py) ─────────────
+# after a real bake (any part), on the walk grid of the last pack (NPZ/nav_debug.npy); --no-ground skips it
+navf = os.path.join(NPZ, "nav_debug.npy")
+if dirty and not a.draft and not a.no_ground and os.path.exists(navf):
+    with stage("ground maps (Cycles)"):
+        if run([a.blender, "-b", "-P", os.path.join(HERE, "ground.py"), "--", "--npz", NPZ, "--scene-blend", BLEND], os.path.join(LOGS, "ground.log")):
+            sys.exit("ground.py failed, see " + os.path.join(LOGS, "ground.log"))
 
 # ───────────── 3. pack ─────────────
 if a.no_pack: TIMES.append(("pack (skipped)", 0.0))
