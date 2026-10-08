@@ -12,10 +12,11 @@
 import { createCover } from './cover.js';
 import { createPrecip } from './precip.js';
 import { createShade } from './shade.js';
+import { createWetLights, counts, lite } from '../light/wet.js';
 
 // targets per state. rain/snow: precipitation (rain 1.6 = storm), wet: wetness, dust: snow cover, cloud: cloud deck,
 // fog: fog density multiplier, mist: lake-mist density multiplier, wind: 0..1, storm: lightning on
-export const STATES = {
+export const STATES = {   // (the ground's permanent wet film is not weather: shade.js uWet.x, every state)
   clear: { rain: 0, snow: 0, wet: 0, dust: 0, cloud: 0, fog: 1, mist: 1, wind: 0, storm: 0 },
   mist: { rain: 0, snow: 0, wet: 0.3, dust: 0, cloud: 0.8, fog: 45, mist: 2.6, wind: 0, storm: 0 },
   rain: { rain: 1, snow: 0, wet: 1, dust: 0, cloud: 0.9, fog: 12, mist: 1.6, wind: 0.15, storm: 0 },
@@ -39,7 +40,9 @@ export function createWeather(opts) {
   let state = 'clear', target = STATES.clear, reduceMotion = !!opts.reduceMotion, degrade = 0;
   const cover = createCover({ renderer, scene, mobile, hdr: Q.hdr !== false });
   let precip = null, shade = null, audio = null, audioLoading = null;
-  const shadeAll = () => (shade ||= createShade({ THREE, scene, surface, cover, getWater: opts.getWater, getFx: opts.getFx, FOG: opts.FOG, uTime }));
+  const wet = createWetLights({ THREE, getPark: opts.getPark });          // lamps mirrored in the wet paving (fx/light/wet.js)
+  wet.U.uWetOcc.value = Math.max(0, Math.log2(cover.size) - 9);          // its occlusion test reads ~1.5 m texels
+  const shadeAll = () => (shade ||= createShade({ THREE, scene, surface, cover, wet, getWater: opts.getWater, getFx: opts.getFx, FOG: opts.FOG, uTime }));
   shadeAll();                                  // patches the shaders now, before they first compile (Clear = untouched path)
   const idle = () => Object.keys(now).every((k) => now[k] === STATES.clear[k]);
 
@@ -84,6 +87,11 @@ export function createWeather(opts) {
     }
     if (!patched) patched = shade.patch();
     const isIdle = idle();
+    // the wet film is there in every weather: its lights follow the eye, the cover map keeps covered ground dry
+    const film = shade.U.uWet.value.x > 0;
+    wet.update(camera, film || !isIdle ? counts({ hd: Q.hd, mobile, degrade }) : 0); wet.U.uWetLite.value = lite({ hd: Q.hd, mobile });
+    if (film && opts.isReady()) ensureCover();
+    shade.U.uCovOn.value = cover.ready ? 1 : 0;
     if (isIdle && wasIdle) return;                                   // Clear and settled: nothing runs, nothing is drawn
     if (!isIdle && opts.isReady()) ensureCover();
     const scale = (Q.fx ? Q.fx.scale : 1) * (Q.hd ? 1 : 0.6) * (degrade >= 4 ? 0.5 : degrade >= 2 ? 0.75 : 1);
@@ -131,6 +139,6 @@ export function createWeather(opts) {
     get state() { return state; }, now, get blend() { return { ...now }; }, STATES,
     setReduceMotion(on) { reduceMotion = !!on; },
     degrade(step) { degrade = step; },
-    get cover() { return cover; }, get precip() { return precip; }, get shade() { return shade; }, get audio() { return audio; },
+    get cover() { return cover; }, get precip() { return precip; }, get shade() { return shade; }, wet, get audio() { return audio; },
   };
 }
