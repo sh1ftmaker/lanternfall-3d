@@ -20,7 +20,7 @@ export function loadPark(dataDir) {
       off += nv * 6 + nv * 4 + (m.aux ? nv * 4 : 0);              // positions, colours, albedo/class
       const idx = new Uint32Array(ni); let mx = -1; const p1 = off + ni, p2 = p1 + ni, p3 = p2 + ni;
       for (let i = 0; i < ni; i++) { const code = (u8[off + i] | (u8[p1 + i] << 8) | (u8[p2 + i] << 16) | (u8[p3 + i] << 24)) >>> 0; const v = mx + 1 - code; if (v > mx) mx = v; idx[i] = v; }
-      off += ni * 4 + (m.lay ? nv : 0);
+      off += ni * 4 + (m.lay ? nv : 0) + (m.mat ? nv : 0);         // + optional rank and material-slot planes
       chunks.push({ part: part.id, i: chunks.length, kind: m.kind, pos, idx, n0: m.n0, n1: m.n1, ni, bbox: m.bbox });
     }
   }

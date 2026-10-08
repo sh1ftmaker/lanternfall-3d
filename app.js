@@ -15,6 +15,7 @@ import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
 import { createSurface } from './fx/surface.js';
 import { installLook } from './fx/light/look.js';                                  // look hook: exposure, tone mapping, HDR emitters, fog
+import { createMaterials } from './fx/light/materials.js';   // tiling PBR materials on the surfaces (fx/light/materials.js)
 import { trackDisposables, watchContext } from './fx/context.js';
 import { veilFail, probe, loadPrefs, buildSettings } from './fx/ui.js';
 import { createGuests } from './fx/guests/render.js';      // guests hook (fx/guests/)
@@ -185,6 +186,7 @@ const uTime = { value: 0 };
 const DN = createDayUniforms();                                  // game hook: daynight
 const surface = createSurface({ FOG, fogD: 2.4e-7, moonDir: MOON, mobile, DN });
 const bakedMat = surface.material;
+const materials = createMaterials({ surface, renderer, mobile, DATA });    // materials hook: patches the surface shader, loads the texture array
 if (/nodetail/.test(location.hash)) surface.uniforms.uDetail.value = 0;
 const glassMat = new THREE.ShaderMaterial({
   uniforms: { uFog: { value: FOG }, uFogD: { value: 2.4e-7 }, ...DN },
@@ -344,6 +346,11 @@ function decodeMesh(u8, off, m) {
     const lay = new Uint8Array(nv); let acc = 0;
     for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
     off += nv; g.setAttribute('aLay', new THREE.BufferAttribute(lay, 1)); bakedMat.uniforms.uZBias.value.y = 0;   // ranks replace the brightness guess
+  }
+  if (m.mat) {                     // optional tiling-material slot plane (zigzag-delta u8 per vertex; fx/light/materials.js)
+    const mt = new Uint8Array(nv); let acc = 0;
+    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; mt[i] = acc; }
+    off += nv; g.setAttribute('aMat', new THREE.BufferAttribute(mt, 1));
   }
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
   g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
@@ -515,6 +522,7 @@ function moonShadow() {
 }
 async function load() {
   manifest = await (await fetch(DATA + 'manifest.json', { cache: 'no-cache' })).json();
+  materials.setManifest(manifest);                                   // materials hook: slot names -> texture layers
   if ((manifest.format || 1) > DATA_FORMAT && await refreshCode('f' + manifest.format + (manifest.build || ''))) return new Promise(() => {});   // reloading
   if (manifest.build) dataTag = '?v=' + manifest.build;
   const ex = manifest.extras;
@@ -1078,7 +1086,7 @@ function frame() {
   prof.poll();
   adapt(dt * 1000);
 }
-window.__park = { sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
+window.__park = { materials, sound, weather, get guests() { return guests; }, glCtx, depth, lodMeshes, get loaded() { return loaded; }, scene, camera, renderer, controls, Q, setMode, gotoPlace, places, walk, get nav() { return nav; }, get mode() { return mode; }, setTour: (t) => { tourClock = t; lastShot = -1; blend.on = false; }, perf, bakedMat, bloom: () => bloomPass, fxWater: () => fxWater, lanterns: () => lanterns, fx: FX, surface,
   post: { prof, get out() { return fxOut; }, rebuild: (h) => { if (h !== undefined) Q.post = readFx(h); disposeComposer(); buildComposer(); resize(); prof.wrapComposer(composer); } } };
 // ── platformer hook ── (fx/platformer/: Walk mode's player is Wick the lamplighter in third person; #btn-pf or P
 // switches to the first-person walker and back, and the choice is remembered; #fp starts in first person. Nothing of
