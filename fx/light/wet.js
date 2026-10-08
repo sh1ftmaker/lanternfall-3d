@@ -5,7 +5,7 @@
 // No popping: a light's weight is a smooth function of its rank metric against the metric of the first light left
 // out (a continuous function of the eye position), so the set changes without a visible switch; in the shader every
 // light also fades with its horizontal distance from the pixel. There are no grid cells, so nothing can seam.
-// The light list: '_lookwork/shared/lights.json' from the bake when it is copied to data/lights.json; until then the
+// The light list: data/lights.json from the bake (every light the bake used, at its visible fitting); without it the
 // emissive (class 7) and glowing glass triangles of the park are clustered here, a few frames' work after loading.
 
 export const WET_N = 12;
@@ -59,12 +59,19 @@ export function createWetLights({ THREE, getPark, glassMat }) {
   const B = new Map(), bkey = (i, j) => (i + 512) * 1024 + (j + 512);
   const st = { scanned: new WeakSet(), cells: new Map(), dirty: false, quiet: 0, tris: 0 };
 
-  // from the bake (data/lights.json): [{p:[x,y,z], c:[r,g,b], r}] or {lights:[...]}; three.js axes, intensity = radiance x area
+  // from the bake (data/lights.json, Blender-Park/web_export/lights.py, format 1): rows with fields x y z r g b i rad kind
+  // fx fy fz part src size up. A floor mirrors what glows, so each light sits at its visible fitting (globe, lantern
+  // glass, flame, pane); helper lights with no fitting (facade washes, fills) are left out. i is in baked units at
+  // 1 m (radiance x area / 4 pi): the list keeps radiance x area, as the scan below does.
   fetch('data/lights.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
-    const a = j && (Array.isArray(j) ? j : j.lights); if (!a || !a.length) return;
-    const out = new Float32Array(a.length * 8);
-    a.forEach((l, i) => { const p = l.p || l.pos, c = l.c || l.col || l.color; out.set([p[0], p[1], p[2], l.r || l.radius || 0.25, c[0], c[1], c[2], 0], i * 8); });
-    setList(out, a.length, 'lights.json');
+    if (!j || j.format !== 1 || !j.rows || !j.fields) return;
+    const F = Object.fromEntries(j.fields.map((f, i) => [f, i])), out = new Float32Array(j.rows.length * 8); let k = 0;
+    for (const row of j.rows) {
+      if (row[F.fx] === null || row[F.fx] === undefined) continue;
+      const e = row[F.i] * 4 * Math.PI, sz = row[F.size] || 2 * row[F.rad] || 0.3;
+      out.set([row[F.fx], row[F.fy], row[F.fz], Math.min(0.9, Math.max(0.08, sz * 0.5)), row[F.r] * e, row[F.g] * e, row[F.b] * e, 0], k++ * 8);
+    }
+    if (k) setList(out, k, 'lights.json');
   }).catch(() => {});
 
   function setList(arr, count, src) {
