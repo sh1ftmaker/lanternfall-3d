@@ -18,8 +18,9 @@ import { loadGlare } from './glare.js';
 
 // knob: [default, softer, stronger] (the report hands over all three)
 export const KNOBS = {
-  exposure: [1.6, 1.3, 2.0],    // multiplies the scene before tone mapping (grey card 0.18 -> pixel 127 at 1.0 with ACES, 128 AgX;
-                                // this park's bake is dim, paving 0.01-0.03, so the owner's mood needs ~1.6; the old look sat at 169)
+  exposure: [2.5, 2.1, 2.9],    // multiplies the scene before tone mapping (grey card 0.18 -> pixel 127 at 1.0 with ACES, 128 AgX;
+                                // this park's bake is dim, paving 0.01-0.03; the owner asked for the old look's brightness, and 2.5
+                                // matches the old captures' mean brightness view by view to within a few %; the old look sat at 169)
   tm: [2, 1, 0],                // 0 = the old look (AgX x2.1 + S-curve grade), 1 = AgX, 2 = ACES
   grade: [0, 0, 0.42],          // the old S-curve grade strength (saturation follows it)
   bloom: [0.14, 0.10, 0.20],    // natural bloom: blend towards the blurred pyramid
