@@ -22,8 +22,12 @@ const RESOLVE = /* glsl */`
   uniform sampler2D tCur, tHist, tDepth; uniform mat4 uCamWorld, uPrevVP; uniform vec2 uJitter; uniform float uAlpha, uReset, uReact, uDepthRej;
   varying vec2 vUv;
   ${DEPTH_GLSL}
-  vec3 tm(vec3 c){ return c / (1.0 + max(c.r, max(c.g, c.b))); }
-  vec3 itm(vec3 c){ return c / max(1e-4, 1.0 - max(c.r, max(c.g, c.b))); }
+  // blend and clamp in a compressed space so one HDR speck does not flicker, but only above uHdrK: compressing all of
+  // it (K = 1) averaged a sub-pixel emitter (the monorail's light strip, 1 px or less at ratio 1) down to a fraction of
+  // its energy, and its glow went with it
+  uniform float uHdrK;
+  vec3 tm(vec3 c){ return c / (1.0 + max(c.r, max(c.g, c.b)) / uHdrK); }
+  vec3 itm(vec3 c){ return c / max(1e-4, 1.0 - max(c.r, max(c.g, c.b)) / uHdrK); }
   // 5-tap Catmull-Rom history fetch (sharper than bilinear, so the image does not go soft)
   vec3 histCR(vec2 uv){
     vec2 sz = vec2(textureSize(tHist, 0)), p = uv * sz, t1 = floor(p - 0.5) + 0.5, f = p - t1;
@@ -99,7 +103,7 @@ export class TAAPass extends Pass {
     this.index = 0; this.saved = new THREE.Matrix4(); this.jitter = new THREE.Vector2(); this.prevVP = new THREE.Matrix4(); this.first = true;
     const rt = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
     this.hist = [rt(), rt()]; this.cur = 0;
-    this.u = Object.assign(depthUniforms(), { tCur: { value: null }, tHist: { value: null }, tDepth: { value: null }, uCamWorld: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() }, uJitter: { value: new THREE.Vector2() }, uAlpha: { value: 0.1 }, uReset: { value: 1 }, uReact: { value: ctx.react ?? 1 }, uDepthRej: { value: ctx.depthRej ?? 0.04 } });
+    this.u = Object.assign(depthUniforms(), { tCur: { value: null }, tHist: { value: null }, tDepth: { value: null }, uCamWorld: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() }, uJitter: { value: new THREE.Vector2() }, uAlpha: { value: 0.1 }, uReset: { value: 1 }, uReact: { value: ctx.react ?? 1 }, uDepthRej: { value: ctx.depthRej ?? 0.04 }, uHdrK: { value: hashNum('u_taahdr', 32) } });
     this.m = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: RESOLVE, uniforms: this.u, defines: depthDefines(ctx.renderer || { capabilities: {} }), depthTest: false, depthWrite: false });
     this.mCopy = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: COPY, uniforms: { tSrc: { value: null }, uSharp: { value: ctx.sharpen || 0 } }, defines: ctx.sharpen ? { SHARPEN: '' } : {}, depthTest: false, depthWrite: false });
     this.q = new FullScreenQuad(null);
