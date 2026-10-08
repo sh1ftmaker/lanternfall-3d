@@ -24,7 +24,7 @@ export class FinalPass extends Pass {
       uAOStrength: { value: 1 }, uAOProtect: { value: new THREE.Vector2(0.9, 4.0) }, uCA: { value: 0 },
       uDofAmount: { value: 0 }, uBloomNorm: { value: 1 }, uCamW: { value: new THREE.Matrix4() }, uFogD: LOOK.uFogD || { value: 2.4e-7 },
       uExposure: LOOK.uExposure, uTM: LOOK.uTM, uGrade: LOOK.uGrade, uBloomMix: LOOK.uBloomMix, uFogSmear: LOOK.uFogSmear, uShow: LOOK.uShow,
-      uFogK: LOOK.uFogK, uFogH: LOOK.uFogH, uFogBase: LOOK.uFogBase,
+      uFogK: LOOK.uFogK, uFogH: LOOK.uFogH, uFogBase: LOOK.uFogBase, uFogFloor: LOOK.uFogFloor,
     });
     this.opts = opts;
     this.material = new THREE.ShaderMaterial({

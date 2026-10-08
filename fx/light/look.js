@@ -14,6 +14,7 @@
 // Hooked into fx/surface.js through the '// @decl' and '// @light' markers and the line after the fog line (left
 // untouched for fx/weather/shade.js); app.js calls installLook() once, right after createSurface().
 import * as THREE from 'three';
+import { loadGlare } from './glare.js';
 
 // knob: [default, softer, stronger] (the report hands over all three)
 export const KNOBS = {
@@ -30,6 +31,7 @@ export const KNOBS = {
   neon: [2.5, 1.8, 3.2],        // gain and ceiling factor for colours no flame has
   fog: [1.0, 0.6, 1.5],         // fog density multiplier (on top of the weather's)
   fogh: [18, 12, 30],           // fog scale height (m)
+  fogfloor: [0.3, 0.5, 0.15],   // share of the haze that does not thin with height (views from high up keep some air; 0 = all thins)
   glare: [1.0, 0.6, 1.5],       // glare sprites on real fittings (fx/light/glare.js)
 };
 function readHash() {
@@ -44,7 +46,7 @@ const H = readHash();
 const v = (k) => ({ value: k in H ? H[k] : KNOBS[k][0] });
 export const LOOK = {
   uGlow: v('glow'), uHot: v('hot'), uPivot: v('pivot'), uTop: v('top'), uNeon: v('neon'),
-  uFogK: v('fog'), uFogH: v('fogh'), uFogBase: { value: 0 },
+  uFogK: v('fog'), uFogH: v('fogh'), uFogFloor: v('fogfloor'), uFogBase: { value: 0 },
   uBloomMix: v('bloom'), uFogSmear: v('fogsmear'), uGrade: v('grade'), uTM: v('tm'), uExposure: v('exposure'), uGlare: v('glare'),
   uShow: { value: { hdr: 1, card: 2 }[H.show] || 0 },
   uFogD: null,          // the surface's density uniform (weather-scaled), set by installLook
@@ -53,11 +55,11 @@ export const LOOK = {
 // fog share for a point at distance d and height y1 seen from height y0 (camera). The density falls as exp(-y / H);
 // its mean along the segment multiplies the squared-distance optical depth.
 export const FOG_GLSL = /* glsl */`
-  uniform float uFogK, uFogH, uFogBase;
+  uniform float uFogK, uFogH, uFogBase, uFogFloor;
   float lookFog(float d, float y0, float y1, float D){
     float a = max(y0 - uFogBase, 0.0) / uFogH, b = max(y1 - uFogBase, 0.0) / uFogH, e = b - a;
     float hf = abs(e) < 1e-3 ? exp(-a) : (exp(-a) - exp(-b)) / e;
-    return 1.0 - exp(-d * d * D * uFogK * hf);
+    return 1.0 - exp(-d * d * D * uFogK * mix(hf, 1.0, uFogFloor));
   }`;
 
 const EMIT_GLSL = /* glsl */`
@@ -108,16 +110,18 @@ export function installLook({ surface, scene, renderer, getWater }) {
     }
   }
   if (getWater) { const t = setInterval(() => { const w = getWater(); if (w && patchWater(w)) { done.push('water'); clearInterval(t); } }, 300); }
-  installed = { done, LOOK, KNOBS, set };
+  installed = { done, LOOK, KNOBS, set, glare: null };
+  // glare sprites on real fittings (fx/light/glare.js), when the data has the bake's light list
+  loadGlare({ scene, fog: { uFog: surface.uniforms.uFog, uFogD: surface.uniforms.uFogD } }).then((g) => { installed.glare = g; if (g) done.push('glare ' + g.count); });
   const t2 = setInterval(() => { if (window.__park) { window.__park.look = installed; clearInterval(t2); } }, 200);
   return installed;
 }
 // set a knob by name on the live page: __park.look.set('exposure', 1.1)
 function set(k, x) {
-  const u = { exposure: 'uExposure', tm: 'uTM', grade: 'uGrade', bloom: 'uBloomMix', fogsmear: 'uFogSmear', glow: 'uGlow', hot: 'uHot', pivot: 'uPivot', top: 'uTop', neon: 'uNeon', fog: 'uFogK', fogh: 'uFogH', glare: 'uGlare', show: 'uShow' }[k];
+  const u = { exposure: 'uExposure', tm: 'uTM', grade: 'uGrade', bloom: 'uBloomMix', fogsmear: 'uFogSmear', glow: 'uGlow', hot: 'uHot', pivot: 'uPivot', top: 'uTop', neon: 'uNeon', fog: 'uFogK', fogh: 'uFogH', fogfloor: 'uFogFloor', glare: 'uGlare', show: 'uShow' }[k];
   if (!u) return false; LOOK[u].value = x; return true;
 }
-const LOOK_U = () => ({ uGlow: LOOK.uGlow, uHot: LOOK.uHot, uPivot: LOOK.uPivot, uTop: LOOK.uTop, uNeon: LOOK.uNeon, uFogK: LOOK.uFogK, uFogH: LOOK.uFogH, uFogBase: LOOK.uFogBase });
+const LOOK_U = () => ({ uGlow: LOOK.uGlow, uHot: LOOK.uHot, uPivot: LOOK.uPivot, uTop: LOOK.uTop, uNeon: LOOK.uNeon, uFogK: LOOK.uFogK, uFogH: LOOK.uFogH, uFogBase: LOOK.uFogBase, uFogFloor: LOOK.uFogFloor });
 
 // the lake (fx/water.js), once it exists: same fog, after the line fx/weather/shade.js anchors on
 function patchWater(w) {

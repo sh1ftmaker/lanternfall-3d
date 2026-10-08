@@ -95,9 +95,7 @@ export function buildFx(ctx) {
   if (useFinal) {
     const fin = new FinalPass({ camera, renderer, ao: !!(ao && ao.isTextureOnly), bloom: F.bloom === 'mip' || F.bloom === 'nat', natural: F.bloom === 'nat', fogSmear: smear, dof: !!dof, grain: F.grain, aoDebug: F.aodebug, sharpen: F.aa === 'taa' });
     if (ao && ao.isTextureOnly) fin.ao = ao;
-    if (F.bloom === 'nat') {
-    bloom = new NatBloomPass(); composer.addPass(bloom); out.passes.bloom = bloom; out.bloomPass = bloom;   // app.js turns it off in Fast
-  } else if (F.bloom === 'mip') { fin.bloom = bloom; fin.uniforms.uBloom.value = bloom.strength; }
+    if (F.bloom === 'mip') { fin.bloom = bloom; fin.uniforms.uBloom.value = bloom.strength; }
     if (F.bloom === 'nat') fin.bloom = bloom;
     fin.dof = dof;
     composer.addPass(fin); out.passes.final = fin;
