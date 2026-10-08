@@ -32,7 +32,7 @@ export const KNOBS = {
   fog: [1.0, 0.6, 1.5],         // fog density multiplier (on top of the weather's)
   fogh: [18, 12, 30],           // fog scale height (m)
   fogfloor: [0.3, 0.5, 0.15],   // share of the haze that does not thin with height (views from high up keep some air; 0 = all thins)
-  glare: [1.0, 0.6, 1.5],       // glare sprites on real fittings (fx/light/glare.js)
+  glare: [1.5, 1.0, 2.5],       // glare sprites on real fittings (fx/light/glare.js)
 };
 function readHash() {
   const out = {}; const h = location.hash.replace(/^#/, '');
