@@ -26,11 +26,18 @@ export function createDepth(THREE, camera, opt = {}) {
   // a decoded park/train chunk: Uint16 positions, mesh.position = origin, mesh.scale = step (see app.js meshFrom)
   function addMesh(mesh) {
     const g = mesh.geometry, p = g.attributes.position.array, idx = g.index.array, s = mesh.scale.x, o = mesh.position;
-    const nv = p.length / 3, vx = new Float32Array(nv), vz = new Float32Array(nv), vy = new Float32Array(nv);
-    for (let v = 0; v < nv; v++) { vx[v] = o.x + p[v * 3] * s; vy[v] = o.y + p[v * 3 + 1] * s; vz[v] = o.z + p[v * 3 + 2] * s; }
+    // cell indices per vertex (ci is monotonic, so the cell of the smallest x is the smallest cell index: the same cells
+    // as marking each triangle's float bounds, without three Math.min/max calls per corner; ~3x faster while loading)
+    const nv = p.length / 3, ix = new Int32Array(nv), iz = new Int32Array(nv), vy = new Float32Array(nv);
+    for (let v = 0; v < nv; v++) { ix[v] = ci(o.x + p[v * 3] * s); vy[v] = o.y + p[v * 3 + 1] * s; iz[v] = ci(o.z + p[v * 3 + 2] * s); }
     for (let t = 0; t < idx.length; t += 3) {
       const a = idx[t], b = idx[t + 1], c = idx[t + 2];
-      mark(Math.min(vx[a], vx[b], vx[c]), Math.max(vx[a], vx[b], vx[c]), Math.min(vz[a], vz[b], vz[c]), Math.max(vz[a], vz[b], vz[c]), Math.max(vy[a], vy[b], vy[c]));
+      let i0 = ix[a], i1 = i0, j0 = iz[a], j1 = j0, h = vy[a];
+      const xb = ix[b], xc = ix[c], zb = iz[b], zc = iz[c];
+      if (xb < i0) i0 = xb; else if (xb > i1) i1 = xb; if (xc < i0) i0 = xc; else if (xc > i1) i1 = xc;
+      if (zb < j0) j0 = zb; else if (zb > j1) j1 = zb; if (zc < j0) j0 = zc; else if (zc > j1) j1 = zc;
+      if (vy[b] > h) h = vy[b]; if (vy[c] > h) h = vy[c];
+      for (let j = j0; j <= j1; j++) for (let k = j * N + i0, e = j * N + i1; k <= e; k++) if (grid[k] < h) grid[k] = h;
     }
   }
   // instanced trees: bounding sphere of the template per instance

@@ -11,6 +11,7 @@ import { createDepth, depthTargetOptions } from './fx/depth.js';
 import { readFx } from './fx/settings.js';
 import { buildFx, fxActive } from './fx/post.js';
 import { addTAA } from './fx/taa.js';
+import { decodeMeshArrays, decodePart } from './fx/meshcodec.js';   // the mesh format; parts decode in fx/meshcodec-worker.js
 import { makeProfiler } from './fx/prof.js';
 import { createWater } from './fx/water.js';
 import * as FX from './fx/index.js';
@@ -25,6 +26,7 @@ import { createDayUniforms, DN_DECL, DN_LAMP, DN_SKY } from './fx/game/daynight/
 import { createCull } from './fx/cull/index.js';          // culling hook: per-camera frustum culling of chunks + forest cells (fx/cull/)
 
 const DATA = 'data/';
+const manifestReq = fetch(DATA + 'manifest.json', { cache: 'no-cache' });   // asked first thing: the renderer and UI set up while it travels (load())
 // a script error while starting up can mean mixed old and new files just after a deploy: refresh them once
 addEventListener('error', (e) => { if (!window.__park || !window.__park.loaded) { if (e.error) refreshCode('boot-error'); } });
 const $ = (s) => document.querySelector(s);
@@ -61,12 +63,14 @@ const FOG = new THREE.Color(0.016, 0.018, 0.046);
 
 /* ───────────────────────── renderer ───────────────────────── */
 const stage = $('#stage');
-const CAN = probe();                              // WebGL2, DecompressionStream, reversed depth, HDR targets (fx/ui.js)
+// WebGL2, DecompressionStream, reversed depth, HDR targets (fx/ui.js); the probed context becomes the renderer's
+// (the attributes three asked for before: alpha, no stencil, no MSAA)
+const CAN = probe({ alpha: true, depth: true, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false });
 if (CAN.fail) { veilFail(CAN.fail.title, CAN.fail.text, false); await new Promise(() => {}); }
 trackDisposables(THREE);                           // context-loss hygiene (fx/context.js)
 // Reversed depth (EXT_clip_control; three falls back to the standard mapping without it, e.g. on most phones). It pays
 // off in the HD composer, whose target gets a 32-bit float depth buffer (fx/depth.js). '#norz' turns it off.
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
+const renderer = new THREE.WebGLRenderer({ canvas: CAN.canvas, context: CAN.gl, antialias: false, powerPreference: 'high-performance', reversedDepthBuffer: CAN.clip && !/norz/.test(location.hash) });
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 2.1;
 renderer.setClearColor(0x05040f);
@@ -309,7 +313,8 @@ async function refreshCode(why) {
   await Promise.all([...urls].map((u) => fetch(u, { cache: 'reload' }).catch(() => {})));
   location.reload(); return true;
 }
-async function fetchBin(file) {
+async function fetchBin(file) { return unpackBin(await fetchRaw(file)); }
+async function fetchRaw(file) {                       // the bytes as they arrive (the progress bar counts them)
   const res = await fetch(DATA + file + (B64 ? '.txt' : '') + dataTag);
   if (!res.ok) throw new Error(file + ': ' + res.status);
   let buf;
@@ -318,6 +323,9 @@ async function fetchBin(file) {
     for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); n += value.length; loadedBytes += value.length; bar.style.width = (100 * Math.min(1, loadedBytes / totalBytes)).toFixed(1) + '%'; }
     buf = new Uint8Array(n); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
   } else buf = new Uint8Array(await res.arrayBuffer());
+  return buf;
+}
+async function unpackBin(buf) {                       // base64 (text-only hosts) and gzip off
   if (B64) {
     const txt = new TextDecoder('latin1').decode(buf).trim();
     if (Uint8Array.fromBase64) buf = Uint8Array.fromBase64(txt);
@@ -329,47 +337,33 @@ async function fetchBin(file) {
   }
   return buf;
 }
-function decodeMesh(u8, off, m) {
-  const nv = m.nv, ni = m.ni;
-  const pos = new Uint16Array(nv * 3);
-  for (let c = 0; c < 3; c++) {
-    const lo = off + c * 2 * nv, hi = lo + nv; let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[lo + i] | (u8[hi + i] << 8); acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFFFF; pos[i * 3 + c] = acc; }
-  }
-  off += nv * 6;
-  const col = new Uint8Array(nv * 4);
-  for (let c = 0; c < 4; c++) {
-    const o = off + c * nv; let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; col[i * 4 + c] = acc; }
-  }
-  off += nv * 4;
-  let aux = null;
-  if (m.aux) {                                         // albedo rgb (sqrt-encoded) + surface class, for fx/surface.js
-    aux = new Uint8Array(nv * 4);
-    for (let c = 0; c < 4; c++) { const o = off + c * nv; let acc = 0; for (let i = 0; i < nv; i++) { const zz = u8[o + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; aux[i * 4 + c] = acc; } }
-    off += nv * 4;
-  }
-  const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
-  let mx = -1; const p1 = off + ni, p2 = p1 + ni, p3 = p2 + ni;
-  for (let i = 0; i < ni; i++) {
-    const code = (u8[off + i] | (u8[p1 + i] << 8) | (u8[p2 + i] << 16) | (u8[p3 + i] << 24)) >>> 0;
-    const v = mx + 1 - code; if (v > mx) mx = v; idx[i] = v;
-  }
-  off += ni * 4;
+function geometryFrom(d, m) {                         // decoded arrays (fx/meshcodec.js) -> BufferGeometry
   const g = new THREE.BufferGeometry();
-  if (m.lay) {                     // optional coplanar-priority plane (zigzag-delta u8 per vertex): a higher rank wins ties
-    const lay = new Uint8Array(nv); let acc = 0;
-    for (let i = 0; i < nv; i++) { const zz = u8[off + i]; acc = (acc + ((zz >>> 1) ^ -(zz & 1))) & 0xFF; lay[i] = acc; }
-    off += nv; g.setAttribute('aLay', new THREE.BufferAttribute(lay, 1)); bakedMat.uniforms.uZBias.value.y = 0;   // ranks replace the brightness guess
-  }
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3, false));
-  g.setAttribute('aCol', new THREE.BufferAttribute(col, 4, true));
-  if (aux) g.setAttribute('aAux', new THREE.BufferAttribute(aux, 4, true));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  if (d.lay) { g.setAttribute('aLay', new THREE.BufferAttribute(d.lay, 1)); bakedMat.uniforms.uZBias.value.y = 0; }   // ranks replace the brightness guess
+  g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3, false));
+  g.setAttribute('aCol', new THREE.BufferAttribute(d.col, 4, true));
+  if (d.aux) g.setAttribute('aAux', new THREE.BufferAttribute(d.aux, 4, true));
+  g.setIndex(new THREE.BufferAttribute(d.idx, 1));
   const o = m.origin, s = m.step, bb = m.bbox;
   g.boundingBox = new THREE.Box3(new THREE.Vector3((bb[0] - o[0]) / s, (bb[1] - o[1]) / s, (bb[2] - o[2]) / s), new THREE.Vector3((bb[3] - o[0]) / s, (bb[4] - o[1]) / s, (bb[5] - o[2]) / s));
   g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
-  return { geometry: g, next: off };
+  return g;
+}
+function decodeMesh(u8, off, m) { const d = decodeMeshArrays(u8, off, m); return { geometry: geometryFrom(d, m), next: d.next }; }
+// A part (as downloaded) gunzipped and decoded in a worker, so the walk does not hitch while lands stream in (a part
+// is 100-250 ms of main thread at 4x CPU throttle); in this thread when module workers are missing or fail.
+let codec = null, codecSeq = 0; const codecWait = new Map();
+function decodeOff(raw, meshes) {
+  const here = () => unpackBin(raw).then((u8) => decodePart(u8, meshes));
+  if (codec === null) {
+    try {
+      codec = new Worker(new URL('./fx/meshcodec-worker.js', import.meta.url), { type: 'module' });
+      codec.onmessage = (e) => { const w = codecWait.get(e.data.id); if (!w) return; codecWait.delete(e.data.id); if (e.data.error) w.here().then(w.res, w.rej); else w.res(e.data.meshes); };
+      codec.onerror = () => { codec = false; for (const w of codecWait.values()) w.here().then(w.res, w.rej); codecWait.clear(); };
+    } catch (e) { codec = false; }
+  }
+  if (!codec || B64) return here();
+  return new Promise((res, rej) => { const id = ++codecSeq; codecWait.set(id, { res, rej, here }); codec.postMessage({ id, buf: raw, meshes }); });   // raw is not transferred: the fallback may need it
 }
 function meshFrom(geometry, m) {
   const mesh = new THREE.Mesh(geometry, m.kind === 'glass' ? glassMat : bakedMat);
@@ -531,12 +525,21 @@ function moonShadow() {
   surface.buildShadow(renderer, scene, casters);
 }
 async function load() {
-  manifest = await (await fetch(DATA + 'manifest.json', { cache: 'no-cache' })).json();
+  manifest = await (await manifestReq).json();
   if ((manifest.format || 1) > DATA_FORMAT && await refreshCode('f' + manifest.format + (manifest.build || ''))) return new Promise(() => {});   // reloading
   if (manifest.build) dataTag = '?v=' + manifest.build;
   const ex = manifest.extras;
   totalBytes = manifest.parts.reduce((s, p) => s + p.bytes, 0) + ex.file.bytes + (ex.train_file ? ex.train_file.bytes : 0) + (manifest.nav ? manifest.nav.bytes : 0);
   if (manifest.b64) { B64 = true; totalBytes = Math.ceil(totalBytes * 4 / 3); }
+  // Downloads run one after another in the order they are needed (the link is shared, so the first file is not slowed
+  // by the rest), each starting as soon as the one before has arrived: decoding a part overlaps the next download.
+  // One part ahead only, so a fast link does not hold every decompressed part in memory at once. The monorail cars and
+  // the walk grid come right after 'transit', where the park opens.
+  const bins = new Map(); let chain = Promise.resolve();
+  const queue = (f, meshes) => { if (!f || bins.has(f)) return; const raw = chain.then(() => fetchRaw(f)); chain = raw.catch(() => {}); bins.set(f, raw.then((b) => (meshes ? decodeOff(b, meshes) : unpackBin(b)))); };   // the next download starts before this one is gunzipped; parts decode in the worker
+  const bin = (f) => { queue(f); const p = bins.get(f); bins.set(f, null); return p; };      // taken: the buffer is not kept here
+  const ahead = (i) => { const part = manifest.parts[i]; if (!part) return; queue(part.file, part.meshes); if (part.id === 'transit') { if (ex.train_file) queue(ex.train_file.file); if (manifest.nav) queue(manifest.nav.file); } };
+  queue(ex.file.file); ahead(0);
   bakedMat.uniforms.uRange.value = manifest.range;
   if (manifest.moon && !manifest.moon.baked) {         // moonlight is added per pixel (it is not in the baked colours)
     surface.uniforms.uMoon.value.fromArray(manifest.moon.dir).normalize(); surface.uniforms.uMoonCol.value.fromArray(manifest.moon.col);
@@ -546,15 +549,6 @@ async function load() {
   fxWater = createWater({ renderer, scene, camera, Q, manifest, uTime, MOON, FOG, DN, park, farMeshes, landMeshes, forest, lodMeshes, getLanterns: () => lanterns, getMode: () => mode, isLoaded: () => loaded });
   setupPlaces();
   FX.fxScene(Q, { scene, lands: manifest.lands, uTime, lake: manifest.lake, waterY: manifest.water_z, moon: MOON });
-  // Downloads run one after another in the order they are needed (the link is shared, so the first file is not slowed
-  // by the rest), each starting as soon as the one before has arrived: decoding a part overlaps the next download.
-  // One part ahead only, so a fast link does not hold every decompressed part in memory at once. The monorail cars and
-  // the walk grid come right after 'transit', where the park opens.
-  const bins = new Map(); let chain = Promise.resolve();
-  const queue = (f) => { if (!f || bins.has(f)) return; const p = chain.then(() => fetchBin(f)); chain = p.catch(() => {}); bins.set(f, p); };
-  const bin = (f) => { queue(f); const p = bins.get(f); bins.set(f, null); return p; };      // taken: the buffer is not kept here
-  const ahead = (i) => { const part = manifest.parts[i]; if (!part) return; queue(part.file); if (part.id === 'transit') { if (ex.train_file) queue(ex.train_file.file); if (manifest.nav) queue(manifest.nav.file); } };
-  queue(ex.file.file); ahead(0);
   const exU8 = await bin(ex.file.file);
   if (ex.lanterns) {
     const lf = new Float32Array(exU8.buffer, exU8.byteOffset + ex.lanterns.span[0], ex.lanterns.count * 8).slice();
@@ -569,10 +563,9 @@ async function load() {
     const land = manifest.lands.find((l) => l.id === part.id);
     const label = (names[part.id] || ('Lighting ' + (land ? land.name : part.id))) + '…';
     veilMsg.textContent = label; pill.textContent = label;
-    const u8 = await bin(part.file); let off = 0;
-    for (const m of part.meshes) {
-      const d = decodeMesh(u8, off, m); off = d.next;
-      const mesh = meshFrom(d.geometry, m); park.add(mesh); depth.addMesh(mesh); 
+    const arrays = await bin(part.file);
+    for (const [k, m] of part.meshes.entries()) {
+      const mesh = meshFrom(geometryFrom(arrays[k], m), m); park.add(mesh); depth.addMesh(mesh);
       const cx = (m.bbox[0] + m.bbox[3]) / 2, cz = (m.bbox[2] + m.bbox[5]) / 2;
       if (Math.hypot(cx, cz) > 420) farMeshes.push(mesh);
       if (part.id !== 'core') landMeshes.push(mesh);

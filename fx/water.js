@@ -29,9 +29,13 @@ function rippleTexture(N = 256, seed = 3) {
     waves.push([fx, fy, rnd() * 6.283, Math.pow(Math.hypot(fx, fy), -1.25)]);
   }
   const data = new Uint8Array(N * N * 4), sx = new Float32Array(N * N), sy = new Float32Array(N * N); let mx = 0;
+  // cos(fx u + fy v + ph) = cos(fx u) cos(fy v + ph) - sin(fx u) sin(fy v + ph): per-column and per-row tables instead
+  // of a cosine per wave per texel (2.6 M at N = 256; ~0.35 s of the page's start at 4x CPU throttle)
+  const W = waves.length, CU = new Float64Array(W * N), SU = new Float64Array(W * N), CV = new Float64Array(W * N), SV = new Float64Array(W * N);
+  for (let w = 0; w < W; w++) { const [fx, fy, ph] = waves[w]; for (let i = 0; i < N; i++) { const t = (i / N) * 6.2831853; CU[w * N + i] = Math.cos(fx * t); SU[w * N + i] = Math.sin(fx * t); CV[w * N + i] = Math.cos(fy * t + ph); SV[w * N + i] = Math.sin(fy * t + ph); } }
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    let dx = 0, dy = 0; const u = (i / N) * 6.2831853, v = (j / N) * 6.2831853;
-    for (const [fx, fy, ph, am] of waves) { const c = Math.cos(fx * u + fy * v + ph) * am; dx += c * fx; dy += c * fy; }
+    let dx = 0, dy = 0;
+    for (let w = 0; w < W; w++) { const c = (CU[w * N + i] * CV[w * N + j] - SU[w * N + i] * SV[w * N + j]) * waves[w][3]; dx += c * waves[w][0]; dy += c * waves[w][1]; }
     sx[j * N + i] = dx; sy[j * N + i] = dy; mx = Math.max(mx, Math.abs(dx), Math.abs(dy));
   }
   for (let k = 0; k < N * N; k++) { data[k * 4] = (sx[k] / mx * 0.5 + 0.5) * 255; data[k * 4 + 1] = (sy[k] / mx * 0.5 + 0.5) * 255; data[k * 4 + 3] = 255; }
