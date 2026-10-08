@@ -21,6 +21,7 @@ export const WET_GLSL = /* glsl */`
     float nv = max(dot(N, V), 0.04);
     vec3 T = V - N * dot(V, N); float tl = dot(T, T); T = tl > 1e-6 ? T * inversesqrt(tl) : vec3(1.0, 0.0, 0.0);
     vec3 B = cross(N, T);
+    s *= 1.0 - nv;                                    // the stretch belongs to grazing views; seen from above a lamp stays a pool
     for (int i = 0; i < WET_N; i++) {
       if (i >= uWetN) break;
       vec3 d = uWL[i].xyz - P; float d2 = dot(d, d), id = inversesqrt(d2); vec3 L = d * id;

@@ -12,6 +12,7 @@ import { WET_GLSL } from '../light/wet.js';
 
 const SURF_DECL = /* glsl */`
   uniform vec4 uWx; uniform vec3 uWxSky, uWxFlash; uniform float uCovOn, uTime;   // uWx: wet, snow, flash, rain
+  float wxRough = -1.0;                    // the tiling material's roughness under the pixel (fx/light/materials.js), -1: none
   uniform vec4 uWet;                       // x: the ground's wetness in every weather ("just after rain"), y: roughness, z: streak stretch, w: puddles
   ${COVER_GLSL}
   ${WET_GLSL}
@@ -60,6 +61,7 @@ const SURF_DECL = /* glsl */`
       }
       float F = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
       float gloss = vCls < 3.5 ? (vCls > 1.5 && vCls < 2.5 ? 0.6 : 1.0) : vCls < 4.5 ? 0.2 : 0.8;     // grass barely, wood less
+      if (wxRough >= 0.0) gloss *= 1.25 - 0.6 * wxRough;                                // smooth stone holds a film, rough less
       float k = F * mix(w * (0.08 + 0.5 * flatk) * gloss, 1.0, pud);
       vec3 R = reflect(-V, N), rl = vec3(0.0);
       if (uCovOn > 0.5 && R.y > 0.015 && k > 0.012) {                                // glow of lamps and signs along the reflected ray
@@ -80,7 +82,9 @@ const SURF_DECL = /* glsl */`
         if (uWetLite < 0.5 && fw < 0.03) tilt += (vec2(vn(q * 17.0), vn(q * 17.0 + 3.3)) - 0.5) * 0.05 * (1.0 - smoothstep(0.008, 0.03, fw));   // rain micro-normals
         vec3 Ns = normalize(mix(Nb, N, pud) + vec3(tilt.x, 0.0, tilt.y) * (1.0 - 0.8 * pud));
         float brk = vCls > 0.5 && vCls < 2.5 ? mix(0.12, 1.0, smoothstep(0.3, 0.75, hgt)) : 1.0;       // dry-ish joints
-        float a = mix(uWet.y * (vCls > 1.5 && vCls < 2.5 ? 1.6 : vCls > 3.5 ? 2.5 : 1.0), 0.05, pud);
+        float a = uWet.y * (vCls > 1.5 && vCls < 2.5 ? 1.6 : vCls > 3.5 ? 2.5 : 1.0);
+        if (wxRough >= 0.0) a *= 0.6 + 0.9 * wxRough;                                  // the material's roughness, mostly filled by water
+        a = mix(a, 0.05, pud);
         col += wetStreaks(vW, Ns, V, a, uWet.z, uCovOn > 0.5 && uWetLite < 1.5) * sa * mix(brk, 1.0, pud);
       }
     }
@@ -137,6 +141,8 @@ export function createShade({ THREE, scene, surface, cover, wet, getWater, getFx
     if (fs.includes(fogLine) && /void main\(\)\{/.test(fs)) {
       fs = fs.replace(/void main\(\)\{/, SURF_DECL + '\n      void main(){');
       fs = fs.replace(fogLine, 'if (uWx.x + uWx.y + uWx.z + uWet.x > 0.0) col = wxSurface(col, nb, dt.y);       // weather (fx/weather/shade.js)\n        ' + fogLine);
+      // the material's roughness, when fx/light/materials.js has patched in its code after '// @surface'
+      if (fs.includes('float matRough')) fs = fs.replace(/(\/\/ @surface[\s\S]*?)(\n\s*col \*= dt\.x;)/, (x, a, b) => a + '\n          wxRough = matRough;       // weather: the wet film follows the material' + b);
       orig.set(m, ['surface', m.fragmentShader]); Object.assign(m.uniforms, U, cover.uniforms, wet.U); m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
     }
   }
