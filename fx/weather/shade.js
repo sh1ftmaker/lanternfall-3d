@@ -8,24 +8,51 @@
 //  - fog density and colour on every fogged material, the lake mist, the moonlight (and so the moon shadows).
 //  - lightning (Storm): a soft, slow flash at most every ~8 s; none at all with Reduce motion.
 import { COVER_GLSL } from './cover.js';
+import { WET_GLSL } from '../light/wet.js';
 
 const SURF_DECL = /* glsl */`
   uniform vec4 uWx; uniform vec3 uWxSky, uWxFlash; uniform float uCovOn, uTime;   // uWx: wet, snow, flash, rain
+  float wxRough = -1.0;                    // the tiling material's roughness under the pixel (fx/light/materials.js), -1: none
+  uniform vec4 uWet;                       // x: the ground's wetness in every weather ("just after rain"), y: roughness, z: streak stretch, w: puddles
   ${COVER_GLSL}
-  vec3 wxSurface(vec3 col){
+  ${WET_GLSL}
+  vec3 wxSurface(vec3 col, vec3 nbIn, float hgt){
     vec3 dx = dFdx(vW), dy = dFdy(vW), n = normalize(cross(dx, dy));                // faces the viewer
     float up = n.y, fw = max(length(dx), length(dy));                              // pixel footprint (m)
     float hc = covH(vW.xz + n.xz * 0.45);                                            // walls: the air in front of them
-    float expo = uCovOn > 0.5 ? smoothstep(-0.4, -0.12, vW.y - hc) : 1.0;            // 0 under a roof, arcade, viaduct
+    // 0 under a roof, arcade, viaduct. Floors read a coarse mip (~1.5 m) so festoon strings and wires do not leave
+    // dry stripes, and softly, so the dry edge under a viaduct or eaves is a gradual one
+    float hcm = up > 0.55 && uCovOn > 0.5 ? textureLod(tCover, covUV(vW.xz), uWetOcc).a * uCovK.y - 8.0 : hc;
+    float expo = uCovOn > 0.5 ? mix(smoothstep(-0.4, -0.12, vW.y - hc), smoothstep(-1.6, -0.3, vW.y - hcm), smoothstep(0.55, 0.9, n.y)) : 1.0;
     if (vCls > 6.5) return col + vAlb * uWxFlash * expo;
-    if (uWx.x > 0.0) {
-      float w = uWx.x * expo;
-      float porous = vCls < 0.5 ? 0.6 : vCls < 3.5 ? 1.0 : vCls < 4.5 ? 0.7 : vCls < 5.5 ? 0.55 : 0.3;
-      col *= 1.0 - 0.45 * w * porous;
-      float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = max(mix(vec3(l), col, 1.0 + 0.4 * w * porous), 0.0);
-      float flatk = smoothstep(0.82, 0.97, up);
-      float pud = 0.0;                                                               // puddles on flat ground, near enough to see
-      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6) { float pn = vn(vW.xz * 0.21) * 0.62 + vn(vW.xz * 0.83 + 3.1) * 0.38; pud = flatk * smoothstep(0.45, 0.58, pn) * w * smoothstep(0.6, 0.15, fw); }
+    // wetness: rain soaks everything open to the sky (porous more); the permanent film sits on floors: paving, setts,
+    // flagstones and plaza stone most, decks a little less, grass and roofs hardly; walls only darken at the foot
+    float flatk = smoothstep(0.82, 0.97, up), floork = smoothstep(0.55, 0.9, up);
+    float porous = vCls < 0.5 ? 0.6 : vCls < 3.5 ? 1.0 : vCls < 4.5 ? 0.7 : vCls < 5.5 ? 0.55 : 0.3;
+    float clsk = vCls < 0.5 ? 0.75 : vCls < 1.5 ? 1.0 : vCls < 2.5 ? 0.85 : vCls < 3.5 ? 0.9 : vCls < 4.5 ? 0.12 : 0.0;
+    float wr = uWx.x * expo;
+    float wb = uWet.x * expo * clsk * floork;
+    float foot = (1.0 - floork) * (vCls < 3.5 ? 1.0 : 0.0) * (1.0 - smoothstep(0.0, 0.7, vW.y - hc)) * uWet.x * expo * 0.5;
+    float w = max(wr, wb);
+    if (w + foot > 0.0) {
+      col *= 1.0 - 0.45 * max(max(wr * porous, wb * 0.85), foot);
+      float sk = max(wr * porous, wb * 0.8);
+      float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = max(mix(vec3(l), col, 1.0 + 0.4 * sk), 0.0);
+      // puddles in the low spots of flat ground: small (the noise is ~1.3 m across, so a pool stays under ~2 m), edges
+      // feathered over 15 cm measured in metres, following the joints (which fill first), a darker damp ring round
+      // each; more and larger while it rains and where the ground sags
+      float pud = 0.0, halo = 0.0;
+      if (flatk > 0.0 && vCls < 3.5 && fw < 0.6 && uWet.w > 0.0) {
+        float water = max(wr, wb * 0.55) * uWet.w;
+        vec2 q = vW.xz;
+        float pn = vn(q * 0.75) * 0.6 + vn(q * 2.1 + 3.1) * 0.4 + 0.06 * (1.0 - hgt);
+        float sag = vn(q * 0.13 + 7.7);
+        float t = 0.86 - 0.2 * water - 0.12 * sag, fp = fwidth(pn), fe = max(0.15 * fp / max(fw, 1e-4), fp);
+        float fade = smoothstep(0.6, 0.15, fw) * flatk * step(0.02, water);
+        pud = smoothstep(t, t + fe, pn) * fade;
+        halo = smoothstep(t - fe * 1.2, t, pn) * (1.0 - pud) * fade;
+      }
+      col *= 1.0 - 0.3 * halo * w;
       vec3 V = normalize(cameraPosition - vW), N = n;
       if (pud > 0.01 && uWx.w > 0.0 && fw < 0.03) {                                  // raindrops ringing the puddles
         vec2 q = vW.xz * 2.2, c = floor(q), o = vec2(fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453), fract(sin(dot(c, vec2(269.5, 183.3))) * 43758.5453));
@@ -34,16 +61,32 @@ const SURF_DECL = /* glsl */`
       }
       float F = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
       float gloss = vCls < 3.5 ? (vCls > 1.5 && vCls < 2.5 ? 0.6 : 1.0) : vCls < 4.5 ? 0.2 : 0.8;     // grass barely, wood less
-      float pk = pud / max(w, 1e-3), k = F * w * mix((0.08 + 0.5 * flatk) * gloss, 1.0, pk);
+      if (wxRough >= 0.0) gloss *= 1.25 - 0.6 * wxRough;                                // smooth stone holds a film, rough less
+      float k = F * mix(w * (0.08 + 0.5 * flatk) * gloss, 1.0, pud);
       vec3 R = reflect(-V, N), rl = vec3(0.0);
-      if (uCovOn > 0.5 && R.y > 0.015 && k > 0.012) {                                // lamps and signs along the reflected ray
+      if (uCovOn > 0.5 && R.y > 0.015 && k > 0.012) {                                // glow of lamps and signs along the reflected ray
         vec2 rd = R.xz / R.y; float rl2 = dot(rd, rd); if (rl2 > 900.0) rd *= 30.0 * inversesqrt(rl2);
-        float lod = mix(2.6, 1.0, pk);
-        rl = covL(vW.xz + rd * 1.2, lod) * 0.35 + covL(vW.xz + rd * 3.0, lod + 0.3) * 0.45 + covL(vW.xz + rd * 6.5, lod + 0.8) * 0.5;
-        if (pk > 0.3) rl = rl * 0.7 + (covL(vW.xz + rd * 2.0, lod) + covL(vW.xz + rd * 4.5, lod + 0.5)) * 0.25;
+        float lod = mix(2.6, 1.0, pud);
+        rl = covL(vW.xz + rd * 1.6, lod) * 0.5 + covL(vW.xz + rd * 4.5, lod + 0.6) * 0.75;
+        if (pud > 0.3) rl = rl * 0.7 + covL(vW.xz + rd * 2.8, lod) * 0.35;
       }
-      vec3 refl = uWxSky * (0.7 + 0.6 * max(R.y, 0.0)) + rl * 1.7;
-      col = col * (1.0 - 0.65 * pud) * (1.0 - k) + refl * k;
+      vec3 refl = uWxSky * (0.7 + 0.6 * max(R.y, 0.0)) + rl * 0.6;              // (the lamps themselves: below)
+      col = col * (1.0 - 0.35 * pud) * (1.0 - k) + refl * k;
+      // the lamps themselves, as streaks (fx/light/wet.js): rough film broken by setts and rain micro-normals, a
+      // near-mirror in the puddles
+      float sa = mix(w * gloss * floork, 1.0, pud);
+      if (uWetN > 0 && sa > 0.02) {
+        vec3 Nb = dot(nbIn, n) < 0.0 ? -nbIn : nbIn;
+        vec2 q = vW.xz;
+        vec2 tilt = (vec2(vn(q * 2.7), vn(q * 2.7 + 5.2)) - 0.5) * 0.09;                           // sett-sized tilts: dashes
+        if (uWetLite < 0.5 && fw < 0.03) tilt += (vec2(vn(q * 17.0), vn(q * 17.0 + 3.3)) - 0.5) * 0.05 * (1.0 - smoothstep(0.008, 0.03, fw));   // rain micro-normals
+        vec3 Ns = normalize(mix(Nb, N, pud) + vec3(tilt.x, 0.0, tilt.y) * (1.0 - 0.8 * pud));
+        float brk = vCls > 0.5 && vCls < 2.5 ? mix(0.12, 1.0, smoothstep(0.3, 0.75, hgt)) : 1.0;       // dry-ish joints
+        float a = uWet.y * (vCls > 1.5 && vCls < 2.5 ? 1.6 : vCls > 3.5 ? 2.5 : 1.0);
+        if (wxRough >= 0.0) a *= 0.6 + 0.9 * wxRough;                                  // the material's roughness, mostly filled by water
+        a = mix(a, 0.05, pud);
+        col += wetStreaks(vW, Ns, V, a, uWet.z, uCovOn > 0.5 && uWetLite < 1.5) * sa * mix(brk, 1.0, pud);
+      }
     }
     if (uWx.y > 0.0) {                                                               // snow settling on what faces up
       float s = uWx.y * expo * smoothstep(0.3, 0.8, up) * (0.7 + 0.3 * vn(vW.xz * 2.7));
@@ -85,8 +128,11 @@ const SKY_CODE = /* glsl */`
       }
       `;
 
-export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG, uTime }) {
-  const U = { uTime, uWx: { value: new THREE.Vector4() }, uWxSky: { value: new THREE.Vector3(0.012, 0.013, 0.022) }, uWxFlash: { value: new THREE.Vector3() }, uCovOn: { value: 0 } };
+// look knobs ('#u_wet=0.6' etc. in the URL; live: __park.weather.shade.U.uWet.value)
+const knob = (k, d) => { const m = new RegExp('(?:^|[#,&+])u_' + k + '=([-\\d.]+)').exec(location.hash); return m ? +m[1] : d; };
+
+export function createShade({ THREE, scene, surface, cover, wet, getWater, getFx, FOG, uTime }) {
+  const U = { uWet: { value: new THREE.Vector4(knob('wet', 0.75), knob('wetrough', 0.06), knob('streak', 7), knob('puddle', 1)) }, uTime, uWx: { value: new THREE.Vector4() }, uWxSky: { value: new THREE.Vector3(0.012, 0.013, 0.022) }, uWxFlash: { value: new THREE.Vector3() }, uCovOn: { value: 0 } };
   const done = [], orig = new Map();          // material -> its shader before patching (tests: unpatch())
   // fx/surface.js
   {
@@ -94,8 +140,10 @@ export function createShade({ THREE, scene, surface, cover, getWater, getFx, FOG
     const fogLine = 'float f = 1.0 - exp(-vDist * vDist * uFogD);';
     if (fs.includes(fogLine) && /void main\(\)\{/.test(fs)) {
       fs = fs.replace(/void main\(\)\{/, SURF_DECL + '\n      void main(){');
-      fs = fs.replace(fogLine, 'if (uWx.x + uWx.y + uWx.z > 0.0) col = wxSurface(col);       // weather (fx/weather/shade.js)\n        ' + fogLine);
-      orig.set(m, ['surface', m.fragmentShader]); Object.assign(m.uniforms, U, cover.uniforms); m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
+      fs = fs.replace(fogLine, 'if (uWx.x + uWx.y + uWx.z + uWet.x > 0.0) col = wxSurface(col, nb, dt.y);       // weather (fx/weather/shade.js)\n        ' + fogLine);
+      // the material's roughness, when fx/light/materials.js has patched in its code after '// @surface'
+      if (fs.includes('float matRough')) fs = fs.replace(/(\/\/ @surface[\s\S]*?)(\n\s*col \*= dt\.x;)/, (x, a, b) => a + '\n          wxRough = matRough;       // weather: the wet film follows the material' + b);
+      orig.set(m, ['surface', m.fragmentShader]); Object.assign(m.uniforms, U, cover.uniforms, wet.U); m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
     }
   }
   // the sky dome (app.js), after fx/sky.js has patched it or not
