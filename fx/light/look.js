@@ -36,6 +36,10 @@ export const KNOBS = {
   fogh: [18, 12, 30],           // fog scale height (m)
   fogfloor: [0.3, 0.5, 0.15],   // share of the haze that does not thin with height (views from high up keep some air; 0 = all thins)
   glare: [1.0, 0.6, 1.5],       // glare sprites on real fittings (fx/light/glare.js)
+  // broad glowing panels (lit windows, podium fascias, ice crystals, over-lit white panels; the pack's panel code, see
+  // panelGLSL below): their own soft ceiling instead of the lamp gain, so they keep colour and pattern
+  bigtop: [0.38, 0.32, 0.5],    // panel ceiling (scene units; x exposure 2.5 ~ 0.95: bright, but below ACES white)
+  bigdet: [1.0, 0.6, 1.3],      // strength of the panel pattern (panes, lattice, ice sheen, facet shading)
 };
 function readHash() {
   const out = {}; const h = location.hash.replace(/^#/, '');
@@ -51,7 +55,8 @@ export const LOOK = {
   uGlow: v('glow'), uHot: v('hot'), uPivot: v('pivot'), uTop: v('top'), uNeon: v('neon'),
   uFogK: v('fog'), uFogH: v('fogh'), uFogFloor: v('fogfloor'), uFogBase: { value: 0 },
   uBloomMix: v('bloom'), uFogSmear: v('fogsmear'), uGrade: v('grade'), uTM: v('tm'), uExposure: v('exposure'), uGlare: v('glare'),
-  uShow: { value: { hdr: 1, card: 2 }[H.show] || 0 },
+  uBigTop: v('bigtop'), uBigDet: v('bigdet'),
+  uShow: { value: { hdr: 1, card: 2, emit: 3 }[H.show] || 0 },     // emit: glowing faces red (lamp gain) .. green (broad panel)
   uFogD: null,          // the surface's density uniform (weather-scaled), set by installLook
 };
 
@@ -77,6 +82,44 @@ const EMIT_GLSL = /* glsl */`
     float nk = mix(1.0, uNeon, neon);
     float k = min(uGlow * nk * pow(max(L / uPivot, 1.0), uHot), max(uTop * nk / max(L, 1e-4), 1.0));
     return c * k;
+  }
+  // Broad glowing panels. The pack (web_export/pack.py EMIT_STYLES) codes every glowing triangle in its material-slot
+  // plane: code = style * 8 + big, big 0..7 from the width of the flat panel the triangle belongs to (windows, fascias,
+  // crystal facets: broad; lamp mantles, neon tubes, letters: 0). A broad panel is rolled off on its brightest channel
+  // to the ceiling uBigTop with a soft knee at half of it (the hue survives the tone mapping), then patterned by style
+  // in world space (the park has no UVs): 0 plain (a little shading by facing and a slow mottle, so a fascia reads as
+  // a form), 1 glazing (panes and mullions, each pane its own brightness), 2 ice (faces seen edge-on brighter, a deep
+  // colour face-on, streaks), 3 paper screens (a fine lattice). Small emitters keep lookEmit exactly.
+  uniform float uBigTop, uBigDet, uShow;
+  float lkLine(float x, float s, float w, float fw){ float d = abs(fract(x / s + 0.5) - 0.5) * s; return smoothstep(w - fw, w + fw, d); }
+  vec3 lookPanel(vec3 c, float sty, vec3 dx, vec3 dy){
+    float m = max(c.r, max(c.g, c.b)), K = uBigTop * 0.5;
+    float mo = m <= K ? m : K + (uBigTop - K) * (1.0 - exp(-(m - K) / (uBigTop - K)));
+    c *= mo / max(m, 1e-5);
+    c = max(mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, 1.2), 0.0);        // a little more colour: ACES pales a bright panel
+    vec3 n = normalize(cross(dx, dy)); float fw = max(length(dx), length(dy));
+    float nv = abs(dot(n, normalize(cameraPosition - vW)));
+    vec2 uv = abs(n.y) > 0.7 ? vW.xz : vec2(dot(vW.xz, normalize(vec2(-n.z, n.x) + 1e-6)), vW.y);
+    float k;
+    if (sty < 0.5) {
+      k = mix(0.8, 1.0, nv) * (0.93 + 0.14 * vn(uv * 1.7));
+    } else if (sty < 1.5) {
+      vec2 sz = vec2(0.6, 0.8), id = floor(uv / sz + 0.5);
+      float far = smoothstep(0.02, 0.07, fw);                                   // mullions under ~half a pixel: their average
+      float mul = min(lkLine(uv.x, sz.x, 0.03, fw), lkLine(uv.y, sz.y, 0.03, fw));
+      float pane = 0.78 + 0.27 * h21(id + 3.1);                                  // rooms / blinds: each pane its own level
+      float grad = 0.9 + 0.12 * smoothstep(0.5, -0.5, fract(uv.y / sz.y + 0.5) - 0.5);   // a little brighter low in the pane
+      k = mix(mix(0.3, 1.0, mul) * pane * grad, 0.82, far);
+    } else if (sty < 2.5) {
+      float e = 1.0 - nv; e *= e;
+      k = mix(0.55, 1.2, e) * (0.88 + 0.24 * vn(vec2(dot(uv, vec2(0.7, 0.2)) * 3.0, uv.y * 0.6)));
+      c = mix(c, c * c / max(max(c.r, max(c.g, c.b)), 1e-4), 0.55 * nv);         // face-on: deeper, more saturated colour
+    } else {
+      float far = smoothstep(0.012, 0.05, fw);
+      float lat = min(lkLine(uv.x, 0.3, 0.012, fw), lkLine(uv.y, 0.36, 0.012, fw));
+      k = mix(mix(0.35, 1.0, lat) * (0.94 + 0.12 * vn(uv * 4.0)), 0.88, far);
+    }
+    return c * mix(1.0, k, uBigDet);
   }`;
 
 let installed = null;
@@ -93,11 +136,24 @@ export function installLook({ surface, scene, renderer, getWater }) {
   const out = 'gl_FragColor = vec4(mix(col, uFog, f), 1.0);';
   if (fs.includes('// @decl') && fs.includes('// @light') && fs.includes(out)) {
     fs = fs.replace('// @decl', FOG_GLSL + EMIT_GLSL + '\n      // @decl')
-      .replace('// @light', `if (vCls > 6.5 && vCls < 7.5) { vec3 ce = lookEmit(col); col = uDay > 0.0 ? mix(col, ce, dnLamp(vW.xz)) : ce; }   // HDR emitters (fx/light/look.js)
+      .replace('// @light', `vec3 lkDx = dFdx(vW), lkDy = dFdy(vW);
+        if (vCls > 6.5 && vCls < 7.5) {                                   // HDR emitters and broad panels (fx/light/look.js)
+          float lkBig = mod(vEmK + 0.5, 8.0) - 0.5, lkSty = floor((vEmK + 0.5) / 8.0);
+          vec3 ce = lookEmit(col);
+          if (lkBig > 0.5) ce = mix(ce, lookPanel(col, lkSty, lkDx, lkDy), lkBig / 7.0);
+          if (uShow > 2.5) ce = mix(vec3(0.5, 0.02, 0.02), vec3(0.02, 0.5, 0.05), lkBig / 7.0);
+          col = uDay > 0.0 ? mix(col, ce, dnLamp(vW.xz)) : ce;
+        } else if (uShow > 2.5) col = vec3(dot(col, vec3(0.3, 0.5, 0.2)));
         // @light`)
       .replace(out, 'f = lookFog(vDist, cameraPosition.y, vW.y, uFogD);       // height-thinned fog (fx/light/look.js)\n        ' + out);
-    Object.assign(m.uniforms, LOOK_U());
-    m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
+    // the panel code rides in the material-slot attribute (fx/light/materials.js declares it when it is on)
+    let vs = m.vertexShader; const va = 'vCls = floor(aAux.a * 255.0 + 0.5);';
+    if (!vs.includes('attribute float aMat;')) vs = vs.replace('attribute vec4 aAux;', 'attribute vec4 aAux; attribute float aMat;');
+    vs = vs.replace('attribute vec4 aAux;', 'attribute vec4 aAux; varying float vEmK;').replace(va, va + ' vEmK = aMat;');
+    fs = fs.replace('// @decl', 'varying float vEmK;\n      // @decl');
+    if (!m.defaultAttributeValues.aMat) m.defaultAttributeValues.aMat = [0];
+    Object.assign(m.uniforms, LOOK_U(), { uBigTop: LOOK.uBigTop, uBigDet: LOOK.uBigDet, uShow: LOOK.uShow });
+    m.vertexShader = vs; m.fragmentShader = fs; m.needsUpdate = true; done.push('surface');
   }
   // ── the sky dome (app.js): fogged like a front 600 m away, so the horizon meets the far lands in the same haze ──
   let sky = null;
@@ -121,7 +177,7 @@ export function installLook({ surface, scene, renderer, getWater }) {
 }
 // set a knob by name on the live page: __park.look.set('exposure', 1.1)
 function set(k, x) {
-  const u = { exposure: 'uExposure', tm: 'uTM', grade: 'uGrade', bloom: 'uBloomMix', fogsmear: 'uFogSmear', glow: 'uGlow', hot: 'uHot', pivot: 'uPivot', top: 'uTop', neon: 'uNeon', fog: 'uFogK', fogh: 'uFogH', fogfloor: 'uFogFloor', glare: 'uGlare', show: 'uShow' }[k];
+  const u = { exposure: 'uExposure', tm: 'uTM', grade: 'uGrade', bloom: 'uBloomMix', fogsmear: 'uFogSmear', glow: 'uGlow', hot: 'uHot', pivot: 'uPivot', top: 'uTop', neon: 'uNeon', fog: 'uFogK', fogh: 'uFogH', fogfloor: 'uFogFloor', glare: 'uGlare', bigtop: 'uBigTop', bigdet: 'uBigDet', show: 'uShow' }[k];
   if (!u) return false; LOOK[u].value = x; return true;
 }
 const LOOK_U = () => ({ uGlow: LOOK.uGlow, uHot: LOOK.uHot, uPivot: LOOK.uPivot, uTop: LOOK.uTop, uNeon: LOOK.uNeon, uFogK: LOOK.uFogK, uFogH: LOOK.uFogH, uFogBase: LOOK.uFogBase, uFogFloor: LOOK.uFogFloor });
